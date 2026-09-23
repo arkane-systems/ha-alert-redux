@@ -40,7 +40,10 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `frontend/alert-redux-card.js` — **build output, do not edit by hand.**
   - `strings.json` / `translations/en.json` — keep in sync manually; `en.json` is
     `strings.json` with `[%key:...%]` references resolved to literal text.
+  - `brand/icon.png`, `brand/icon@2x.png` — integration icon (256 and 512 px),
+    rendered from `assets/alert-redux-icon.svg`.
 - **`frontend/`** — card source (TypeScript + Lit), bundled with esbuild.
+- **`assets/`** — the icon's SVG master and the 32 px README header icon.
 - **`tests/`** — smoke tests using `pytest-homeassistant-custom-component`.
 
 ## Card development

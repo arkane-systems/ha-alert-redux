@@ -1,4 +1,4 @@
-# Alert Redux
+# ![icon](assets/alert-redux-32px.png) Alert Redux
 
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.

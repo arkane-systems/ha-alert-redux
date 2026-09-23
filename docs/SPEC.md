@@ -846,6 +846,23 @@ To make sure it gets fixed:
 - Filters (hide acknowledged; per priority) [Decided, R22, late phase].
 - Styling follows [weather_alerts_card](https://github.com/seevee/weather_alerts_card)
   [Decided, N31].
+- **Priority colours** [Decided]. Used for the sub-cards, the admin card, and the
+  integration icon:
+
+  | Priority | Colour | Card treatment |
+  |---|---|---|
+  | Emergency | Red `#E53935` | Solid, with a **glow** |
+  | Critical | Orange `#FB8C00` | Solid, with a **glow** |
+  | Warning | Yellow `#FDD835` | **Caution striping** |
+  | Notice | Green `#43A047` | Solid |
+  | Informational | Blue `#1E88E5` | Solid |
+
+  The glow and striping are extra emphasis for the most serious levels. Exactly how
+  they look (glow strength, stripe angle and width, whether the glow pulses) is
+  settled when the card is built (phase 3), keeping them legible on both light and
+  dark themes. Acknowledged alerts should tone the effects down.
+- **Icon** [Decided]: a priority-coloured warning triangle with a circling arrow, on a
+  deep indigo (`#26305A`) tile. Master SVG: `assets/alert-redux-icon.svg`.
 
 ### 13.2 Admin card (`alert-redux-admin-card`)
 
@@ -1030,6 +1047,7 @@ Decisions with their reasons, in the order they were made.
 | Custom notification buttons defined independently of notifiers | Alerts can offer "Close door" without depending on mobile details; only configured actions run [N37]. |
 | Done notifications throttle along with on notifications | Throttling is exceptional; the throttling summary covers it [§9.7]. |
 | Quiet-hours summary gives start and end times | For alerts announced before quiet hours, the summary is where you learn they ended [§9.9]. |
+| Priority palette: red, orange, yellow, green, blue | The two original reds were too close, and the darker one looked less urgent than Critical [§13.1]. |
 | Notifications after the main card, split into three phases | The card makes notification behaviour easier to debug; smaller phases [§20]. |
 | Events built in from phase 1 | Easier than retrofitting every transition; useful for debugging [§20]. |
 | Separate events per change, with a common prefix | Easy to filter; list-based event triggers cover listening for several [§11.3]. |
