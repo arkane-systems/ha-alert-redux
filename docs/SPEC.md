@@ -1,9 +1,8 @@
 # Alert Redux — Specification
 
-**Status:** draft 3. All sections reviewed; §9 was rewritten for the notifier model
-and quiet hours, and its new **[Proposed]** details await review. Built from the
-notes in [spec-notes.md](spec-notes.md); IDs in brackets (N7, R2, F12, …) refer to
-that file.
+**Status:** draft 3. All sections reviewed and every open question resolved; the
+phase plan (§20) is next. Built from the notes in [spec-notes.md](spec-notes.md);
+IDs in brackets (N7, R2, F12, …) refer to that file.
 
 Each substantive point carries a status tag:
 
@@ -431,9 +430,9 @@ A group has:
 
   A group holding both kinds of destination should be split into two groups, and an
   alert can use both.
-- [Proposed] Exposing each group as a `notify.*` entity, so that your own automations
-  can send plain messages through groups with quiet hours applied, is a later-phase
-  extra.
+- [Decided] Groups are **not** exposed for use outside Alert Redux. General-purpose
+  notification belongs in the possible future notifier integration (§9.1), not
+  halfway here.
 
 ### 9.4 Which groups an alert uses, and the fallback
 
@@ -520,13 +519,12 @@ doesn't repeat it automatically. It can include the name deliberately through th
   notification waits that long to see whether the superseding alert also stops
   firing. The default is longer than the 0.5 s debounce because the two alerts may
   have different `delay_off` settings.
-- [Open] **Done notifications while throttling is active.** Throttling holds back on
-  notifications (§9.8). If every flicker still sends a done notification, a
-  flickering alert produces a stream of done notifications, which defeats the point
-  of throttling. Suggested: while an alert is throttled, its done notifications are
-  held too, and when throttling ends, one done notification (or the throttling
-  summary) is sent if the alert is no longer firing.
-- [Proposed] **Done notifications during quiet hours** for affected alerts on loud
+- [Decided] **Done notifications are throttled too.** While an alert is throttled, its
+  done notifications are held along with its on notifications. The throttling
+  summary sent when throttling ends (§9.8) covers what happened. Throttling is
+  expected to be exceptional, and usually means someone goes to the console for
+  details anyway; revisit if it proves a problem.
+- [Decided] **Done notifications during quiet hours** for affected alerts on loud
   groups are held and folded into the end-of-quiet-hours summary (§9.9).
 
 ### 9.8 Throttling
@@ -535,11 +533,13 @@ doesn't repeat it automatically. It can include the name deliberately through th
 
 - Throttling applies to **notifications** only; state never flickers because of it.
   (Flicker at the state level is handled by `delay_off`, §4.1.)
-- Format: `[count, minutes]` — at most *count* on notifications in any *minutes*
+- Format: `[count, minutes]`: at most *count* on notifications in any *minutes*
   window. Set per alert, or else from the global default (default: no throttling).
 - It doesn't affect reminders.
 - Throttling summaries ("[Throttling starts]" / "fired 10× in this period") are part
   of the feature [Decided, R14].
+- Done notifications are held while throttled, and covered by the summary (§9.7)
+  [Decided].
 
 ### 9.9 Quiet hours
 
@@ -558,7 +558,7 @@ lower-priority alerts, while a quiet-hours entity is on.
 - **Priority threshold** [Decided, R9]: quiet hours apply only to alerts *below* a
   threshold priority, a global setting that defaults to Warning. So by default
   Notice and Informational alerts are affected, and Warning and above always get
-  through. [Proposed] A loud group can override the threshold.
+  through. [Decided] A loud group can override the threshold.
 - **Only loud groups** are affected. Quiet groups deliver as normal (§9.3).
 
 **What happens during quiet hours**
@@ -569,41 +569,43 @@ Each loud group has a **quiet-hours behaviour** [Decided, R25]:
   quiet hours end.
 - **Soften**: notifications are sent anyway, using each member's quiet-hours `data`
   instead of its normal `data`, e.g. iOS `interruption-level: passive` or a
-  low-priority Android channel. [Proposed] Members that have no quiet-hours `data`,
+  low-priority Android channel. [Decided] Members that have no quiet-hours `data`,
   or can't take `data` at all (entities, persistent), hold instead. Softened
   notifications count as delivered and aren't repeated later.
 
-**When quiet hours end** [Decided in outline, R9; details Proposed]
+**When quiet hours end** [Decided, R9]
 
 For each loud group, when its quiet-hours entity turns off:
 
-- [Proposed] **Alerts still firing and unacknowledged** get **one reminder**, which
+- [Decided] **Alerts still firing and unacknowledged** get **one reminder**, which
   shows the real firing duration. There's no late on notification, for the same
   reason as §8.3: a late on notification would make it look as if the alert had
   only just started. Held reminders aren't replayed. Alerts acknowledged during the
   night get nothing more.
-- [Proposed] **Alerts that fired and stopped during quiet hours** are listed in
-  **one summary notification** per group: each alert's name, when it started, how
-  long it fired, and how many times. Their held done notifications are folded into
-  this summary rather than sent separately. (This answers the quiet-hours question
-  in §9.7.)
+- [Decided] **Alerts that stopped firing during quiet hours**, whether they started
+  before quiet hours or during them, are listed in **one summary notification** per
+  group. For each alert it gives the name, when it **started**, when it **stopped**,
+  how long it fired, and how many times. Their held done notifications are folded
+  into this summary rather than sent separately (§9.7). For an alert whose on
+  notification went out before quiet hours began, the summary is where you learn
+  when it ended.
 - [Deferred, R7] The summary may later be delivered through the acknowledgement
   queue (§10) instead.
 
 ### 9.10 Replacing and clearing notifications
 
-[Decided in outline, P1–P2, R25; details Proposed] Where a notifier kind can do it,
+[Decided, P1–P2, R25] Where a notifier kind can do it,
 each alert's notifications replace one another instead of piling up, and can be
 cleared when they're no longer needed.
 
-- [Proposed] Each alert has a **lifecycle key**, `alert_redux_<alert object ID>`. It's
+- [Decided] Each alert has a **lifecycle key**, `alert_redux_<alert object ID>`. It's
   used as the mobile `tag` (legacy mobile members) and as the `notification_id`
   (persistent members). Each new notification for the alert (on, reminder, done)
   replaces the previous one on that device.
-- [Proposed] Per member, **clear when acknowledged**: when the alert is acknowledged
+- [Decided] Per member, **clear when acknowledged**: when the alert is acknowledged
   (on the card, by voice, by button), its notification is removed, using
   `clear_notification` on mobile and `dismiss` for persistent. Default: on.
-- [Proposed] Per member, **when the alert stops firing**: *replace* the notification
+- [Decided] Per member, **when the alert stops firing**: *replace* the notification
   with the done message (default), or *clear* it.
 - Entity members can't replace or clear. Each notification arrives as a separate
   message.
@@ -629,12 +631,12 @@ keyboards could be added later. Other members leave the buttons out.
   `mobile_app_notification_action` event. Alert Redux matches the ID and runs **only
   the action configured for that button**; nothing in the event itself is executed.
   The user who tapped it is recorded for the activity log (R18).
-- [Proposed] **Too many buttons**: some platforms limit the number of buttons (Android
+- [Decided] **Too many buttons**: some platforms limit the number of buttons (Android
   shows at most three). They're ordered custom buttons first, then Acknowledge, then
   Snooze, and the extras are dropped from the end.
-- [Proposed] **Which notifications carry buttons**: on and reminder notifications do;
+- [Decided] **Which notifications carry buttons**: on and reminder notifications do;
   done notifications don't.
-- [Proposed] **Tapping after the alert has ended**: custom buttons still run their
+- [Decided] **Tapping after the alert has ended**: custom buttons still run their
   action. Acknowledge and Snooze do nothing.
 - [Deferred] Raw extra `data` supplied per alert, for anything buttons can't express,
   could be added later if a need appears.
@@ -974,7 +976,7 @@ all" action.
 - Separate notifier groups for the on, reminder, and done notifications [R10].
 - Notifier groups chosen by template or entity [R13] (for now; not ruled out).
 - A separate notifier integration [R24] (for now; the notifier module is built to
-  be extracted later).
+  be extracted later). Groups aren't exposed for outside use in the meantime.
 - Migration code for the built-in `alert` inside the integration [F28]. Instead, a
   separate converter utility in this repository (not shipped in the integration)
   reads an `alert:` YAML section and writes a file for `alert_redux.import`.
@@ -993,8 +995,8 @@ all" action.
 | ~~Q8~~ | ~~Review the remaining proposals~~ Resolved: all approved. | — |
 | ~~Q9~~ | ~~Dangling references~~ Resolved: fail-safe behaviour, with Repairs issues (§12.4). | §12.4 |
 | ~~Q10~~ | ~~Create/edit/delete by action?~~ Resolved: export/import actions, with overwrite protection (§16). | §16 |
-| Q11 | Review the **[Proposed]** details in the rewritten §9: notifier groups exposed as entities (§9.3); quiet-hours threshold override, softening, and end-of-quiet-hours behaviour (§9.9); replacing and clearing (§9.10); button ordering and behaviour (§9.11); done notifications during quiet hours (§9.7). | §9 |
-| Q12 | Done notifications while an alert is throttled (§9.7). | §9.7, §9.8 |
+| ~~Q11~~ | ~~Remaining §9.9 details~~ Resolved: per-group threshold override; members that can't soften hold instead (§9.9). | §9.9 |
+| ~~Q12~~ | ~~Done notifications while throttled~~ Resolved: held, and covered by the throttling summary (§9.7). | §9.7, §9.8 |
 
 ## 19. Decision log
 
@@ -1026,6 +1028,8 @@ Decisions with their reasons, in the order they were made.
 | Notifier layer as a self-contained module, not a separate integration (yet) | Avoids a two-step install and two-repo churn while the design settles; extract it later [N36, R24]. |
 | Quiet hours driven by an external entity | Reuses HA's schedule editor; automations can control it [R25]. |
 | Custom notification buttons defined independently of notifiers | Alerts can offer "Close door" without depending on mobile details; only configured actions run [N37]. |
+| Done notifications throttle along with on notifications | Throttling is exceptional; the throttling summary covers it [§9.7]. |
+| Quiet-hours summary gives start and end times | For alerts announced before quiet hours, the summary is where you learn they ended [§9.9]. |
 | Separate events per change, with a common prefix | Easy to filter; list-based event triggers cover listening for several [§11.3]. |
 | Paired events when one change implies another | Snooze and ack don't always move together, so firing both gives the most information [§11.3]. |
 | Per-priority counts as attributes, not sensors | Avoids multiplying entities [§11.2]. |
