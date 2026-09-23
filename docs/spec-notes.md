@@ -363,6 +363,59 @@ One related point about restarts: an alert that was active before the restart an
 still active afterwards should resume quietly (F21). It shouldn't send a fresh "on"
 notification.
 
+## Notifier and quiet-hours discussion
+
+### Status quo (confirmed against HA core 2026.9 `dev`)
+
+- **S1 — Notify entities.** `notify.send_message` sends only `message`, and `title`
+  if the entity supports it. There's no `data` and no `target`. Notify entities are
+  real entities, so they can be selected, labelled, and grouped.
+- **S2 — Persistent notifications.** `persistent_notification.create` takes a
+  `notification_id`, so a notification can be replaced, and `.dismiss` removes it.
+  The legacy `notify.persistent_notification` action also reads `notification_id`
+  from `data`. Persistent notifications aren't entities.
+- **S3 — Legacy notify actions.** These take `data` and `target`. Deprecation happens
+  per integration, through a Repairs "migrate notify" issue, as each integration
+  moves to entities. In HA 2026.2, about 59 integrations were still legacy and about
+  15 had entities.
+- **S4 — `mobile_app` has both kinds.** Its notify entity sends only message and
+  title. Actionable buttons, `tag`, `clear_notification`, and critical alerts are
+  still possible only through the legacy `notify.mobile_app_*` action.
+
+### Batch 7
+
+- **N34 — Integrations can't report whether they're quiet.** Some couldn't even if
+  there were an interface: `notify_mqtt` can't know who is listening on its topic.
+  So whether a notifier is quiet has to be recorded where notifiers are configured
+  in Alert Redux.
+- **N35 — Notifier groups.** Alert Redux has its own internal notifier groups. A group
+  can contain notifiers of any of the three kinds (S1–S3). Each group is flagged
+  **quiet** or **loud**: quiet hours silence loud groups but not quiet ones. Alerts
+  are configured in terms of these groups.
+- **N36 — Maybe a separate integration.** The notifier-group and quiet-hours layer
+  could be a general-purpose "notify unbreaker" and quiet-hours provider in its own
+  integration, which Alert Redux depends on and which is developed, debugged, and
+  released separately.
+
+### Batch 8
+
+- **R24 — N36 (separate integration): decided, not yet.** The notifier layer is built
+  as a self-contained module inside Alert Redux, with a narrow interface, so it can
+  be extracted into its own integration later.
+- **R25 — N35 (notifier groups): adopted, with these refinements:**
+  - Each group member can carry settings specific to its kind of notifier: `data`
+    templates, `target`, and `notification_id` schemes. Alerts refer only to groups.
+  - Quiet hours are driven by an **external on/off entity**, e.g. a Schedule helper.
+    There's a global one, and a loud group can optionally use its own instead.
+  - Priority still overrides quiet hours, as in R9.
+  - A loud group chooses its quiet-hours behaviour: **hold** notifications, or
+    **send them differently** using alternative data, e.g. silently on mobile.
+  - The defaults and the fallback are groups.
+- **N37 — Custom buttons from alerts.** Alerts should be able to see slightly past
+  the group abstraction. For example, *Garage Door Left Open* could offer a "Close
+  door" button, which the group passes only to notifiers that support it (the mobile
+  apps).
+
 ## Flags for the reconciliation pass
 
 Points to raise once the capture phase is over. These are not objections yet.

@@ -1,8 +1,9 @@
 # Alert Redux — Specification
 
-**Status:** draft 2. All sections reviewed, except the notifier model (Q1), quiet
-hours (Q2), and the items listed in §18. Built from the notes in
-[spec-notes.md](spec-notes.md); IDs in brackets (N7, R2, F12, …) refer to that file.
+**Status:** draft 3. All sections reviewed; §9 was rewritten for the notifier model
+and quiet hours, and its new **[Proposed]** details await review. Built from the
+notes in [spec-notes.md](spec-notes.md); IDs in brackets (N7, R2, F12, …) refer to
+that file.
 
 Each substantive point carries a status tag:
 
@@ -48,6 +49,7 @@ same repository and in the same HACS install.
 | **Alert** | One configured alert and its `alert_redux.*` entity. |
 | **Firing** | The alert's triggering condition currently holds: its state is `active` or `ack`. |
 | **Notification** | A message sent to notifiers *about* an alert. Alerts fire; notifications are sent. |
+| **Notifier group** | A named set of notifiers, defined in Alert Redux and flagged loud or quiet. Alerts send to groups, not to notifiers directly (§9.3). |
 | **Acknowledge (ack)** | Mark a firing alert as seen. This stops reminders until the alert stops firing. |
 | **Snooze** | Acknowledge for a limited time (§6.2). |
 | **Disable** | Turn an alert off so that it can't fire at all (§6.3). |
@@ -100,7 +102,7 @@ duration runs out [Decided, R2, R3].
   new event, adds one to the fire count, and updates the message context. It
   **doesn't** clear an acknowledgement. The alert is still the same firing, so an
   event that repeats frequently doesn't cause repeated nagging. The fire-again
-  notification is subject to throttling (§9.6).
+  notification is subject to throttling (§9.8).
 - The card shows a draining progress bar for the remaining duration (§13.1).
 - [Decided, F23] Internally, both kinds share one engine: a bus event alert is a
   trigger alert with an `event` trigger. Keeping it as a separate kind is purely to
@@ -155,9 +157,9 @@ Priority affects:
 - sort order whenever alerts compete for attention [Decided, N10];
 - the default event-alert duration (§4.2) [Decided, N4];
 - the default icon; each priority has an icon list to pick from [Decided, N14, F4];
-- which alerts quiet hours apply to (§9.7) [Decided, R9].
+- which alerts quiet hours apply to (§9.9) [Decided, R9].
 
-[Decided, F4] Priority does **not** set default notifiers or reminder schedules.
+[Decided, F4] Priority does **not** set default notifier groups or reminder schedules.
 Those have a single global default and can be overridden per alert. Otherwise the
 precedence rules would get complicated for little gain; revisit if that proves wrong.
 
@@ -286,7 +288,7 @@ notifications; see below).
   its own state, in line with N1, and its attributes include `superseded_by`. It can
   stop firing before the alert that supersedes it; that's fine.
 - [Decided] While the superseding alert is firing, the superseded alert sends no on
-  or reminder notifications. Its **done** notification follows §9.5: it's dropped
+  or reminder notifications. Its **done** notification follows §9.7: it's dropped
   only if both alerts stop firing together.
 - [Decided, F7] On the main card, superseded alerts are **hidden behind a
   disclosure toggle** under the alert that supersedes them, e.g. "▸ 1 superseded
@@ -338,7 +340,7 @@ fired. So acknowledging the superseded alert **pre-acknowledges** the supersedin
 
 - [Decided] A superseding alert that fires pre-acknowledged sends **no** on
   notification. That's the point of the workshop example: you're there, you know.
-- [Decided] Its done notification is still sent (§9.5). In the workshop example,
+- [Decided] Its done notification is still sent (§9.7). In the workshop example,
   closing the door ends both alerts together, so you get exactly one done
   notification: the superseding alert's.
 - [Decided] If a pre-snooze deadline passes while the alert is still firing, it
@@ -352,42 +354,102 @@ fired. So acknowledging the superseded alert **pre-acknowledges** the supersedin
   alert fired at 10:00 with schedule `[15, 30, 60]`, and the pre-snooze ended at
   10:50. A reminder goes out at 10:50 ("still firing, 50 min"), and the next is at
   11:45, the next slot on the original schedule (10:15, 10:45, 11:45, …).
-- The done notification follows in due course, as always (§9.5).
+- The done notification follows in due course, as always (§9.7).
 
 ### 8.4 Escalation and delayed notification
 
 These are done with supersession, not as separate features [Decided, R8, R11]:
 
 - **Escalation:** a superseding alert with a longer `delay_on`, a higher priority, or
-  different notifiers. To escalate only when nobody has acknowledged, use the **alert
-  state** condition kind (§4.1) against the superseded alert.
+  different notifier groups. To escalate only when nobody has acknowledged, use the
+  **alert state** condition kind (§4.1) against the superseded alert.
 - **Delayed first notification** (the built-in `skip_first`): a first alert with an
-  empty notifier list shows up on the card at once, and a superseding alert with a
+  empty notifier group list shows up on the card at once, and a superseding alert with a
   `delay_on` sends the notification.
 
 ## 9. Notifications
 
-### 9.1 Notifiers
+### 9.1 The notifier module
 
-- Each alert has a list of notifiers, or else uses the global default list. An
-  explicitly **empty** list means "notify nobody" [Decided, N15, F26].
-- Separate notifiers for the on, reminder, and done notifications: **not** planned
+[Decided, R24] All notification delivery lives in a **self-contained module** inside
+the integration (its own package, with its own tests). The rest of Alert Redux talks
+to it through a narrow interface:
+
+- *send this notification (title, message, buttons, lifecycle key) to notifier
+  group X*;
+- *is group X currently quiet?*;
+- *clear the notification with this lifecycle key from group X* (§9.10).
+
+The module handles notifier kinds, groups, retries (§15.2), the fallback, quiet-hours
+delivery rules, notification replacing and clearing, and turning buttons into each
+notifier's format. The aim is that it can later be pulled out into a general-purpose
+integration of its own, without redesign [Decided, N36, R24].
+
+### 9.2 Notifier kinds
+
+[Decided, S1–S4] HA currently has three incompatible ways to notify. The module
+supports all three:
+
+| Kind | How it sends | What it can do |
+|---|---|---|
+| **Entity** | `notify.send_message` to a `notify.*` entity | Message, and title if the entity supports it. Nothing else. |
+| **Legacy action** | A `notify.<name>` action | Message, title, `data`, `target`. `data` is what makes mobile features possible: `tag`, `clear_notification`, action buttons, critical alerts. |
+| **Persistent** | `persistent_notification.create` / `.dismiss` | Message, title, and `notification_id`, so notifications can be replaced and dismissed. |
+
+- Legacy actions are deprecated one integration at a time (S3). Mobile app
+  notifications with any of the features above are still only possible through the
+  legacy action (S4), so supporting legacy actions is required, not optional.
+- When a legacy action disappears, e.g. after an integration has moved to entities,
+  its group members stop working. That's treated like any other missing notifier:
+  retried, then the fallback is used (§9.4), and a Repairs issue names the member so
+  it can be switched to the entity (as in §12.4).
+
+### 9.3 Notifier groups
+
+[Decided, N35, R25] Alerts never name notifiers directly. They name **notifier
+groups**, which Alert Redux defines itself. Each group is a **config subentry**, like
+alerts and generators (§12.1).
+
+A group has:
+
+- **Members:** any mix of the three notifier kinds. Each member can have settings
+  that only make sense for its kind:
+
+  | Member setting | Applies to | Purpose |
+  |---|---|---|
+  | `data` template | Legacy action | Extra `data` merged into every notification, e.g. a mobile notification channel. Templates can use the notification's context (§9.5). |
+  | `target` | Legacy action | Passed through as `target`. |
+  | Replace and clear | Legacy (mobile), persistent | How earlier notifications for the same alert are replaced or cleared (§9.10). |
+  | Buttons | Legacy (mobile) | Whether this member shows buttons (§9.11). Detected automatically for `notify.mobile_app_*`. |
+  | Quiet-hours `data` | Legacy action | Alternative `data` used when the group *softens* during quiet hours (§9.9). |
+
+- **Loud or quiet** [Decided, N35]. Only you know which notifiers make noise, and
+  integrations can't tell us (N34: `notify_mqtt` can't even know who's listening).
+  So every group is flagged:
+  - **quiet**, e.g. a text message: delivered at any time;
+  - **loud**, e.g. a speaker announcement: quiet hours apply (§9.9).
+
+  A group holding both kinds of destination should be split into two groups, and an
+  alert can use both.
+- [Proposed] Exposing each group as a `notify.*` entity, so that your own automations
+  can send plain messages through groups with quiet hours applied, is a later-phase
+  extra.
+
+### 9.4 Which groups an alert uses, and the fallback
+
+- Each alert names one or more groups, or else uses the global **default group**. An
+  explicitly **empty** list means "notify nobody" [Decided, N15, F26, R25].
+- Separate groups for the on, reminder, and done notifications: **not** planned
   [Decided, R10].
-- Notifier lists chosen by template or entity: not planned for now, but nothing in
-  the design should rule it out [Decided, R13].
-- **Which kind of notifier to support (`notify.*` entities vs. legacy
-  `notify.<name>` actions), and whether to pass through `data`, `target`, tags,
-  clearing, and actionable buttons: [Deferred, R1, F8]** for a separate discussion.
-  §9.1–§9.6 are written so that either answer fits.
+- Groups chosen by template or entity: not planned for now, but nothing in the design
+  should rule it out [Decided, R13].
+- **Fallback group** [Decided, R6, F26, R25]: a global setting (default: one
+  persistent member). It receives a notification when *every* member of *every* group
+  it was sent to is missing or has failed, after the retry queue (§15.2) gives up. It
+  isn't used for alerts with an explicitly empty list. A notification that reached at
+  least one member counts as delivered; failed members are logged.
 
-### 9.2 Fallback notifier
-
-[Decided, R6, F26] A global fallback notifier (default:
-`persistent_notification`) receives a notification when *all* of an alert's
-notifiers are missing or fail, after the retry queue (§15.2) gives up. It isn't used
-for alerts with an explicitly empty notifier list.
-
-### 9.3 Messages
+### 9.5 Messages
 
 [Decided, N17] The notification title is the alert's name, and the message body
 doesn't repeat it automatically. It can include the name deliberately through the
@@ -432,7 +494,7 @@ doesn't repeat it automatically. It can include the name deliberately through th
 - [Decided, F22] The card shows the **on** message by default. An optional separate
   **display** message can be set for the card.
 
-### 9.4 Reminders
+### 9.6 Reminders
 
 - Each alert has a reminder schedule, or else uses the global default [Decided, N16].
 - A schedule is a list of intervals, e.g. `[15, 30, 60]`: the gaps follow the list,
@@ -441,7 +503,7 @@ doesn't repeat it automatically. It can include the name deliberately through th
 - [Decided] Event alerts send reminders only if their duration is longer than the
   first reminder interval. Short event alerts just fire and expire.
 
-### 9.5 The done notification
+### 9.7 The done notification
 
 - It's always sent, even if the alert was acknowledged [Decided, R10].
 - [Decided, F25] It's sent **even if no on notification went out**, e.g. because of
@@ -459,15 +521,15 @@ doesn't repeat it automatically. It can include the name deliberately through th
   firing. The default is longer than the 0.5 s debounce because the two alerts may
   have different `delay_off` settings.
 - [Open] **Done notifications while throttling is active.** Throttling holds back on
-  notifications (§9.6). If every flicker still sends a done notification, a
+  notifications (§9.8). If every flicker still sends a done notification, a
   flickering alert produces a stream of done notifications, which defeats the point
   of throttling. Suggested: while an alert is throttled, its done notifications are
   held too, and when throttling ends, one done notification (or the throttling
   summary) is sent if the alert is no longer firing.
-- [Open] **Done notifications during quiet hours:** sent immediately, or held and
-  included in the quiet-hours summary? This is part of the quiet-hours design (§9.7).
+- [Proposed] **Done notifications during quiet hours** for affected alerts on loud
+  groups are held and folded into the end-of-quiet-hours summary (§9.9).
 
-### 9.6 Throttling
+### 9.8 Throttling
 
 [Decided, N18, F9]
 
@@ -479,24 +541,110 @@ doesn't repeat it automatically. It can include the name deliberately through th
 - Throttling summaries ("[Throttling starts]" / "fired 10× in this period") are part
   of the feature [Decided, R14].
 
-### 9.7 Quiet hours
+### 9.9 Quiet hours
 
-[Decided, R9; design Open] Quiet hours hold back notifications for alerts below a
-chosen priority (e.g. below Warning) during a schedule.
+[Decided, R9, R25] Quiet hours hold back or soften notifications to **loud** groups for
+lower-priority alerts, while a quiet-hours entity is on.
 
-- [Decided-ish, R9] When quiet hours end, alerts still firing notify again, and alerts
-  that fired and stopped during quiet hours are sent as a summary. The summary could
-  share its mechanism with the acknowledgement queue (§10).
-- [Open, R9] Should quiet hours be set per notifier (a silent text at night is fine;
-  a loud announcement isn't), per priority, or both? How does this interact with the
-  notifier decisions in R1?
+**When quiet hours apply**
+
+- **The quiet-hours entity** [Decided, R25]: any on/off entity, e.g. a Schedule
+  helper, an `input_boolean`, or a template binary sensor. While it's on, it's quiet
+  hours. It's a global setting, so HA's own schedule editor and your automations
+  (guests, naps, holidays) control quiet hours, not Alert Redux.
+- **Per-group override** [Decided, R25]: a loud group can name its own quiet-hours
+  entity instead of the global one, e.g. if bedroom and office speakers need
+  different hours.
+- **Priority threshold** [Decided, R9]: quiet hours apply only to alerts *below* a
+  threshold priority, a global setting that defaults to Warning. So by default
+  Notice and Informational alerts are affected, and Warning and above always get
+  through. [Proposed] A loud group can override the threshold.
+- **Only loud groups** are affected. Quiet groups deliver as normal (§9.3).
+
+**What happens during quiet hours**
+
+Each loud group has a **quiet-hours behaviour** [Decided, R25]:
+
+- **Hold** (default): the group's notifications for affected alerts are held until
+  quiet hours end.
+- **Soften**: notifications are sent anyway, using each member's quiet-hours `data`
+  instead of its normal `data`, e.g. iOS `interruption-level: passive` or a
+  low-priority Android channel. [Proposed] Members that have no quiet-hours `data`,
+  or can't take `data` at all (entities, persistent), hold instead. Softened
+  notifications count as delivered and aren't repeated later.
+
+**When quiet hours end** [Decided in outline, R9; details Proposed]
+
+For each loud group, when its quiet-hours entity turns off:
+
+- [Proposed] **Alerts still firing and unacknowledged** get **one reminder**, which
+  shows the real firing duration. There's no late on notification, for the same
+  reason as §8.3: a late on notification would make it look as if the alert had
+  only just started. Held reminders aren't replayed. Alerts acknowledged during the
+  night get nothing more.
+- [Proposed] **Alerts that fired and stopped during quiet hours** are listed in
+  **one summary notification** per group: each alert's name, when it started, how
+  long it fired, and how many times. Their held done notifications are folded into
+  this summary rather than sent separately. (This answers the quiet-hours question
+  in §9.7.)
+- [Deferred, R7] The summary may later be delivered through the acknowledgement
+  queue (§10) instead.
+
+### 9.10 Replacing and clearing notifications
+
+[Decided in outline, P1–P2, R25; details Proposed] Where a notifier kind can do it,
+each alert's notifications replace one another instead of piling up, and can be
+cleared when they're no longer needed.
+
+- [Proposed] Each alert has a **lifecycle key**, `alert_redux_<alert object ID>`. It's
+  used as the mobile `tag` (legacy mobile members) and as the `notification_id`
+  (persistent members). Each new notification for the alert (on, reminder, done)
+  replaces the previous one on that device.
+- [Proposed] Per member, **clear when acknowledged**: when the alert is acknowledged
+  (on the card, by voice, by button), its notification is removed, using
+  `clear_notification` on mobile and `dismiss` for persistent. Default: on.
+- [Proposed] Per member, **when the alert stops firing**: *replace* the notification
+  with the done message (default), or *clear* it.
+- Entity members can't replace or clear. Each notification arrives as a separate
+  message.
+
+### 9.11 Buttons
+
+[Decided, N37, P3] Alerts can put buttons on notifications, and members that support
+buttons show them. Currently that means legacy mobile members; Telegram inline
+keyboards could be added later. Other members leave the buttons out.
+
+- **Custom buttons** [Decided, N37]: each alert can define buttons, each with a
+  label and the HA action it runs. For example, *Garage Door Left Open* has "Close
+  door", which runs `cover.close_cover` on `cover.garage_door`. The definition says
+  nothing about mobile; the member converts it into its own format.
+- **Built-in buttons** [Decided, P3]: **Acknowledge**, and **Snooze** for a fixed
+  duration (per alert, or else a global default). They aren't shown on
+  unacknowledgeable alerts (§6.1).
+- **Require unlock** [Decided]: a per-button setting. It maps to iOS
+  `authenticationRequired`, so security-sensitive buttons (e.g. "Unlock door") only
+  work from an unlocked phone.
+- **How a tap is handled** [Decided]: the member sends each button with an action ID
+  of the form `ALERT_REDUX_<alert>_<button>`. Tapping it makes `mobile_app` fire a
+  `mobile_app_notification_action` event. Alert Redux matches the ID and runs **only
+  the action configured for that button**; nothing in the event itself is executed.
+  The user who tapped it is recorded for the activity log (R18).
+- [Proposed] **Too many buttons**: some platforms limit the number of buttons (Android
+  shows at most three). They're ordered custom buttons first, then Acknowledge, then
+  Snooze, and the extras are dropped from the end.
+- [Proposed] **Which notifications carry buttons**: on and reminder notifications do;
+  done notifications don't.
+- [Proposed] **Tapping after the alert has ended**: custom buttons still run their
+  action. Acknowledge and Snooze do nothing.
+- [Deferred] Raw extra `data` supplied per alert, for anything buttons can't express,
+  could be added later if a need appears.
 
 ## 10. Acknowledgement queue
 
 [Deferred, R7] A late phase adds a separate "needs acknowledgement" system. When an
 alert stops firing without being acknowledged, it's handed off to this queue. Several
 unacknowledged firings produce several separate items to acknowledge. The quiet-hours
-summary (§9.7) may use the same mechanism. The details are to be designed when it's
+summary (§9.9) may use the same mechanism. The details are to be designed when it's
 built.
 
 ## 11. Integration surface: attributes, sensors, events
@@ -510,7 +658,7 @@ built.
   `disabled_until`, `pre_acked_by`, `superseded_by`, `no_data_since`, the input
   entities that are missing data, and the time and user of the last acknowledge,
   snooze, disable, or enable [Decided, R18].
-- **Configuration:** `acknowledgeable`, `supersedes`, `notifiers`,
+- **Configuration:** `acknowledgeable`, `supersedes`, `notifier_groups`, `buttons`,
   `reminder_schedule`, `throttle`, `delay_on`/`delay_off`, `duration`, the source
   entity or entities, and the on message (rendered).
 - **Generator provenance:** `generated_by` (§12.3).
@@ -586,12 +734,14 @@ tells the whole story and nothing has to be inferred:
 [Decided, R21, F27]
 
 - One integration config entry (already in place) holds the **global defaults**:
-  notifiers, fallback notifier, reminder schedule, throttle, the per-priority event
-  durations and icons, quiet hours, and the no-data grace period. They're edited
-  through its options flow.
+  the default and fallback notifier groups, reminder schedule, throttle, snooze
+  duration for notification buttons, the per-priority event durations and icons, the
+  quiet-hours entity and priority threshold, and the no-data grace period. They're
+  edited through its options flow.
 - Each **alert** is a **config subentry** of that entry, created and edited in the
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
+- Each **notifier group** is also a subentry (§9.3).
 - The forms use HA's own selectors: entity, template, trigger, duration, and so on.
   The form fields shown depend on the kind of alert.
 
@@ -747,9 +897,12 @@ After a restart:
 
 [Decided, R16 response]
 
-- If a notifier doesn't exist yet or fails, the notification is queued and retried
-  with backoff, up to a timeout (default a few minutes, configurable).
-- After the timeout, the fallback notifier is used (§9.2), and the failure is logged.
+- If a group member doesn't exist yet or fails, the notification to that member is
+  queued and retried with backoff, up to a timeout (default a few minutes,
+  configurable). Retries are per member, so one broken member doesn't hold up the
+  rest of its group.
+- After the timeout, the failure is logged. If no member of any target group
+  received the notification, it goes to the fallback group (§9.4).
 - This applies all the time, not just at startup, so it also covers integrations
   restarting while HA is running.
 
@@ -818,8 +971,10 @@ all" action.
 - A separate escalation or `skip_first` feature [R8, R11]; use supersession.
 - `early_start` [R16].
 - Alert2's history view [N24]; use the Activity card.
-- Separate notifiers for the on, reminder, and done notifications [R10].
-- Notifier lists from a template or entity [R13] (for now; not ruled out).
+- Separate notifier groups for the on, reminder, and done notifications [R10].
+- Notifier groups chosen by template or entity [R13] (for now; not ruled out).
+- A separate notifier integration [R24] (for now; the notifier module is built to
+  be extracted later).
 - Migration code for the built-in `alert` inside the integration [F28]. Instead, a
   separate converter utility in this repository (not shipped in the integration)
   reads an `alert:` YAML section and writes a file for `alert_redux.import`.
@@ -828,8 +983,8 @@ all" action.
 
 | # | Question | Refs |
 |---|---|---|
-| Q1 | Notifier model: `notify.*` entities, legacy actions, or both; `data`/`target` passthrough; mobile tag replacement, clearing, actionable buttons. | R1, F8, P1–P3, P8 |
-| Q2 | Quiet-hours design: per notifier, per priority, or both; how the summary is delivered. | R9, §9.7 |
+| ~~Q1~~ | ~~Notifier model~~ Resolved: all three kinds, behind Alert Redux's own notifier groups; buttons, replacing and clearing (§9.1–§9.4, §9.10, §9.11). | R1, R24, R25, N37 |
+| ~~Q2~~ | ~~Quiet-hours design~~ Resolved: loud groups, an external quiet-hours entity, a priority threshold, hold or soften (§9.9). | R9, R25 |
 | ~~Q3~~ | ~~Should propagation optionally snooze?~~ Resolved: yes (§8.2). | N13 |
 | ~~Q4~~ | ~~Generator details~~ Resolved: supersession can be generated; generators are entities (§12.3). | F20 |
 | ~~Q5~~ | ~~Export/import~~ Resolved: yes, in the admin card, late phase (§13.2). | F27 |
@@ -838,6 +993,8 @@ all" action.
 | ~~Q8~~ | ~~Review the remaining proposals~~ Resolved: all approved. | — |
 | ~~Q9~~ | ~~Dangling references~~ Resolved: fail-safe behaviour, with Repairs issues (§12.4). | §12.4 |
 | ~~Q10~~ | ~~Create/edit/delete by action?~~ Resolved: export/import actions, with overwrite protection (§16). | §16 |
+| Q11 | Review the **[Proposed]** details in the rewritten §9: notifier groups exposed as entities (§9.3); quiet-hours threshold override, softening, and end-of-quiet-hours behaviour (§9.9); replacing and clearing (§9.10); button ordering and behaviour (§9.11); done notifications during quiet hours (§9.7). | §9 |
+| Q12 | Done notifications while an alert is throttled (§9.7). | §9.7, §9.8 |
 
 ## 19. Decision log
 
@@ -862,8 +1019,13 @@ Decisions with their reasons, in the order they were made.
 | Drop a superseded alert's done notification when both end together | One "door closed" message is enough [F25]. |
 | `name` available in message templates | Messages don't repeat the name automatically, so it must be easy to include deliberately [N17]. |
 | Snooze-end reminder rule: remind now unless a scheduled reminder is under 5 min away | The alert speaks up when the snooze ends, without a double reminder; reminders show the real firing duration [§6.2, §8.3]. |
-| `subject_entity_name` (subject entity) in message templates | Generated alerts can share one message template without deriving names from the alert name [§9.3]. |
+| `subject_entity_name` (subject entity) in message templates | Generated alerts can share one message template without deriving names from the alert name [§9.5]. |
 | Export/import actions instead of create/edit actions; import won't overwrite without a flag | One validation path; protects existing definitions from accidental replacement [Q10]. |
+| All three notifier kinds supported | The entity model can't carry `data`, and mobile features still need the legacy actions [S1–S4]. |
+| Alert Redux's own notifier groups, flagged loud or quiet | Integrations can't say whether they're noisy; only you know [N34, N35]. |
+| Notifier layer as a self-contained module, not a separate integration (yet) | Avoids a two-step install and two-repo churn while the design settles; extract it later [N36, R24]. |
+| Quiet hours driven by an external entity | Reuses HA's schedule editor; automations can control it [R25]. |
+| Custom notification buttons defined independently of notifiers | Alerts can offer "Close door" without depending on mobile details; only configured actions run [N37]. |
 | Separate events per change, with a common prefix | Easy to filter; list-based event triggers cover listening for several [§11.3]. |
 | Paired events when one change implies another | Snooze and ack don't always move together, so firing both gives the most information [§11.3]. |
 | Per-priority counts as attributes, not sensors | Avoids multiplying entities [§11.2]. |
@@ -885,14 +1047,16 @@ To be written once §18 is resolved. Rough shape, for discussion:
 
 1. Core alert entity: states, attributes, restore; manual alerts; ack/unack; actions.
 2. Condition alerts (state, template), `delay_on`/`delay_off`, no data.
-3. Notifications: notifiers, fallback, messages, reminders, retry queue.
+3. Notifications: the notifier module, all three notifier kinds, notifier groups,
+   fallback, messages, reminders, retry queue.
 4. Main card, basic version.
 5. Remaining condition kinds (on/off, threshold, alert state); event alerts; card
    progress bar.
 6. Snooze, disable, suspend; admin card, basic version.
 7. Supersession, propagation, pre-acknowledgement.
 8. Summary sensors, events, logbook.
-9. Throttling, quiet hours.
+9. Throttling, quiet hours; replacing and clearing notifications; notification
+   buttons.
 10. Generators.
 11. Voice control.
 12. Acknowledgement queue; card filters; admin-card editing; export/import.
