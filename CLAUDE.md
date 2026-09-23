@@ -13,6 +13,20 @@ and registers it itself.
 The project is at the scaffolding stage: the integration sets up (single-instance
 config entry) and registers a placeholder card, but no alerting behavior exists yet.
 
+## Specification
+
+**`docs/SPEC.md` is the authoritative design** for the integration and cards. Read it
+before implementing anything, and follow its phase plan (§20): build one phase at a
+time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
+
+- Every point is tagged **[Decided]**, **[Deferred]**, and so on. Don't reopen a
+  Decided point while implementing. If building a phase shows that a decision
+  doesn't work, raise it with the user and update the spec, including its decision
+  log (§19), rather than quietly diverging.
+- `docs/spec-notes.md` is the brainstorming record the spec was built from. The
+  bracketed IDs in the spec (N7, R2, F12, …) refer to it. Use it for background and
+  rationale; it isn't a source of requirements in its own right.
+
 ## Layout
 
 - **`custom_components/alert_redux/`** — the integration (what HACS installs).
