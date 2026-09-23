@@ -1,7 +1,7 @@
 # Alert Redux — Specification
 
-**Status:** draft 3. All sections reviewed and every open question resolved; the
-phase plan (§20) is next. Built from the notes in [spec-notes.md](spec-notes.md);
+**Status:** version 1, approved. All sections reviewed, every open question
+resolved, and the phase plan (§20) agreed. Built from the notes in [spec-notes.md](spec-notes.md);
 IDs in brackets (N7, R2, F12, …) refer to that file.
 
 Each substantive point carries a status tag:
@@ -1030,6 +1030,8 @@ Decisions with their reasons, in the order they were made.
 | Custom notification buttons defined independently of notifiers | Alerts can offer "Close door" without depending on mobile details; only configured actions run [N37]. |
 | Done notifications throttle along with on notifications | Throttling is exceptional; the throttling summary covers it [§9.7]. |
 | Quiet-hours summary gives start and end times | For alerts announced before quiet hours, the summary is where you learn they ended [§9.9]. |
+| Notifications after the main card, split into three phases | The card makes notification behaviour easier to debug; smaller phases [§20]. |
+| Events built in from phase 1 | Easier than retrofitting every transition; useful for debugging [§20]. |
 | Separate events per change, with a common prefix | Easy to filter; list-based event triggers cover listening for several [§11.3]. |
 | Paired events when one change implies another | Snooze and ack don't always move together, so firing both gives the most information [§11.3]. |
 | Per-priority counts as attributes, not sensors | Avoids multiplying entities [§11.2]. |
@@ -1047,21 +1049,165 @@ Decisions with their reasons, in the order they were made.
 
 ## 20. Phase plan
 
-To be written once §18 is resolved. Rough shape, for discussion:
+[Decided] Each phase is small enough to build, test, and live with before the next
+one starts, and each ends with a usable release.
 
-1. Core alert entity: states, attributes, restore; manual alerts; ack/unack; actions.
-2. Condition alerts (state, template), `delay_on`/`delay_off`, no data.
-3. Notifications: the notifier module, all three notifier kinds, notifier groups,
-   fallback, messages, reminders, retry queue.
-4. Main card, basic version.
-5. Remaining condition kinds (on/off, threshold, alert state); event alerts; card
-   progress bar.
-6. Snooze, disable, suspend; admin card, basic version.
-7. Supersession, propagation, pre-acknowledgement.
-8. Summary sensors, events, logbook.
-9. Throttling, quiet hours; replacing and clearing notifications; notification
-   buttons.
-10. Generators.
-11. Voice control.
-12. Acknowledgement queue; card filters; admin-card editing; export/import.
-13. Converter utility from built-in `alert:` YAML to import files.
+**Every phase ends with:**
+
+- smoke tests for the new behaviour (`pytest-homeassistant-custom-component`), and
+  the card type-checked and rebuilt;
+- a run in a real HA instance;
+- CI green, and a `0.N.0` release (manifest version bumped, card rebuilt), so HACS
+  can install it;
+- the spec updated if building the phase changed any decisions.
+
+**Choices built into this ordering:**
+
+- **Notifications come after the main card** (your suggestion). With the card in
+  place, you can see an alert's state while debugging what was or wasn't sent.
+- **Notifications are split in two.** Phase 4 does basic delivery. Phase 9 does the
+  device-specific features (replacing, clearing, buttons), and phase 10 does
+  throttling and quiet hours.
+- **Events come with the core (phase 1), not with the summary sensors.** Every state
+  change fires its event (§11.3). Building that in from the start is simpler than
+  adding it to every transition later, and events are useful for debugging too.
+  Summary sensors and the logbook descriptions stay in phase 8.
+- **Alert configuration forms arrive with each alert kind.** Configuration is UI-only
+  (R21), so an alert kind is unusable until its subentry form exists. Each phase that
+  adds a kind also adds its form.
+- **The alert state condition kind moves to phase 7.** It refers to other alerts, so
+  it belongs with the rest of the alert-to-alert machinery (supersession, dangling
+  references).
+
+### Phase 1 — Core alert entity and manual alerts (0.1.0)
+
+- The alert entity: `idle`, `active`, and `ack` states, with translations; core
+  attributes (§11.1); state restored across restarts (§15.1).
+- Manual alerts (§4.3), with their subentry form: name, priority, icon,
+  acknowledgeable, dismissable from the card.
+- Actions: `fire`, `dismiss`, `ack`, `unack` (§16), with who-did-it recorded (R18).
+- Events for every transition so far (§11.3).
+
+*Done when* a manual alert can be created in the UI, fired and dismissed by action,
+and acknowledged, and it survives a restart.
+
+### Phase 2 — Condition alerts I (0.2.0)
+
+- **State** and **template** condition kinds (§4.1), with their forms.
+- `delay_on`, `delay_off`, and the optional extra condition.
+- The `no_data` state and its grace period (§4.4); startup behaviour (§15.3).
+- The subject entity and its attribute (§9.5).
+
+*Done when* a door-sensor alert and a template alert fire and end correctly,
+including through sensor dropouts and restarts.
+
+### Phase 3 — Main card (0.3.0)
+
+- `alert-redux-card` (§13.1): sub-cards sorted and coloured by priority, icon, name,
+  and on or display message (rendered by the integration); acknowledge control;
+  dismiss button where enabled; the no-data section; the empty state.
+- Styling after weather_alerts_card (N31).
+
+*Done when* the card shows the alerts from phases 1–2 correctly, and acknowledging and
+dismissing from the card works.
+
+### Phase 4 — Notifications I (0.4.0)
+
+- The notifier module (§9.1), supporting all three notifier kinds (§9.2).
+- Notifier groups, as subentries with their form (§9.3). The loud/quiet flag is
+  stored, but unused until phase 10.
+- The default and fallback groups (§9.4); the retry queue (§15.2); a Repairs issue
+  for missing legacy actions.
+- Messages and their template context (§9.5), reminders (§9.6), the done-notification
+  rules except supersession (§9.7).
+
+*Done when* alerts deliver on, reminder, and done notifications to a mobile app, a
+notify entity, and persistent notifications, and a missing notifier falls back
+correctly.
+
+### Phase 5 — Condition alerts II and event alerts (0.5.0)
+
+- **On/off** and **threshold** condition kinds (§4.1).
+- **Trigger** and **bus event** alerts (§4.2): duration, per-priority default
+  durations, firing again while firing.
+- The card's progress bar for event alerts.
+
+*Done when* every alert kind except alert state works end to end.
+
+### Phase 6 — Snooze, disable, suspend; admin card (0.6.0)
+
+- Snoozing and the snooze-end reminder rule (§6.2); disabling (§6.3); suspending
+  (§6.4). Actions and events for each.
+- The card's snooze control and countdown, and the disabled-alerts count line.
+- `alert-redux-admin-card`, basic version (§13.2): all alerts by priority, with
+  enable, disable, and suspend.
+
+*Done when* snoozes, disables, and suspensions behave as specified, across restarts.
+
+### Phase 7 — Supersession (0.7.0)
+
+- Supersession: transitive, with debounce (§8.1); the done window (§9.7).
+- Propagation (None, Acknowledge, Snooze), pre-acknowledgement and pre-snoozing
+  (§8.2, §8.3).
+- The **alert state** condition kind (§4.1).
+- Dangling references: fail-safe behaviour, Repairs issues, `broken_references`, the
+  delete warning (§12.4).
+- The card's collapsed superseded alerts.
+
+*Done when* the *Door Open* / *Door Left Open* and workshop examples behave exactly as
+the spec describes.
+
+### Phase 8 — Summary sensors and logbook (0.8.0)
+
+- The summary sensors (§11.2), including the diagnostic disabled count.
+- The logbook platform (§11.4).
+- A pass over the event set and its data (§11.3), plus the ready-to-paste list of
+  event types.
+
+*Done when* the signal-light glue can be written as a single-entity automation, and
+the Activity card reads well.
+
+### Phase 9 — Notifications II: replacing, clearing, buttons (0.9.0)
+
+- Replacing and clearing (§9.10).
+- Built-in and custom buttons, tap handling, and require unlock (§9.11).
+
+*Done when* a mobile notification updates in place, clears when acknowledged, and
+"Close door" works from the phone.
+
+### Phase 10 — Throttling and quiet hours (0.10.0)
+
+- Throttling, including held done notifications and the throttling summaries (§9.8).
+- Quiet hours: the entity, per-group overrides, threshold, hold and soften, and the
+  end-of-quiet-hours reminder and summary (§9.9).
+
+*Done when* a night with quiet hours on produces exactly the specified morning
+summary.
+
+### Phase 11 — Generators (0.11.0)
+
+- Generator subentries and entities; target selection; dynamic creation and removal
+  (§12.3).
+- Generated supersession; the `refresh_generator` action.
+
+*Done when* one generator covers every door lock, including a lock added later.
+
+### Phase 12 — Voice control (0.12.0)
+
+- Assist intents for acknowledge, unacknowledge, and snooze (§14).
+- Optional per-alert proxy switches, checked with Alexa and Google Home.
+
+### Phase 13 — Late features (0.13.0 onwards; may be split)
+
+- The acknowledgement queue (§10).
+- Card filters (§13.1).
+- Creating and editing alerts from the admin card (§13.2).
+- The export and import actions and admin-card controls (§13.2, §16).
+
+### Phase 14 — Converter utility
+
+- A standalone tool in this repository, not shipped in the integration, that
+  converts an `alert:` YAML section into an import file (§17).
+
+**1.0.0** comes after phase 11, once the core feature set is proven in daily use,
+with phases 12–14 as 1.x releases [Decided, provisionally].
