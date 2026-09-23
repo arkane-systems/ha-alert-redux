@@ -1,8 +1,8 @@
 # Alert Redux — Specification
 
 **Status:** draft 2. All sections reviewed, except the notifier model (Q1), quiet
-hours (Q2), and the items listed in §18. Built from the notes in [spec-notes.md](spec-notes.md); IDs in
-brackets (N7, R2, F12, …) refer to that file.
+hours (Q2), and the items listed in §18. Built from the notes in
+[spec-notes.md](spec-notes.md); IDs in brackets (N7, R2, F12, …) refer to that file.
 
 Each substantive point carries a status tag:
 
@@ -188,6 +188,19 @@ still firing when the timer runs out, it becomes unacknowledged and reminders
 resume. The timer is cleared if the alert stops firing, or if the acknowledgement is
 removed manually.
 
+[Decided] **Snooze-end reminder rule.** This applies to ordinary snoozes and to
+pre-snoozes (§8.3). When a snooze runs out and the alert is still firing:
+
+- one reminder is sent **immediately**, so the alert speaks up again;
+- **unless** the next slot on the alert's original reminder schedule (counted from
+  when it actually started firing) is less than 5 minutes away. In that case the
+  immediate reminder is skipped and the slot's reminder does the job, so there's no
+  double reminder;
+- after that, reminders follow the original schedule;
+- reminders always give the real firing duration.
+
+[Decided] The 5-minute threshold is a global setting, with 5 minutes as its default.
+
 [Decided, F3] There's no separate state for snoozing. A snoozed alert is `ack` with
 a `snoozed_until` attribute. Snoozing is a kind of acknowledgement, and keeping the
 state list small keeps automations simple. Anything that needs to tell them apart can
@@ -312,10 +325,10 @@ fired. So acknowledging the superseded alert **pre-acknowledges** the supersedin
 
 **Pre-snoozing** (the *Snooze* setting) works the same way, plus a deadline:
 
-- [Proposed] The snooze timer starts when you acknowledge the superseded alert, not
+- [Decided] The snooze timer starts when you acknowledge the superseded alert, not
   when the superseding alert fires. The deadline is *acknowledgement time +
   duration*, which matches the intent: "if you take long enough, it speaks up".
-- [Proposed] If the superseding alert fires before the deadline, it starts as `ack`
+- [Decided] If the superseding alert fires before the deadline, it starts as `ack`
   with `snoozed_until` set to the deadline, and then behaves like any snoozed alert
   (§6.2). If it fires after the deadline, it starts as `active`, as normal.
 - Until the superseding alert fires, the deadline is shown alongside `pre_acked_by`
@@ -323,15 +336,23 @@ fired. So acknowledging the superseded alert **pre-acknowledges** the supersedin
 
 **Notifications for a pre-acknowledged firing:**
 
-- [Proposed] A superseding alert that fires pre-acknowledged sends **no** on
+- [Decided] A superseding alert that fires pre-acknowledged sends **no** on
   notification. That's the point of the workshop example: you're there, you know.
 - [Decided] Its done notification is still sent (§9.5). In the workshop example,
   closing the door ends both alerts together, so you get exactly one done
   notification: the superseding alert's.
-- [Proposed] If a pre-snooze deadline passes while the alert is still firing, it
-  becomes `active` and sends its on notification **then**, as a late on
-  notification, since none was sent earlier. Reminders follow as normal, and the
-  done notification will follow in due course.
+- [Decided] If a pre-snooze deadline passes while the alert is still firing, it
+  becomes `active` and **no** on notification is sent, not even a late one.
+  Instead, reminders start from that point, as if the alert had been on its normal
+  reminder schedule since it actually started firing. A late on notification would
+  make it look as if the alert had only just started, and the times in the messages
+  would then be confusing. Reminders always give the real firing duration.
+- [Decided] Reminders resume by the **snooze-end reminder rule** (§6.2): one
+  reminder is sent immediately, then the original schedule carries on. Example: the
+  alert fired at 10:00 with schedule `[15, 30, 60]`, and the pre-snooze ended at
+  10:50. A reminder goes out at 10:50 ("still firing, 50 min"), and the next is at
+  11:45, the next slot on the original schedule (10:15, 10:45, 11:45, …).
+- The done notification follows in due course, as always (§9.5).
 
 ### 8.4 Escalation and delayed notification
 
@@ -372,7 +393,7 @@ for alerts with an explicitly empty notifier list.
 doesn't repeat it automatically. It can include the name deliberately through the
 `name` variable. There are three messages, each a template with a default:
 
-| Message | When | Default (proposed wording) |
+| Message | When | Default |
 |---|---|---|
 | **On** | When the alert starts firing | "{{ name }} is firing." |
 | **Reminder** | On the reminder schedule, while firing and unacknowledged | "{{ name }} is still firing ({{ duration }})." |
@@ -381,12 +402,33 @@ doesn't repeat it automatically. It can include the name deliberately through th
 - Templates can read entity states and attributes [Decided, N25, R23], plus context
   variables [Decided, R23, P28]:
   - `name`, the alert entity's friendly name [Decided];
+  - `subject_entity_name` and `subject_entity_id`, the friendly name and entity ID
+    of the alert's **subject entity** (see below) [Decided];
   - `entity_id` and `priority`;
   - how long the alert has been firing, as `duration` (readable text) and
     `duration_seconds`;
   - the fire count;
   - the trigger or event data (event alerts), and `fire_data` (manual alerts);
-  - the reason for the notification (`on`, `reminder`, `done`, or late on; §8.3).
+  - the reason for the notification (`on`, `reminder`, or `done`).
+- [Decided] The default wording is deliberately generic. It's a starting point,
+  meant to be overridden with something more specific.
+- **Subject entity.** Many alerts are about one obvious entity: the door, the lock,
+  the thermometer. Its name is available to templates as `subject_entity_name`, so
+  messages can say "{{ subject_entity_name }} is unlocked." without deriving the
+  text from the alert's name. This matters most for generators: *Back Door Lock*,
+  *Side Door Lock*, and *Front Door Lock* alerts can all share one message template
+  [Decided].
+  - [Decided] The subject entity is set automatically where it's obvious: the
+    entity in a **state** alert, the value entity in a **threshold** alert (when the
+    value comes from an entity), the other alert in an **alert state** alert, and
+    the target of a **generated** alert.
+  - [Decided] Any alert can also set its subject entity explicitly, overriding the
+    automatic choice. This is how template, on/off, trigger, and bus event alerts
+    get one.
+  - [Decided] If there's no subject entity, `subject_entity_name` falls back to the
+    alert's `name`, so generic templates still read sensibly.
+  - [Decided] The subject entity is also exposed as a `subject_entity` attribute
+    (N1).
 - [Decided, F22] The card shows the **on** message by default. An optional separate
   **display** message can be set for the card.
 
@@ -661,8 +703,8 @@ To make sure it gets fixed:
 - Controls to enable, disable, and suspend each alert.
 - Later phase: create and edit alerts and generators from the card, making it a
   friendlier front end to the subentry flows.
-- [Decided, F27; late phase] Export/import of alert definitions, to make up for losing YAML's
-  version control and text editing.
+- [Decided, F27; late phase] Export/import of alert definitions, to make up for
+  losing YAML's version control and text editing. Also available as actions (§16).
 
 ## 14. Voice control
 
@@ -736,18 +778,31 @@ area, label, …):
 | `alert_redux.suspend` | Suspend for a `duration`, or `until` a time. |
 | `alert_redux.fire` / `alert_redux.dismiss` | Fire or dismiss a manual alert; `fire` can take `data`. |
 | `alert_redux.refresh_generator` | Re-evaluate a generator's targets now (debugging; §12.3). |
+| `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off). |
 
-**Creating, editing, and deleting alerts by action** [Open, Q10]. Proposed:
-**no** separate create/edit/delete actions. Instead:
+**Managing alert definitions by action** [Decided, Q10]. There are **no** separate
+create or edit actions. Instead:
 
 - The admin card creates and edits alerts through HA's own config-subentry flows
   (which the frontend can already drive), so there's only one validation path.
-- For completeness, **export and import** (§13.2) are also actions:
-  `alert_redux.export` returns alert definitions as response data, and
-  `alert_redux.import` takes them. That makes alert definitions scriptable through
-  the same validation as the UI, without a second set of configuration code (R21).
-- `alert_redux.delete` could be added cheaply if it's wanted, as it has no validation
-  to duplicate.
+- **Export and import** (§13.2) are also actions. `alert_redux.export` returns alert
+  and generator definitions as response data, and `alert_redux.import` takes them.
+  Definitions can then be scripted through the same validation as the UI, without a
+  second set of configuration code (R21).
+- **Overwrite protection** [Decided]: `alert_redux.import` has an `overwrite` flag,
+  off by default. Without it, an import that would replace an existing alert or
+  generator is refused.
+  - [Decided] Imports are all-or-nothing. Every definition is validated first, and
+    if any fails validation, or would overwrite without the flag, **nothing** is
+    imported. The error lists every conflict and problem, so a partial import can't
+    leave things half-changed.
+  - [Decided] "Existing" is decided by each definition's **stable ID**, which export
+    includes. A new definition whose entity ID would clash with a different existing
+    alert is also a conflict.
+- [Decided] Import is an **admin-only** action, since it changes configuration.
+  Export is available to everyone, like reading any other entity data.
+- There's no `alert_redux.delete` action for now. It can be added later if a use
+  appears.
 
 There's no bulk acknowledge [Decided, R19]. Targeting several entities in one call is
 allowed, because HA's normal targeting permits it; there's just no dedicated "ack
@@ -780,9 +835,9 @@ all" action.
 | ~~Q5~~ | ~~Export/import~~ Resolved: yes, in the admin card, late phase (§13.2). | F27 |
 | ~~Q6~~ | ~~Migration from built-in `alert:`~~ Resolved: no code in the integration; a separate converter utility that produces import files, late phase (§17, §20). | F28 |
 | ~~Q7~~ | ~~One event per change, or one combined event?~~ Resolved: separate events (§11.3). | §11.3 |
-| Q8 | Review the remaining **[Proposed]** items: §8.3 (pre-snooze timing, no on notification when pre-acknowledged, late on notification) and §9.3 (default message wording). | — |
+| ~~Q8~~ | ~~Review the remaining proposals~~ Resolved: all approved. | — |
 | ~~Q9~~ | ~~Dangling references~~ Resolved: fail-safe behaviour, with Repairs issues (§12.4). | §12.4 |
-| Q10 | Create/edit/delete alerts by action, or export/import actions only? | §16 |
+| ~~Q10~~ | ~~Create/edit/delete by action?~~ Resolved: export/import actions, with overwrite protection (§16). | §16 |
 
 ## 19. Decision log
 
@@ -806,6 +861,9 @@ Decisions with their reasons, in the order they were made.
 | Always send the done notification, even without an on notification | You want to know when it's over, whether or not you acknowledged it or heard it start; you may know the world's state some other way [R10, F25]. |
 | Drop a superseded alert's done notification when both end together | One "door closed" message is enough [F25]. |
 | `name` available in message templates | Messages don't repeat the name automatically, so it must be easy to include deliberately [N17]. |
+| Snooze-end reminder rule: remind now unless a scheduled reminder is under 5 min away | The alert speaks up when the snooze ends, without a double reminder; reminders show the real firing duration [§6.2, §8.3]. |
+| `subject_entity_name` (subject entity) in message templates | Generated alerts can share one message template without deriving names from the alert name [§9.3]. |
+| Export/import actions instead of create/edit actions; import won't overwrite without a flag | One validation path; protects existing definitions from accidental replacement [Q10]. |
 | Separate events per change, with a common prefix | Easy to filter; list-based event triggers cover listening for several [§11.3]. |
 | Paired events when one change implies another | Snooze and ack don't always move together, so firing both gives the most information [§11.3]. |
 | Per-priority counts as attributes, not sensors | Avoids multiplying entities [§11.2]. |
