@@ -52,6 +52,11 @@ class Settings:
             startup_delay=DEFAULT_STARTUP_DELAY if startup is None else startup,
         )
 
+    def update(self, other: Settings) -> None:
+        """Take another set of settings, in place: entities hold this object."""
+        self.no_data_grace = other.no_data_grace
+        self.startup_delay = other.startup_delay
+
 
 @dataclass(frozen=True, slots=True)
 class Transition:

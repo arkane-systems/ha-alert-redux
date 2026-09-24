@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import voluptuous as vol
 
@@ -21,10 +22,14 @@ from .const import (
     ATTR_OLD_STATE,
     ATTR_PRIORITY,
     ATTR_USER_ID,
+    DATA_ADD_ENTITIES,
     DATA_COMPONENT,
+    DATA_ENTITIES,
+    DATA_OPTIONS,
     DATA_SETTINGS,
     DATA_STARTUP_UNTIL,
     DATA_STORE,
+    DATA_SUBENTRIES,
     DOMAIN,
     EVENT_DELETED,
     SERVICE_ACK,
@@ -33,7 +38,7 @@ from .const import (
     SERVICE_UNACK,
     SUBENTRY_ALERT,
 )
-from .entity import AlertEntity
+from .entity import AlertEntity, create_alert_entity
 from .frontend import async_register_frontend
 from .model import AlertRuntime, Settings
 from .store import AlertStore
@@ -81,9 +86,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not await component.async_setup_entry(entry):
         return False
 
-    # Adding, changing, or removing a subentry reloads the entry; alert state
-    # survives through the store.
-    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
+    # Subentry and option changes are applied in place, not by reloading the
+    # entry, so that other alerts don't go through unavailable and no_data.
+    data[DATA_SUBENTRIES] = _alert_subentries(entry)
+    data[DATA_OPTIONS] = dict(entry.options)
+    entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
     return True
 
 
@@ -95,8 +102,45 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unloaded
 
 
-async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    hass.config_entries.async_schedule_reload(entry.entry_id)
+async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Add, edit, and forget alerts, and apply new defaults, without a reload."""
+    data = hass.data[DOMAIN]
+    entities: dict[str, AlertEntity] = data[DATA_ENTITIES]
+    old: dict[str, tuple[str, dict[str, Any]]] = data[DATA_SUBENTRIES]
+    new = data[DATA_SUBENTRIES] = _alert_subentries(entry)
+
+    # Home Assistant removes a deleted subentry's entity itself, through the
+    # entity registry; what's left is its stored record and the deleted event.
+    if removed := old.keys() - new.keys():
+        for subentry_id in removed:
+            entities.pop(subentry_id, None)
+        _async_forget_deleted_alerts(hass, entry, data[DATA_STORE])
+
+    for subentry_id in new.keys() - old.keys():
+        entity = create_alert_entity(
+            entry.subentries[subentry_id], data[DATA_STORE], data[DATA_SETTINGS]
+        )
+        entities[subentry_id] = entity
+        data[DATA_ADD_ENTITIES]([entity], config_subentry_id=subentry_id)
+
+    for subentry_id in new.keys() & old.keys():
+        if new[subentry_id] != old[subentry_id] and subentry_id in entities:
+            entities[subentry_id].async_update_config(entry.subentries[subentry_id])
+
+    if dict(entry.options) != data[DATA_OPTIONS]:
+        data[DATA_OPTIONS] = dict(entry.options)
+        data[DATA_SETTINGS].update(Settings.from_options(entry.options))
+        for entity in entities.values():
+            entity.async_settings_changed()
+
+
+def _alert_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]]]:
+    """Return what identifies a change to each alert subentry."""
+    return {
+        subentry_id: (subentry.title, dict(subentry.data))
+        for subentry_id, subentry in entry.subentries.items()
+        if subentry.subentry_type == SUBENTRY_ALERT
+    }
 
 
 def _async_forget_deleted_alerts(

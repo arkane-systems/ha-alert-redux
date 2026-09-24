@@ -21,6 +21,7 @@ DATA_SETTINGS = "settings"
 DATA_ADD_ENTITIES = "add_entities"
 DATA_ENTITIES = "entities"
 DATA_SUBENTRIES = "subentries"
+DATA_OPTIONS = "options"
 DATA_STARTUP_UNTIL = "startup_until"
 
 # Persistent alert state (spec §15.1).

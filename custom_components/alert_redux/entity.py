@@ -394,6 +394,7 @@ class ConditionAlertEntity(AlertEntity):
     def async_settings_changed(self) -> None:
         """Re-evaluate: the default grace period may have changed."""
         self._async_evaluate()
+        self.async_write_ha_state()
 
     @callback
     def _async_start_source(self) -> None:
