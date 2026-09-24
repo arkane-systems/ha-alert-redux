@@ -67,10 +67,10 @@ changes. It can't be fired or dismissed manually [Decided, R3].
 
 | Kind | Configuration |
 |---|---|
-| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. |
+| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. |
 | **On/off** | Separate *on* and *off* criteria, each a condition and/or trigger. Turns on when the on criterion becomes true, and off when the off criterion becomes true (edge-triggered, as in Alert2). |
 | **Threshold** | A numeric value (from an entity, attribute, or template) with a minimum and/or maximum, and hysteresis. The limits can themselves come from entities or templates [P18]. |
-| **Template** | A template that evaluates to true or false. The fully general option. |
+| **Template** | A template that evaluates to true or false. The fully general option. [Decided, phase 2] Only a clearly true or false result counts (`true`/`on`/`yes`/`1`, `false`/`off`/`no`/`0`, or a real boolean or number). An error, an undefined variable, or a result of `none`, `unknown`, `unavailable`, or anything else means no data (§4.4). A template binary sensor would read those as false, but for an alert that silently hides a broken template. |
 | **Alert state** | [Decided, F24] Fires when another alert has been in a given state (e.g. `active`, meaning unacknowledged) for a given time. This gives escalation without templates (§8.4). |
 
 All condition alerts support:
@@ -83,6 +83,14 @@ All condition alerts support:
   (§6.1) and sends a done notification.
 - An optional extra **condition** combined (AND) with the main criterion (threshold
   kind in particular) [P18].
+  - [Decided, phase 2] It's a **template**, judged like the template kind, and
+    tracked reactively. HA's condition selector would be friendlier, but HA
+    conditions can't be tracked, so time-based ones would need polling.
+  - [Decided, phase 2] It's simply part of the condition: while it's false, the alert
+    doesn't fire, and if it turns false while the alert is firing, `delay_off` runs and
+    then the alert ends.
+  - [Decided, phase 2] If either the main criterion or the extra condition has no
+    data, the alert has no data, even if the other one is false (§4.4).
 
 ### 4.2 Event alerts
 
@@ -92,7 +100,7 @@ duration runs out [Decided, R2, R3].
 
 | Kind | Configuration |
 |---|---|
-| **Trigger** | Any HA trigger, plus an optional condition that must be true when the trigger fires [Decided, R2, P16]. |
+| **Trigger** | Any HA trigger, plus an optional condition that must be true when the trigger fires [Decided, R2, P16]. [Decided, phase 2] The condition is a template, for consistency with the condition alerts' extra condition (§4.1), even though it's only checked at the moment the trigger fires. |
 | **Bus event** | An event type on the HA event bus, plus an optional filter on the event data [Decided, R2]. |
 
 - **Duration** comes from the alert's own setting, or else from its priority's default
@@ -139,7 +147,19 @@ won't parse (e.g. a non-numeric threshold value), the alert goes into its
 - [Decided] If the alert was firing, it keeps its firing state and acknowledgement
   while it waits for data, until a grace period runs out. That way a sensor briefly
   dropping out doesn't end the firing and trigger done and "on" notifications. The
-  grace period is set per alert, with a global default.
+  grace period is set per alert, with a global default. [Decided, phase 2] The
+  default is 10 minutes.
+- [Decided, phase 2] During the grace period the entity **stays `active` or
+  `ack`**. Its `no_data_since` and `missing_inputs` attributes show that data is
+  missing, and a `_no_data` event is fired (§11.3). It still counts as firing
+  (§3), so summary sensors and signal lights don't drop out with the sensor, and
+  automations watching its state don't see the flicker the grace period exists to
+  prevent. If the grace period runs out, the firing ends (`_ended` with reason
+  `no_data`) and the state becomes `no_data`. An alert that isn't firing goes to
+  `no_data` at once.
+- [Decided, phase 2] Missing data interrupts pending delays. `delay_on` needs the
+  condition to hold *continuously*, and while there's no data, nobody knows whether
+  it stopped holding. So both delays start afresh when data returns.
 - [Decided] An alert that has just started up, or been re-enabled, is in the no-data
   state until its inputs first report data (§15).
 - Alerts with no data are listed in their own section on the card (§13.1) and counted
@@ -263,12 +283,13 @@ such as a configuration error.
    fires        = condition met (after delay_on) · event received · manual fire
    stops firing = condition ends (after delay_off) · duration elapsed · manual dismiss
 
-   any enabled state ── inputs missing ──▶ no_data ── inputs return ──▶ re-evaluate
+   idle ── inputs missing ──▶ no_data ── inputs return ──▶ re-evaluate
+   active/ack ── inputs missing ──▶ (stays active/ack) ── grace ends ──▶ no_data
+                                                  └── inputs return ──▶ re-evaluate
    any state ── disable / suspend ──▶ disabled ── enable / suspension ends ──▶ no_data
 ```
 
-(While in `no_data`, a firing alert keeps its firing/ack status for the grace period;
-see §4.4.)
+(A firing alert keeps its `active`/`ack` state through the grace period; see §4.4.)
 
 ## 8. Supersession
 
@@ -658,11 +679,16 @@ built.
 - **State details:** `kind`, `priority`, `firing_since`, `last_fired`, `last_ended`,
   `fire_count` (current firing), `event_expires` (event alerts), `snoozed_until`,
   `disabled_until`, `pre_acked_by`, `superseded_by`, `no_data_since`, the input
-  entities that are missing data, and the time and user of the last acknowledge,
-  snooze, disable, or enable [Decided, R18].
+  entities that are missing data (`missing_inputs`), and the time and user of the
+  last acknowledge, snooze, disable, or enable [Decided, R18]. [Decided, phase 2]
+  Also the pending deadlines: `delay_on_until`, `delay_off_until`, and
+  `no_data_grace_until`.
 - **Configuration:** `acknowledgeable`, `supersedes`, `notifier_groups`, `buttons`,
   `reminder_schedule`, `throttle`, `delay_on`/`delay_off`, `duration`, the source
-  entity or entities, and the on message (rendered).
+  entity or entities, and the on message (rendered). [Decided, phase 2] Durations
+  are given in seconds. The state kind shows `source_entity` and `target_state`,
+  and the template kind shows `template`. Condition alerts also show `condition`
+  and the effective `no_data_grace`. Templates are kept out of the recorder.
 - **Generator provenance:** `generated_by` (§12.3).
 
 Attributes that can grow large, or change constantly, should be kept out of the
@@ -718,6 +744,16 @@ tells the whole story and nothing has to be inferred:
   for `_unacked` as "someone un-acknowledged this" would see false positives.
 - [Decided] A firing that starts pre-acknowledged (§8.3) fires `_fired` and
   `_acked`, and the `_acked` data carries `pre_acked_by`.
+- [Decided, phase 2] `_ended` carries a **`reason`**: `resolved` (the condition
+  ended, or an event alert's duration ran out), `dismissed` (a manual alert), or
+  `no_data` (the grace period ran out; §4.4). Phase 6 adds `disabled` (F15). The
+  done notification (§9.7) uses it.
+- [Decided, phase 2] `_no_data` fires when an alert loses its data, and carries
+  `missing_inputs`. This happens both when the alert enters `no_data` and when a
+  firing alert loses data but keeps its state during the grace period. If the
+  grace period then runs out, only `_ended` fires. Data returning has no event of
+  its own (`state_changed` shows it); the phase 8 review of the event set can
+  revisit that. Waiting for data at startup fires no events.
 
 ### 11.4 Logbook / Activity
 
@@ -902,6 +938,10 @@ To make sure it gets fixed:
 [Decided, F21] Alert Redux restores its state across restarts: firing status,
 acknowledgement, snooze timer, disabled/suspended status and time, event-alert
 expiry, pre-acknowledgements, throttle counters, and the reminder schedule position.
+[Decided, phase 2] Also pending `delay_on` and `delay_off` deadlines. These are
+honoured if the condition still holds when data first returns after the restart,
+and dropped if not. Inputs that are still loading don't cancel them. Restarting the
+timers from zero would delay an alert that was about to fire, which fails quiet.
 [Decided, phase 1] This uses a single `Store`, saved shortly after every change, as
 the one source of truth; `RestoreEntity` isn't used. Its periodic 15-minute save is
 exactly the gap the Store closes, and some state that must persist (throttle
@@ -936,6 +976,10 @@ After a restart:
 - Alerts start in `no_data` and evaluate as soon as their inputs report data
   [Decided, N33]. There's no `early_start` [Decided, R16].
 - An optional startup grace period (global setting) delays the first evaluation.
+  [Decided, phase 2] It's called the **startup delay** (default: none). It applies
+  only while HA is starting, counted from when Alert Redux is set up, and not to
+  later reloads or newly added alerts. During it, alerts that aren't firing show
+  `no_data`, and firing alerts keep their restored state.
 - Integrations or entities that disappear and come back are handled by the no-data
   mechanism (§4.4).
 
@@ -1079,6 +1123,14 @@ Decisions with their reasons, in the order they were made.
 | "Suspend" for timed disabling | Keeps "snooze" meaning what it usually means [N22]. |
 | Persist with a single Store, not `RestoreEntity` | Saves on every change; some persistent state isn't tied to an entity, so a Store is needed anyway [§15.1]. |
 | Inapplicable actions are no-ops, not errors | Calls that target several alerts shouldn't fail because some are in the wrong state [§16]. |
+| Firing alerts stay `active`/`ack` through the no-data grace period | "Firing" is defined by state, so signal lights and automations shouldn't see a dropout; attributes and the `_no_data` event show it [§4.4]. |
+| The extra condition, and the event-alert condition, are templates | Templates can be tracked reactively; HA conditions can't, so time-based ones would need polling. The same form for both kinds keeps things consistent [§4.1, §4.2]. |
+| A state alert can target `unavailable`/`unknown` | "Lock unavailable for 10 minutes" is a common use of the built-in `alert` [§4.1]. |
+| Template results must be clearly true or false | Reading garbage as false would silently hide a broken alert [§4.1]. |
+| No data in any input means no data for the alert | Literal reading of §4.4; the alert depends on every input [§4.1]. |
+| Pending delays survive restarts | Restarting them from zero fails quiet [§15.1]. |
+| `_ended` carries a reason | Done messages must tell a resolved alert from one that lost its data (and, later, one that was disabled) [§11.3]. |
+| Subentry changes applied in place, not by reloading the entry | A reload made every alert briefly `unavailable`, and would push condition alerts through `no_data` [§20]. |
 
 ## 20. Phase plan
 
@@ -1139,6 +1191,12 @@ and acknowledged, and it survives a restart.
 *Done when* a door-sensor alert and a template alert fire and end correctly,
 including through sensor dropouts and restarts.
 
+[Phase 2 as built] Global defaults are set in the integration's options flow:
+the no-data grace period and the startup delay. Adding an alert starts with a menu of
+kinds, and editing uses the alert's own kind's form; the kind can't be changed.
+Editing a condition alert keeps its firing if the new condition still holds, and
+otherwise lets `delay_off` run from the edit.
+
 ### Phase 3 — Main card (0.3.0)
 
 - `alert-redux-card` (§13.1): sub-cards sorted and coloured by priority, icon, name,
@@ -1173,7 +1231,8 @@ correctly.
 
 - **On/off** and **threshold** condition kinds (§4.1).
 - **Trigger** and **bus event** alerts (§4.2): duration, per-priority default
-  durations, firing again while firing.
+  durations, firing again while firing. The trigger kind's condition is a template
+  (decided in phase 2; §4.2).
 - The card's progress bar for event alerts.
 
 *Done when* every alert kind except alert state works end to end.
