@@ -51,7 +51,11 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     if not await _async_register_lovelace_resource(hass, url):
         from homeassistant.components.frontend import add_extra_js_url
 
-        add_extra_js_url(hass, url)
+        try:
+            add_extra_js_url(hass, url)
+        except Exception:  # noqa: BLE001 - e.g. the frontend isn't loaded
+            _LOGGER.warning("Could not load the Alert Redux card", exc_info=True)
+            return
         _LOGGER.debug("Loaded Alert Redux card via add_extra_js_url")
 
     data[_DATA_REGISTERED] = True

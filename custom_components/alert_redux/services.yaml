@@ -1,0 +1,29 @@
+fire:
+  target:
+    entity:
+      integration: alert_redux
+      domain: alert_redux
+  fields:
+    data:
+      required: false
+      example: '{"room": "kitchen"}'
+      selector:
+        object:
+
+dismiss:
+  target:
+    entity:
+      integration: alert_redux
+      domain: alert_redux
+
+ack:
+  target:
+    entity:
+      integration: alert_redux
+      domain: alert_redux
+
+unack:
+  target:
+    entity:
+      integration: alert_redux
+      domain: alert_redux
