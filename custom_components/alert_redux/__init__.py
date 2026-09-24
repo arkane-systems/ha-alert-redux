@@ -7,10 +7,11 @@ import logging
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_DATA,
@@ -21,6 +22,8 @@ from .const import (
     ATTR_PRIORITY,
     ATTR_USER_ID,
     DATA_COMPONENT,
+    DATA_SETTINGS,
+    DATA_STARTUP_UNTIL,
     DATA_STORE,
     DOMAIN,
     EVENT_DELETED,
@@ -32,7 +35,7 @@ from .const import (
 )
 from .entity import AlertEntity
 from .frontend import async_register_frontend
-from .model import AlertRuntime
+from .model import AlertRuntime, Settings
 from .store import AlertStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,6 +65,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if (store := data.get(DATA_STORE)) is None:
         store = data[DATA_STORE] = AlertStore(hass)
         await store.async_load()
+
+    settings = data[DATA_SETTINGS] = Settings.from_options(entry.options)
+    # The startup delay holds back condition alerts' first evaluation, but only
+    # while Home Assistant is starting, not on later reloads (spec §15.3).
+    data[DATA_STARTUP_UNTIL] = (
+        dt_util.utcnow() + settings.startup_delay
+        if hass.state is not CoreState.running and settings.startup_delay
+        else None
+    )
 
     _async_forget_deleted_alerts(hass, entry, store)
 

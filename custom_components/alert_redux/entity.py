@@ -1,17 +1,25 @@
-"""The alert entity (spec §7, §11)."""
+"""The alert entities (spec §7, §11)."""
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigSubentry
+from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_ACKNOWLEDGEABLE,
+    ATTR_CONDITION,
+    ATTR_DELAY_OFF,
+    ATTR_DELAY_OFF_UNTIL,
+    ATTR_DELAY_ON,
+    ATTR_DELAY_ON_UNTIL,
     ATTR_DURATION_SECONDS,
     ATTR_FIRE_COUNT,
     ATTR_FIRE_DATA,
@@ -23,54 +31,96 @@ from .const import (
     ATTR_LAST_FIRED,
     ATTR_LAST_UNACKED,
     ATTR_LAST_UNACKED_BY,
+    ATTR_MISSING_INPUTS,
     ATTR_NAME,
     ATTR_NEW_STATE,
+    ATTR_NO_DATA_GRACE,
+    ATTR_NO_DATA_GRACE_UNTIL,
+    ATTR_NO_DATA_SINCE,
     ATTR_OLD_STATE,
     ATTR_PRIORITY,
     ATTR_REASON,
+    ATTR_SOURCE_ENTITY,
+    ATTR_SUBJECT_ENTITY,
+    ATTR_TARGET_STATE,
+    ATTR_TEMPLATE,
     ATTR_USER_DISMISSABLE,
     ATTR_USER_ID,
+    CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_CONDITION,
+    CONF_DELAY_OFF,
+    CONF_DELAY_ON,
+    CONF_ENTITY_ID,
     CONF_ICON,
     CONF_KIND,
+    CONF_NO_DATA_GRACE,
     CONF_PRIORITY,
+    CONF_SUBJECT_ENTITY,
+    CONF_TARGET_STATE,
+    CONF_TEMPLATE,
     CONF_USER_DISMISSABLE,
+    DATA_STARTUP_UNTIL,
     DEFAULT_PRIORITY_ICONS,
     DOMAIN,
     EVENT_ACKED,
     EVENT_CREATED,
     EVENT_ENDED,
     EVENT_FIRED,
+    EVENT_NO_DATA,
     EVENT_UNACKED,
     AlertKind,
     EndReason,
     Priority,
 )
-from .model import AlertRuntime, Transition
+from .model import AlertRuntime, Change, Settings, Timing, Transition, to_timedelta
+from .sources import AndSource, Source, StateSource, TemplateSource
 from .store import AlertStore
 
 _LOGGER = logging.getLogger(__name__)
 
 
+def create_alert_entity(
+    subentry: ConfigSubentry, store: AlertStore, settings: Settings
+) -> AlertEntity:
+    """Return the entity for an alert subentry, according to its kind."""
+    if AlertKind(subentry.data[CONF_KIND]) in CONDITION_KINDS:
+        return ConditionAlertEntity(subentry, store, settings)
+    return AlertEntity(subentry, store, settings)
+
+
 class AlertEntity(Entity):
-    """One configured alert."""
+    """One configured alert; on its own, a manual alert (spec §4.3)."""
 
     _attr_should_poll = False
     _attr_translation_key = "alert"
     _unrecorded_attributes = frozenset({ATTR_FIRE_DATA})
 
-    def __init__(self, subentry: ConfigSubentry, store: AlertStore) -> None:
+    def __init__(
+        self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
+    ) -> None:
         """Initialize the alert from its subentry."""
-        data = subentry.data
         self._store = store
-        self._kind = AlertKind(data[CONF_KIND])
+        self._settings = settings
+        self._kind = AlertKind(subentry.data[CONF_KIND])
+        self._runtime = AlertRuntime()
+        self._attr_unique_id = subentry.subentry_id
+        self._configure(subentry)
+
+    def _configure(self, subentry: ConfigSubentry) -> None:
+        """Take the alert's configuration from its subentry."""
+        data = subentry.data
         self._priority = Priority(data[CONF_PRIORITY])
         self._acknowledgeable: bool = data[CONF_ACKNOWLEDGEABLE]
         self._user_dismissable: bool = data.get(CONF_USER_DISMISSABLE, False)
-        self._runtime = AlertRuntime()
-        self._attr_unique_id = subentry.subentry_id
+        self._explicit_subject: str | None = data.get(CONF_SUBJECT_ENTITY) or None
         self._attr_name = subentry.title
         self._attr_icon = data.get(CONF_ICON) or DEFAULT_PRIORITY_ICONS[self._priority]
+
+    @property
+    def subject_entity(self) -> str | None:
+        """Return the entity the alert is about, if any (spec §9.5)."""
+        return self._explicit_subject
 
     @property
     def state(self) -> str:
@@ -81,21 +131,24 @@ class AlertEntity(Entity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the alert's state details and configuration (spec §11.1)."""
         runtime = self._runtime
-        return {
+        attributes: dict[str, Any] = {
             ATTR_KIND: self._kind,
             ATTR_PRIORITY: self._priority,
             ATTR_ACKNOWLEDGEABLE: self._acknowledgeable,
-            ATTR_USER_DISMISSABLE: self._user_dismissable,
+            ATTR_SUBJECT_ENTITY: self.subject_entity,
             ATTR_FIRING_SINCE: runtime.firing_since,
             ATTR_LAST_FIRED: runtime.last_fired,
             ATTR_LAST_ENDED: runtime.last_ended,
             ATTR_FIRE_COUNT: runtime.fire_count,
-            ATTR_FIRE_DATA: runtime.fire_data,
             ATTR_LAST_ACKED: runtime.last_acked,
             ATTR_LAST_ACKED_BY: runtime.last_acked_by,
             ATTR_LAST_UNACKED: runtime.last_unacked,
             ATTR_LAST_UNACKED_BY: runtime.last_unacked_by,
         }
+        if self._kind is AlertKind.MANUAL:
+            attributes[ATTR_USER_DISMISSABLE] = self._user_dismissable
+            attributes[ATTR_FIRE_DATA] = runtime.fire_data
+        return attributes
 
     async def async_added_to_hass(self) -> None:
         """Restore the persisted state, or announce a new alert."""
@@ -103,9 +156,25 @@ class AlertEntity(Entity):
         record = self._store.get_alert(self.unique_id)
         if record is not None:
             self._runtime = AlertRuntime.from_dict(record["runtime"])
+        self._async_restored()
         self._persist()
         if record is None:
             self._fire_event(EVENT_CREATED, None)
+
+    @callback
+    def _async_restored(self) -> None:
+        """Prepare the restored (or new) runtime state, before it is saved."""
+
+    @callback
+    def async_update_config(self, subentry: ConfigSubentry) -> None:
+        """Apply an edited subentry in place, keeping the alert's state."""
+        self._configure(subentry)
+        self.async_write_ha_state()
+        self._persist()
+
+    @callback
+    def async_settings_changed(self) -> None:
+        """React to a change in the global defaults."""
 
     async def async_fire(self, data: dict[str, Any] | None = None) -> None:
         """Fire a manual alert, or fire it again if it is already firing."""
@@ -125,15 +194,7 @@ class AlertEntity(Entity):
         ) is None:
             _LOGGER.debug("%s: dismiss ignored; not firing", self.entity_id)
             return
-        self._apply(
-            EVENT_ENDED,
-            transition,
-            {
-                ATTR_FIRE_COUNT: transition.fire_count,
-                ATTR_DURATION_SECONDS: transition.duration_seconds,
-                ATTR_REASON: transition.reason,
-            },
-        )
+        self._apply(EVENT_ENDED, transition, _ended_data(transition))
 
     async def async_ack(self) -> None:
         """Acknowledge the alert."""
@@ -215,3 +276,214 @@ class AlertEntity(Entity):
             },
             context=self._context,
         )
+
+
+class ConditionAlertEntity(AlertEntity):
+    """An alert that fires while its condition holds (spec §4.1).
+
+    A source reports the condition, or that it has no data; the runtime applies the
+    delays and the no-data grace period, and this entity keeps one timer for the
+    runtime's next deadline.
+    """
+
+    _unrecorded_attributes = frozenset({ATTR_TEMPLATE, ATTR_CONDITION})
+
+    def __init__(
+        self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
+    ) -> None:
+        """Initialize the alert from its subentry."""
+        self._source: Source | None = None
+        self._result: tuple[bool | None, list[str]] | None = None
+        self._unsub_timer: CALLBACK_TYPE | None = None
+        self._unsub_startup: CALLBACK_TYPE | None = None
+        super().__init__(subentry, store, settings)
+
+    def _configure(self, subentry: ConfigSubentry) -> None:
+        super()._configure(subentry)
+        data = subentry.data
+        self._source_entity: str | None = data.get(CONF_ENTITY_ID)
+        self._target_state: str | None = data.get(CONF_TARGET_STATE)
+        self._template: str | None = data.get(CONF_TEMPLATE)
+        self._condition: str | None = data.get(CONF_CONDITION) or None
+        self._delay_on = to_timedelta(data.get(CONF_DELAY_ON))
+        self._delay_off = to_timedelta(data.get(CONF_DELAY_OFF))
+        self._no_data_grace = to_timedelta(data.get(CONF_NO_DATA_GRACE))
+
+    @property
+    def subject_entity(self) -> str | None:
+        """Return the explicit subject, or else the state kind's entity."""
+        return self._explicit_subject or self._source_entity
+
+    @property
+    def _timing(self) -> Timing:
+        grace = self._no_data_grace
+        return Timing(
+            delay_on=self._delay_on or timedelta(0),
+            delay_off=self._delay_off or timedelta(0),
+            no_data_grace=self._settings.no_data_grace if grace is None else grace,
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Add the condition's configuration and current evaluation."""
+        runtime = self._runtime
+        timing = self._timing
+        attributes = super().extra_state_attributes
+        if self._kind is AlertKind.STATE:
+            attributes[ATTR_SOURCE_ENTITY] = self._source_entity
+            attributes[ATTR_TARGET_STATE] = self._target_state
+        else:
+            attributes[ATTR_TEMPLATE] = self._template
+        attributes |= {
+            ATTR_CONDITION: self._condition,
+            ATTR_DELAY_ON: timing.delay_on.total_seconds(),
+            ATTR_DELAY_OFF: timing.delay_off.total_seconds(),
+            ATTR_NO_DATA_GRACE: timing.no_data_grace.total_seconds(),
+            ATTR_NO_DATA_SINCE: runtime.no_data_since,
+            ATTR_MISSING_INPUTS: runtime.missing_inputs,
+            ATTR_DELAY_ON_UNTIL: runtime.delay_on_until,
+            ATTR_DELAY_OFF_UNTIL: runtime.delay_off_until,
+            ATTR_NO_DATA_GRACE_UNTIL: runtime.no_data_grace_until(timing),
+        }
+        return attributes
+
+    @callback
+    def _async_restored(self) -> None:
+        """Count as having no data until the inputs report (spec §15.3)."""
+        self._runtime.await_data(dt_util.utcnow())
+
+    async def async_added_to_hass(self) -> None:
+        """Start watching, after the startup delay if HA is starting."""
+        await super().async_added_to_hass()
+        startup_until: datetime | None = self.hass.data[DOMAIN].get(DATA_STARTUP_UNTIL)
+        if startup_until is not None and dt_util.utcnow() < startup_until:
+            self._unsub_startup = async_track_point_in_utc_time(
+                self.hass, self._async_startup_done, startup_until
+            )
+        else:
+            self._async_start_source()
+
+    @callback
+    def _async_startup_done(self, _now: datetime) -> None:
+        self._unsub_startup = None
+        self._async_start_source()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Stop watching the condition."""
+        if self._unsub_startup is not None:
+            self._unsub_startup()
+            self._unsub_startup = None
+        self._async_stop_source()
+
+    @callback
+    def async_update_config(self, subentry: ConfigSubentry) -> None:
+        """Apply an edited subentry: re-subscribe, and restart pending delays.
+
+        The firing (if any) carries on if the new condition holds; otherwise
+        delay_off runs from now.
+        """
+        self._async_stop_source()
+        self._configure(subentry)
+        self._runtime.delay_on_until = None
+        self._runtime.delay_off_until = None
+        super().async_update_config(subentry)
+        if self._unsub_startup is None:
+            self._async_start_source()
+
+    @callback
+    def async_settings_changed(self) -> None:
+        """Re-evaluate: the default grace period may have changed."""
+        self._async_evaluate()
+
+    @callback
+    def _async_start_source(self) -> None:
+        main: Source
+        if self._kind is AlertKind.STATE:
+            assert self._source_entity is not None
+            assert self._target_state is not None
+            main = StateSource(self.hass, self._source_entity, self._target_state)
+        else:
+            assert self._template is not None
+            main = TemplateSource(
+                self.hass, self._template, f"{self.entity_id} template"
+            )
+        if self._condition:
+            main = AndSource(
+                self.hass,
+                main,
+                TemplateSource(
+                    self.hass, self._condition, f"{self.entity_id} condition"
+                ),
+            )
+        self._source = main
+        self._result = None
+        main.async_start(self._async_source_updated)
+
+    @callback
+    def _async_stop_source(self) -> None:
+        if self._source is not None:
+            self._source.async_stop()
+            self._source = None
+        if self._unsub_timer is not None:
+            self._unsub_timer()
+            self._unsub_timer = None
+
+    @callback
+    def _async_source_updated(
+        self, result: bool | None, missing_inputs: list[str]
+    ) -> None:
+        self._result = (result, missing_inputs)
+        self._async_evaluate()
+
+    @callback
+    def _async_timer(self, _now: datetime) -> None:
+        self._unsub_timer = None
+        self._async_evaluate()
+
+    @callback
+    def _async_evaluate(self) -> None:
+        """Apply the latest result, publish any changes, and set the next timer."""
+        if self._result is None:
+            return
+        # Changes here are the alert's own, not those of the last user action.
+        self._context = None
+        timing = self._timing
+        before = self._runtime.to_dict()
+        changes = self._runtime.evaluate(*self._result, dt_util.utcnow(), timing)
+
+        if self._unsub_timer is not None:
+            self._unsub_timer()
+            self._unsub_timer = None
+        if (deadline := self._runtime.next_deadline(timing)) is not None:
+            self._unsub_timer = async_track_point_in_utc_time(
+                self.hass, self._async_timer, deadline
+            )
+
+        if changes or self._runtime.to_dict() != before:
+            self.async_write_ha_state()
+            self._persist()
+        for change, transition in changes:
+            if change is Change.FIRED:
+                self._fire_event(
+                    EVENT_FIRED,
+                    transition.old_state,
+                    {ATTR_FIRE_COUNT: transition.fire_count},
+                )
+            elif change is Change.ENDED:
+                self._fire_event(
+                    EVENT_ENDED, transition.old_state, _ended_data(transition)
+                )
+            else:
+                self._fire_event(
+                    EVENT_NO_DATA,
+                    transition.old_state,
+                    {ATTR_MISSING_INPUTS: self._runtime.missing_inputs},
+                )
+
+
+def _ended_data(transition: Transition) -> dict[str, Any]:
+    return {
+        ATTR_FIRE_COUNT: transition.fire_count,
+        ATTR_DURATION_SECONDS: transition.duration_seconds,
+        ATTR_REASON: transition.reason,
+    }

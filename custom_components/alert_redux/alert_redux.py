@@ -12,8 +12,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DATA_STORE, DOMAIN, SUBENTRY_ALERT
-from .entity import AlertEntity
+from .const import DATA_ENTITIES, DATA_SETTINGS, DATA_STORE, DOMAIN, SUBENTRY_ALERT
+from .entity import create_alert_entity
 
 
 async def async_setup_entry(
@@ -22,10 +22,11 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add an entity for every alert subentry."""
-    store = hass.data[DOMAIN][DATA_STORE]
+    data = hass.data[DOMAIN]
+    entities = data[DATA_ENTITIES] = {}
     for subentry in entry.subentries.values():
         if subentry.subentry_type != SUBENTRY_ALERT:
             continue
-        async_add_entities(
-            [AlertEntity(subentry, store)], config_subentry_id=subentry.subentry_id
-        )
+        entity = create_alert_entity(subentry, data[DATA_STORE], data[DATA_SETTINGS])
+        entities[subentry.subentry_id] = entity
+        async_add_entities([entity], config_subentry_id=subentry.subentry_id)

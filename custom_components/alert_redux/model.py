@@ -8,12 +8,49 @@ entity wraps it, adding configuration checks, timers, events, and persistence.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
-from .const import AlertState, EndReason
+from .const import (
+    CONF_NO_DATA_GRACE,
+    CONF_STARTUP_DELAY,
+    DEFAULT_NO_DATA_GRACE,
+    DEFAULT_STARTUP_DELAY,
+    AlertState,
+    EndReason,
+)
+
+
+def to_timedelta(value: Any) -> timedelta | None:
+    """Convert a stored duration (a duration selector's dict) to a timedelta."""
+    if value is None:
+        return None
+    if isinstance(value, timedelta):
+        return value
+    if isinstance(value, dict):
+        return timedelta(**{unit: float(amount) for unit, amount in value.items()})
+    return timedelta(seconds=float(value))
+
+
+@dataclass(slots=True)
+class Settings:
+    """The global defaults, from the config entry's options (spec §12.1)."""
+
+    no_data_grace: timedelta = DEFAULT_NO_DATA_GRACE
+    startup_delay: timedelta = DEFAULT_STARTUP_DELAY
+
+    @classmethod
+    def from_options(cls, options: Mapping[str, Any]) -> Settings:
+        """Read the settings from the entry's options, defaulting what's unset."""
+        grace = to_timedelta(options.get(CONF_NO_DATA_GRACE))
+        startup = to_timedelta(options.get(CONF_STARTUP_DELAY))
+        return cls(
+            no_data_grace=DEFAULT_NO_DATA_GRACE if grace is None else grace,
+            startup_delay=DEFAULT_STARTUP_DELAY if startup is None else startup,
+        )
 
 
 @dataclass(frozen=True, slots=True)
