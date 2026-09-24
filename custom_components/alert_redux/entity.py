@@ -27,6 +27,7 @@ from .const import (
     ATTR_NEW_STATE,
     ATTR_OLD_STATE,
     ATTR_PRIORITY,
+    ATTR_REASON,
     ATTR_USER_DISMISSABLE,
     ATTR_USER_ID,
     CONF_ACKNOWLEDGEABLE,
@@ -42,6 +43,7 @@ from .const import (
     EVENT_FIRED,
     EVENT_UNACKED,
     AlertKind,
+    EndReason,
     Priority,
 )
 from .model import AlertRuntime, Transition
@@ -118,7 +120,9 @@ class AlertEntity(Entity):
     async def async_dismiss(self) -> None:
         """Dismiss a firing manual alert."""
         self._require_manual()
-        if (transition := self._runtime.end(dt_util.utcnow())) is None:
+        if (
+            transition := self._runtime.end(dt_util.utcnow(), EndReason.DISMISSED)
+        ) is None:
             _LOGGER.debug("%s: dismiss ignored; not firing", self.entity_id)
             return
         self._apply(
@@ -127,6 +131,7 @@ class AlertEntity(Entity):
             {
                 ATTR_FIRE_COUNT: transition.fire_count,
                 ATTR_DURATION_SECONDS: transition.duration_seconds,
+                ATTR_REASON: transition.reason,
             },
         )
 
