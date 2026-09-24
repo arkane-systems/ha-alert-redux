@@ -177,7 +177,8 @@ def test_delay_off_absorbs_flicker_and_keeps_ack() -> None:
     timing = Timing(delay_off=timedelta(minutes=1))
     assert runtime.evaluate(False, [], T0 + timedelta(minutes=2), timing) == []
     assert runtime.delay_off_until == T0 + timedelta(minutes=3)
-    assert runtime.evaluate(True, [], T0 + timedelta(minutes=2, seconds=30), timing) == []
+    flicker_back = T0 + timedelta(minutes=2, seconds=30)
+    assert runtime.evaluate(True, [], flicker_back, timing) == []
     assert runtime.delay_off_until is None
     assert runtime.state is AlertState.ACK
     runtime.evaluate(False, [], T0 + timedelta(minutes=4), timing)
