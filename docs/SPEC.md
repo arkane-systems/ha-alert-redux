@@ -1130,6 +1130,11 @@ and acknowledged, and it survives a restart.
 - `delay_on`, `delay_off`, and the optional extra condition.
 - The `no_data` state and its grace period (§4.4); startup behaviour (§15.3).
 - The subject entity and its attribute (§9.5).
+- **Stop reloading the entry on subentry changes.** Phase 1 reloads the whole
+  config entry whenever an alert is added, edited, or removed. That makes every
+  alert briefly `unavailable`, which may confuse automations that depend on them.
+  From this phase it would also push condition alerts through `no_data` and
+  re-evaluation. Add, update, and remove individual alert entities in place instead.
 
 *Done when* a door-sensor alert and a template alert fire and end correctly,
 including through sensor dropouts and restarts.
@@ -1140,6 +1145,12 @@ including through sensor dropouts and restarts.
   and on or display message (rendered by the integration); acknowledge control;
   dismiss button where enabled; the no-data section; the empty state.
 - Styling after weather_alerts_card (N31).
+- **Browser refresh after install or upgrade.** A newly registered or updated card
+  resource isn't picked up until the browser does a hard refresh. Until then, the
+  dashboard shows "Custom element not found". Look into triggering the refresh
+  automatically once the integration is set up (or the card version changes). If
+  that isn't possible, tell the user it's needed, e.g. with a persistent
+  notification or a README note.
 
 *Done when* the card shows the alerts from phases 1–2 correctly, and acknowledging and
 dismissing from the card works.
