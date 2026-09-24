@@ -902,8 +902,14 @@ To make sure it gets fixed:
 [Decided, F21] Alert Redux restores its state across restarts: firing status,
 acknowledgement, snooze timer, disabled/suspended status and time, event-alert
 expiry, pre-acknowledgements, throttle counters, and the reminder schedule position.
-This uses `RestoreEntity` together with a `Store`, saved whenever something important
-changes, rather than relying only on HA's 15-minute periodic save.
+[Decided, phase 1] This uses a single `Store`, saved shortly after every change, as
+the one source of truth; `RestoreEntity` isn't used. Its periodic 15-minute save is
+exactly the gap the Store closes, and some state that must persist (throttle
+counters, held quiet-hours notifications, the retry queue) doesn't belong to any
+entity, so a Store is needed anyway. Per-alert records are keyed by the entity's
+unique ID, which also covers generated alerts. The records also tell Alert Redux
+which alerts are new or deleted since the last run (for `_created`/`_deleted`,
+§11.3).
 
 After a restart:
 
@@ -975,6 +981,13 @@ create or edit actions. Instead:
   Export is available to everyone, like reading any other entity data.
 - There's no `alert_redux.delete` action for now. It can be added later if a use
   appears.
+
+[Decided, phase 1] An action that doesn't apply to an alert's current state (such
+as `ack` on an `idle` alert, `unack` on an `active` one, or `dismiss` on an `idle`
+one) does nothing, and fires no event, so a call targeting several alerts doesn't
+fail because some of them aren't in the right state. Actions the spec refuses are
+errors: acknowledging or snoozing an unacknowledgeable alert (§6.1), and `fire` or
+`dismiss` on an alert that isn't manual.
 
 There's no bulk acknowledge [Decided, R19]. Targeting several entities in one call is
 allowed, because HA's normal targeting permits it; there's just no dedicated "ack
@@ -1064,6 +1077,8 @@ Decisions with their reasons, in the order they were made.
 | No bulk acknowledge | Alerts should be handled deliberately [R19]. |
 | No history view on the card | Confusing in Alert2; the Activity card does it better [N24]. |
 | "Suspend" for timed disabling | Keeps "snooze" meaning what it usually means [N22]. |
+| Persist with a single Store, not `RestoreEntity` | Saves on every change; some persistent state isn't tied to an entity, so a Store is needed anyway [§15.1]. |
+| Inapplicable actions are no-ops, not errors | Calls that target several alerts shouldn't fail because some are in the wrong state [§16]. |
 
 ## 20. Phase plan
 

@@ -10,8 +10,8 @@ it. Both live in this one repository and are delivered by a single HACS *integra
 install: the card bundle ships inside the integration package and the integration serves
 and registers it itself.
 
-The project is at the scaffolding stage: the integration sets up (single-instance
-config entry) and registers a placeholder card, but no alerting behavior exists yet.
+Phase 1 (manual alerts) is implemented; the card is still a placeholder until
+phase 3.
 
 ## Specification
 
@@ -30,9 +30,18 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
 ## Layout
 
 - **`custom_components/alert_redux/`** — the integration (what HACS installs).
-  - `__init__.py` — config entry setup/unload.
+  - `__init__.py` — creates the `EntityComponent` for the `alert_redux` entity domain
+    and registers the actions; config entry setup/unload; reloads the entry when
+    subentries change; announces alerts deleted since the last run.
+  - `alert_redux.py` — the entity platform for our own domain, loaded by
+    `EntityComponent.async_setup_entry`; adds one entity per alert subentry, linked
+    with `config_subentry_id` so HA removes it with the subentry.
+  - `entity.py` — `AlertEntity`: state, attributes, actions, events, persistence.
+  - `model.py` — `AlertRuntime`, the HA-free state machine and its serialization.
+  - `store.py` — `AlertStore`, the single persistent `Store` (no `RestoreEntity`).
   - `config_flow.py` — single-instance config flow (`single_config_entry` in the
-    manifest makes HA enforce the one-instance rule).
+    manifest makes HA enforce the one-instance rule) and the alert subentry flow.
+  - `services.yaml`, `icons.json` — action definitions and icons.
   - `frontend.py` — serves `frontend/` via a static path and registers the card as a
     storage-mode Lovelace resource with a `?v=<manifest version>` cache-buster, updating
     an existing resource in place on upgrade; falls back to `add_extra_js_url` when the
