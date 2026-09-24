@@ -9,5 +9,121 @@
     "abort": {
       "single_instance_allowed": "Already configured. Only a single configuration possible."
     }
+  },
+  "config_subentries": {
+    "alert": {
+      "entry_type": "Alert",
+      "initiate_flow": {
+        "user": "Add alert"
+      },
+      "step": {
+        "user": {
+          "title": "Add a manual alert",
+          "description": "A manual alert is fired and dismissed by the `alert_redux.fire` and `alert_redux.dismiss` actions.",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "acknowledgeable": "Acknowledgeable",
+            "user_dismissable": "Dismissable from the card"
+          },
+          "data_description": {
+            "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit alert",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "acknowledgeable": "Acknowledgeable",
+            "user_dismissable": "Dismissable from the card"
+          },
+          "data_description": {
+            "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to."
+          }
+        }
+      },
+      "error": {
+        "name_exists": "An alert with this name already exists."
+      },
+      "abort": {
+        "reconfigure_successful": "Re-configuration was successful"
+      }
+    }
+  },
+  "entity": {
+    "alert_redux": {
+      "alert": {
+        "state": {
+          "idle": "Idle",
+          "active": "Active",
+          "ack": "Acknowledged"
+        },
+        "state_attributes": {
+          "priority": {
+            "state": {
+              "emergency": "Emergency",
+              "critical": "Critical",
+              "warning": "Warning",
+              "notice": "Notice",
+              "informational": "Informational"
+            }
+          }
+        }
+      }
+    }
+  },
+  "selector": {
+    "priority": {
+      "options": {
+        "emergency": "Emergency",
+        "critical": "Critical",
+        "warning": "Warning",
+        "notice": "Notice",
+        "informational": "Informational"
+      }
+    }
+  },
+  "services": {
+    "fire": {
+      "name": "Fire",
+      "description": "Fires a manual alert. Firing an alert that is already firing adds to its fire count and keeps its acknowledgement.",
+      "fields": {
+        "data": {
+          "name": "Data",
+          "description": "Variables made available to the alert's message templates as `fire_data`."
+        }
+      }
+    },
+    "dismiss": {
+      "name": "Dismiss",
+      "description": "Ends a manual alert's firing."
+    },
+    "ack": {
+      "name": "Acknowledge",
+      "description": "Acknowledges a firing alert, stopping its reminders until it stops firing."
+    },
+    "unack": {
+      "name": "Remove acknowledgement",
+      "description": "Removes an alert's acknowledgement, so that it is active again."
+    }
+  },
+  "exceptions": {
+    "not_acknowledgeable": {
+      "message": "{entity_id} can't be acknowledged."
+    },
+    "not_manual": {
+      "message": "{entity_id} isn't a manual alert, so it can't be fired or dismissed by action."
+    }
   }
 }

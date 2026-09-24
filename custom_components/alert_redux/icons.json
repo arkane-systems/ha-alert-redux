@@ -1,0 +1,16 @@
+{
+  "services": {
+    "fire": {
+      "service": "mdi:alert-plus"
+    },
+    "dismiss": {
+      "service": "mdi:alert-remove"
+    },
+    "ack": {
+      "service": "mdi:check-circle"
+    },
+    "unack": {
+      "service": "mdi:check-circle-outline"
+    }
+  }
+}
