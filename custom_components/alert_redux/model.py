@@ -17,10 +17,13 @@ from typing import Any
 from .const import (
     CONF_DEFAULT_GROUPS,
     CONF_DEFAULT_REMINDER_SCHEDULE,
+    CONF_FALLBACK_GROUP,
     CONF_NO_DATA_GRACE,
+    CONF_RETRY_TIMEOUT,
     CONF_STARTUP_DELAY,
     DEFAULT_NO_DATA_GRACE,
     DEFAULT_REMINDER_SCHEDULE,
+    DEFAULT_RETRY_TIMEOUT,
     DEFAULT_STARTUP_DELAY,
     AlertState,
     EndReason,
@@ -48,6 +51,10 @@ class Settings:
     default_groups: tuple[str, ...] = ()
     # Minutes between reminders (spec §9.6).
     reminder_schedule: tuple[float, ...] = DEFAULT_REMINDER_SCHEDULE
+    # A notifier group ID; None means the built-in persistent fallback (§9.4).
+    fallback_group: str | None = None
+    # How long a failing notifier member is retried (spec §15.2).
+    retry_timeout: timedelta = DEFAULT_RETRY_TIMEOUT
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> Settings:
@@ -55,6 +62,7 @@ class Settings:
         grace = to_timedelta(options.get(CONF_NO_DATA_GRACE))
         startup = to_timedelta(options.get(CONF_STARTUP_DELAY))
         schedule = options.get(CONF_DEFAULT_REMINDER_SCHEDULE)
+        retry = to_timedelta(options.get(CONF_RETRY_TIMEOUT))
         return cls(
             no_data_grace=DEFAULT_NO_DATA_GRACE if grace is None else grace,
             startup_delay=DEFAULT_STARTUP_DELAY if startup is None else startup,
@@ -62,6 +70,8 @@ class Settings:
             reminder_schedule=(
                 DEFAULT_REMINDER_SCHEDULE if schedule is None else tuple(schedule)
             ),
+            fallback_group=options.get(CONF_FALLBACK_GROUP) or None,
+            retry_timeout=DEFAULT_RETRY_TIMEOUT if not retry else retry,
         )
 
     def update(self, other: Settings) -> None:

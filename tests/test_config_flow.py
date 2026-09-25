@@ -50,11 +50,14 @@ async def _start(
     return await _choose(hass, result, kind)
 
 
+# The frontend always submits the notifications section, filled from its fields'
+# defaults; an empty one gets those defaults here too.
 FORM = {
     "name": "Back Door Open",
     "priority": "critical",
     "acknowledgeable": True,
     "user_dismissable": True,
+    "notifications": {},
 }
 
 
@@ -201,6 +204,7 @@ async def test_create_state_alert(
             "delay_on": {"hours": 0, "minutes": 5, "seconds": 0},
             "condition": "",
             "acknowledgeable": True,
+            "notifications": {},
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -235,6 +239,7 @@ async def test_create_template_alert(
         "acknowledgeable": False,
         "subject_entity": "sensor.server_room",
         "no_data_grace": {"hours": 0, "minutes": 2, "seconds": 0},
+        "notifications": {},
     }
 
     # The template selector refuses templates that don't parse.
@@ -296,6 +301,7 @@ async def test_reconfigure_state_alert(
             "entity_id": "binary_sensor.back_door",
             "target_state": "on",
             "acknowledgeable": True,
+            "notifications": {},
         },
     )
     assert result["reason"] == "reconfigure_successful"
@@ -321,6 +327,7 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
     assert defaults == {
         "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
         "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
+        "retry_timeout": {"hours": 0, "minutes": 5, "seconds": 0},
     }
     assert _suggested(schema) == {"default_reminder_schedule": "10, 20, 30, 60"}
 
@@ -572,3 +579,33 @@ async def test_options_notification_defaults(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["default_groups"] == ["phones"]
     assert entry.options["default_reminder_schedule"] == []
+    assert entry.options["fallback_group"] is None
+    assert entry.options["retry_timeout"] == {"hours": 0, "minutes": 5, "seconds": 0}
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    (fallback_key,) = [
+        key for key in result["data_schema"].schema if str(key) == "fallback_group"
+    ]
+    assert result["data_schema"].schema[fallback_key].config["multiple"] is False
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **form,
+            "fallback_group": "phones",
+            "retry_timeout": {"hours": 0, "minutes": 2, "seconds": 0},
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["fallback_group"] == "phones"
+
+
+async def test_notifications_section_is_required_without_default(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """The frontend builds a section's value from its fields only when the
+    section has no default; with one, it showed empty and saving wiped it."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    (key,) = [k for k in result["data_schema"].schema if str(k) == "notifications"]
+    assert isinstance(key, vol.Required)
+    assert key.default is vol.UNDEFINED

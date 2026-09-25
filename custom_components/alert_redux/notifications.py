@@ -24,7 +24,7 @@ from .const import (
     EndReason,
 )
 from .model import Settings
-from .notifier import FALLBACK_GROUP, Notification, Notifier
+from .notifier import Notification, Notifier
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,9 +64,9 @@ def effective_groups(
 
 def group_names(hass: HomeAssistant, groups: tuple[str, ...] | None) -> list[str]:
     """Return the names of the groups an alert sends to, for its attributes."""
-    if groups is None:
-        return [FALLBACK_GROUP.name]
     notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]
+    if groups is None:
+        return [notifier.fallback_group.name]
     return [group.name for group_id in groups if (group := notifier.group(group_id))]
 
 

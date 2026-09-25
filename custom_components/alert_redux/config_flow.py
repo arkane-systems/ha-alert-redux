@@ -49,6 +49,7 @@ from .const import (
     CONF_DONE_MESSAGE,
     CONF_ENTITIES,
     CONF_ENTITY_ID,
+    CONF_FALLBACK_GROUP,
     CONF_ICON,
     CONF_KIND,
     CONF_LOUD,
@@ -59,6 +60,7 @@ from .const import (
     CONF_PRIORITY,
     CONF_REMINDER_MESSAGE,
     CONF_REMINDER_SCHEDULE,
+    CONF_RETRY_TIMEOUT,
     CONF_STARTUP_DELAY,
     CONF_SUBJECT_ENTITY,
     CONF_TARGET,
@@ -135,6 +137,8 @@ class AlertReduxOptionsFlow(OptionsFlow):
                         CONF_STARTUP_DELAY: user_input[CONF_STARTUP_DELAY],
                         CONF_DEFAULT_GROUPS: user_input.get(CONF_DEFAULT_GROUPS, []),
                         CONF_DEFAULT_REMINDER_SCHEDULE: list(schedule),
+                        CONF_FALLBACK_GROUP: user_input.get(CONF_FALLBACK_GROUP),
+                        CONF_RETRY_TIMEOUT: user_input[CONF_RETRY_TIMEOUT],
                     }
                 )
 
@@ -146,6 +150,8 @@ class AlertReduxOptionsFlow(OptionsFlow):
             CONF_DEFAULT_REMINDER_SCHEDULE: format_schedule(
                 settings.reminder_schedule
             ),
+            CONF_FALLBACK_GROUP: settings.fallback_group,
+            CONF_RETRY_TIMEOUT: _duration_dict(settings.retry_timeout),
         }
         return self.async_show_form(
             step_id="init",
@@ -167,6 +173,13 @@ class AlertReduxOptionsFlow(OptionsFlow):
                             defaults, CONF_DEFAULT_REMINDER_SCHEDULE
                         ),
                     ): TextSelector(),
+                    vol.Optional(
+                        CONF_FALLBACK_GROUP,
+                        description=_suggested(defaults, CONF_FALLBACK_GROUP),
+                    ): _groups_selector(self.config_entry, multiple=False),
+                    vol.Required(
+                        CONF_RETRY_TIMEOUT, default=defaults[CONF_RETRY_TIMEOUT]
+                    ): DurationSelector(),
                 }
             ),
             errors=errors,
@@ -187,8 +200,8 @@ def _suggested(defaults: dict[str, Any], key: str) -> dict[str, Any]:
     return {"suggested_value": defaults[key]}
 
 
-def _groups_selector(entry: ConfigEntry) -> SelectSelector:
-    """Return a multi-select of the notifier groups."""
+def _groups_selector(entry: ConfigEntry, multiple: bool = True) -> SelectSelector:
+    """Return a selector of the notifier groups."""
     return SelectSelector(
         SelectSelectorConfig(
             options=[
@@ -196,7 +209,7 @@ def _groups_selector(entry: ConfigEntry) -> SelectSelector:
                 for subentry_id, subentry in entry.subentries.items()
                 if subentry.subentry_type == SUBENTRY_NOTIFIER_GROUP
             ],
-            multiple=True,
+            multiple=multiple,
             mode=SelectSelectorMode.DROPDOWN,
         )
     )
@@ -323,7 +336,10 @@ def _alert_schema(
                 CONF_NO_DATA_GRACE, description=_suggested(defaults, CONF_NO_DATA_GRACE)
             )
         ] = DurationSelector()
-    schema[vol.Optional(SECTION_NOTIFICATIONS, default={})] = _notifications_section(
+    # Required, and without a default: the frontend then builds the section's
+    # value from its fields' defaults and suggested values. With a default of {},
+    # it used that instead, so the section showed empty and saving wiped it.
+    schema[vol.Required(SECTION_NOTIFICATIONS)] = _notifications_section(
         entry, defaults
     )
     return vol.Schema(schema)

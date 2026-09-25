@@ -112,3 +112,52 @@ def parse_target(value: Any) -> tuple[str, ...]:
         return ()
     items = value if isinstance(value, list) else str(value).split(",")
     return tuple(item for item in (str(item).strip() for item in items) if item)
+
+
+# Serialization for the retry queue's store.
+KEY_KIND = "kind"
+KIND_ENTITY = "entity"
+KIND_ACTION = "action"
+KIND_PERSISTENT = "persistent"
+
+
+def member_to_dict(member: Member) -> dict[str, Any]:
+    """Return a member in storable form."""
+    if isinstance(member, EntityMember):
+        return {KEY_KIND: KIND_ENTITY, "entity_id": member.entity_id}
+    if isinstance(member, ActionMember):
+        return {
+            KEY_KIND: KIND_ACTION,
+            KEY_ACTION: member.action,
+            KEY_DATA: dict(member.data) if member.data else None,
+            KEY_TARGET: list(member.target),
+        }
+    return {KEY_KIND: KIND_PERSISTENT}
+
+
+def member_from_dict(data: Mapping[str, Any]) -> Member:
+    """Return a member from its stored form."""
+    if data[KEY_KIND] == KIND_ENTITY:
+        return EntityMember(data["entity_id"])
+    if data[KEY_KIND] == KIND_ACTION:
+        return ActionMember(
+            data[KEY_ACTION], data.get(KEY_DATA), tuple(data.get(KEY_TARGET) or ())
+        )
+    return PersistentMember()
+
+
+def notification_to_dict(notification: Notification) -> dict[str, Any]:
+    """Return a notification in storable form."""
+    return {
+        "title": notification.title,
+        "message": notification.message,
+        "key": notification.key,
+        "variables": dict(notification.variables),
+    }
+
+
+def notification_from_dict(data: Mapping[str, Any]) -> Notification:
+    """Return a notification from its stored form."""
+    return Notification(
+        data["title"], data["message"], data["key"], data.get("variables") or {}
+    )

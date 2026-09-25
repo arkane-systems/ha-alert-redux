@@ -110,6 +110,10 @@ duration runs out [Decided, R2, R3].
   **doesn't** clear an acknowledgement. The alert is still the same firing, so an
   event that repeats frequently doesn't cause repeated nagging. The fire-again
   notification is subject to throttling (§9.8).
+  [Decided, phase 4] The fire-again notification is the on message again, with the
+  new fire count, and it's sent only while the alert is `active`. An acknowledged
+  alert that fires again sends nothing: keeping the acknowledgement is what stops
+  the nagging. (Manual alerts do the same, §4.3.)
 - The card shows a draining progress bar for the remaining duration (§13.1).
 - [Decided, F23] Internally, both kinds share one engine: a bus event alert is a
   trigger alert with an `event` trigger. Keeping it as a separate kind is purely to
@@ -423,6 +427,12 @@ supports all three:
   its group members stop working. That's treated like any other missing notifier:
   retried, then the fallback is used (§9.4), and a Repairs issue names the member so
   it can be switched to the entity (as in §12.4).
+  [Decided, phase 4] The issue names the group and the action. It's raised when a
+  member gives up because its action is missing, and also for every missing action
+  once integrations have had the retry timeout (§15.2) to set up after startup;
+  after that, for a group edited to use a missing action. It clears itself when the
+  action is registered, or the group no longer uses it. Missing notify *entities*
+  are only logged.
 
 ### 9.3 Notifier groups
 
@@ -468,6 +478,19 @@ A group has:
   it was sent to is missing or has failed, after the retry queue (§15.2) gives up. It
   isn't used for alerts with an explicitly empty list. A notification that reached at
   least one member counts as delivered; failed members are logged.
+  [Decided, phase 4] The fallback group is chosen in the options; unset, or a group
+  that no longer exists, means the built-in persistent member. If the fallback fails
+  too, that's logged; it has no fallback of its own.
+- [Decided, phase 4] **No default groups configured.** An alert that uses the
+  default groups when none are set sends to the fallback, and a Repairs issue
+  (`default_groups_unset`) says why, listing the alerts. It's raised while any alert
+  relies on the unset default, and clears itself once default groups are set or no
+  alert relies on them. Nothing fails silently, but the admin is told why.
+- [Decided, phase 4] **Deleting a group** removes it from the default groups and the
+  fallback-group setting (emptied defaults then count as unset, as above). Alerts'
+  own group lists keep it: a group that doesn't exist is skipped, and an alert with
+  none of its groups left notifies the fallback. Pruning an alert's list to empty
+  would instead make it silently notify nobody.
 
 ### 9.5 Messages
 
@@ -491,9 +514,18 @@ doesn't repeat it automatically. It can include the name deliberately through th
     `duration_seconds`;
   - the fire count;
   - the trigger or event data (event alerts), and `fire_data` (manual alerts);
-  - the reason for the notification (`on`, `reminder`, or `done`).
+  - the reason for the notification (`on`, `reminder`, or `done`);
+  - [Decided, phase 4] for the done message, why the firing ended, as `end_reason`
+    (`resolved`, `dismissed`, or `no_data`; §11.3).
 - [Decided] The default wording is deliberately generic. It's a starting point,
   meant to be overridden with something more specific.
+- [Decided, phase 4] The default done message depends on `end_reason`: an alert
+  that lost its data says "{{ name }} lost its data; stopped firing after
+  {{ duration }}.", so that it never reads as resolved.
+- [Decided, phase 4] The on and reminder messages give `duration` as at the time of
+  sending (so 0 for the on message), and the done message the length of the whole
+  firing. A message that fails to render is logged, and the default for that
+  message is sent instead.
 - **Subject entity.** Many alerts are about one obvious entity: the door, the lock,
   the thermometer. Its name is available to templates as `subject_entity_name`, so
   messages can say "{{ subject_entity_name }} is unlocked." without deriving the
@@ -530,6 +562,15 @@ doesn't repeat it automatically. It can include the name deliberately through th
 - A schedule is a list of intervals, e.g. `[15, 30, 60]`: the gaps follow the list,
   and the last value repeats [Decided, R12]. An empty list means no reminders.
 - Reminders are sent only while the alert is `active`.
+- [Decided, phase 4] The global default schedule is `[10, 20, 30, 60]`: reminders at
+  10, 30, and 60 minutes, then hourly.
+- [Decided, phase 4] Slots are always counted from when the firing started (as in
+  §6.2). Removing an acknowledgement resumes reminders at the next slot after that
+  moment; slots that passed while the alert was acknowledged aren't made up.
+  Changing a schedule, or the default, applies from the next slot after the change.
+- [Decided, phase 4] The next reminder is kept in the store and shown as the
+  `next_reminder` attribute. A reminder that fell due while HA was down is sent
+  once, when it's back, and the schedule then carries on (§15.1).
 - [Decided] Event alerts send reminders only if their duration is longer than the
   first reminder interval. Short event alerts just fire and expire.
 
@@ -702,6 +743,10 @@ built.
   [Decided, phase 3] The rendered messages are `message` (the on message) and
   `display_message` (null unless one is configured). Both are null while the alert
   isn't firing, and both are kept out of the recorder.
+  [Decided, phase 4] `notifier_groups` gives the names of the groups the alert
+  actually sends to (the defaults, or the fallback, if it has none of its own), and
+  `reminder_schedule` the effective schedule in minutes. `next_reminder` is when
+  the next reminder is due, or null.
 - **Generator provenance:** `generated_by` (§12.3).
 
 Attributes that can grow large, or change constantly, should be kept out of the
@@ -1025,6 +1070,8 @@ After a restart:
   [Decided, R16 response].
 - An alert that was firing and no longer is ends normally, with a done notification.
 - A snooze or suspension that ran out during the restart ends as soon as HA is back.
+- [Decided, phase 4] A reminder that fell due during the restart is sent as soon as
+  HA is back. It isn't an on notification, so it doesn't break "resumes quietly".
 
 ### 15.2 Notifier retry queue
 
@@ -1038,6 +1085,14 @@ After a restart:
   received the notification, it goes to the fallback group (§9.4).
 - This applies all the time, not just at startup, so it also covers integrations
   restarting while HA is running.
+- [Decided, phase 4] The backoff starts at 5 s and doubles, up to 60 s between
+  tries, with a last try at the timeout itself. The timeout (the **retry timeout**
+  option) defaults to 5 minutes, counted from when the notification was sent. A
+  legacy action that's registered while members wait for it is retried at once.
+- [Decided, phase 4] The queue is kept in the notifier module's own store, separate
+  from the alerts' (so that the module stays extractable, §9.1), and resumes after a
+  restart. A notification whose timeout passed while HA was down goes to the
+  fallback as soon as it's back, unless a member had already received it.
 
 ### 15.3 Startup order
 
@@ -1204,6 +1259,13 @@ Decisions with their reasons, in the order they were made.
 | Card messages rendered by the integration, with the on notification's context | One template engine, and the card shows what the notification says [§9.5]. |
 | Browser refresh: a notification per new card version, plus a reload banner in the card | Resources load once per page; nothing server-side can reload a browser [§20]. |
 | An unacknowledged Emergency alert's glow pulses | The one level that should catch the eye from across the room; acknowledging it stops [§13.1]. |
+| Firing again resends the on message only while unacknowledged | Keeping the acknowledgement exists to stop repeats from nagging [§4.2]. |
+| No default groups: send to the fallback, and raise a Repairs issue | Alerts notify somewhere from day one, and the admin is told why rather than it being buried in a log [§9.4]. |
+| Default reminder schedule `[10, 20, 30, 60]` | Alert2's 60 minutes was too long for everyday use, and 10 minutes throughout too frequent; escalating gaps settle at hourly [§9.6]. |
+| Unacknowledging resumes reminders on the original schedule | Consistent with how snooze-end counts slots; missed slots aren't made up [§9.6]. |
+| Done message wording depends on why the firing ended | A lost-data end must never read as resolved [§9.5]. |
+| Last retry at the timeout itself | So the timeout means what it says, rather than giving up at the last backoff that fits [§15.2]. |
+| The retry queue has its own store | Keeps the notifier module extractable [§15.2]. |
 
 ## 20. Phase plan
 
@@ -1310,6 +1372,20 @@ older cards don't check. The card's styling was settled on a preview page
 *Done when* alerts deliver on, reminder, and done notifications to a mobile app, a
 notify entity, and persistent notifications, and a missing notifier falls back
 correctly.
+
+[Phase 4 as built] Built in two parts: 4a (delivery) and 4b (retries, the
+fallback group, and missing-action issues), released together as 0.4.0. The notifier
+module is the `notifier/` package; the alert side is `notifications.py`. Every alert
+kind has optional reminder and done message templates alongside the on and card
+messages, all in a collapsed **Notifications and messages** section of its form.
+The choices between "the defaults" and the alert's own setting are three-way (the
+default, a list, or an explicitly empty list), so each is a "use the default"
+checkbox plus a field: a groups multi-select, and a reminder schedule typed as
+minutes (`10, 20, 30, 60`). Legacy action members are edited as a list, each with
+its action, `data`, and `target`; the action can be one that isn't registered yet.
+The options gain the default groups and reminder schedule, the fallback group, and
+the retry timeout. Decisions from building it are recorded in §4.2, §9.2, §9.4–§9.6,
+§11.1, §15.1, and §15.2.
 
 ### Phase 5 — Condition alerts II and event alerts (0.5.0)
 

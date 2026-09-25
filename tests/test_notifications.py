@@ -357,3 +357,86 @@ async def test_deleted_group_is_skipped(
     assert hass.states.get(DOOR).attributes["notifier_groups"] == ["Phones"]
     await _call(hass, "fire")
     assert len(phone) == 1
+
+
+async def test_fallback_group_option(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """With a fallback group chosen, alerts without default groups use it."""
+    pager = async_mock_service(hass, "notify", "pager")
+    with patch(PERSISTENT_CREATE) as create:
+        await setup_alerts(
+            alert_subentry("Back Door Open"),
+            group_subentry("Pagers", "pagers", actions=[{"action": "notify.pager"}]),
+            options={"fallback_group": "pagers"},
+        )
+        assert hass.states.get(DOOR).attributes["notifier_groups"] == ["Pagers"]
+        await _call(hass, "fire")
+    assert len(pager) == 1
+    create.assert_not_called()
+
+
+async def test_unreachable_groups_fall_back(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """If no member of the alert's groups can be notified within the retry
+    timeout, the fallback gets the notification (spec §9.4, §15.2)."""
+    with patch(PERSISTENT_CREATE) as create:
+        await setup_alerts(
+            alert_subentry("Back Door Open"),
+            group_subentry("Gone", "gone", actions=[{"action": "notify.gone"}]),
+            options={
+                "default_groups": ["gone"],
+                "retry_timeout": {"minutes": 1},
+            },
+        )
+        await _call(hass, "fire")
+        create.assert_not_called()
+        for _ in range(61):
+            freezer.tick(timedelta(seconds=1))
+            async_fire_time_changed(hass)
+            await hass.async_block_till_done()
+    create.assert_called_once_with(hass, "Back Door Open is firing.", "Back Door Open")
+
+
+async def test_pending_retry_survives_restart(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A notification waiting for a notifier is still delivered after a restart."""
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open"),
+        group_subentry("Late", "late", actions=[{"action": "notify.late"}]),
+        options={"default_groups": ["late"]},
+    )
+    await _call(hass, "fire")
+    await _restart(hass, entry)
+    calls = async_mock_service(hass, "notify", "late")
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 1)
+    assert _sent(calls) == [("Back Door Open", "Back Door Open is firing.")]
+
+
+async def test_deleted_group_leaves_the_options(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Deleting a group removes it from the default and fallback groups; deleting
+    the last default raises the unset-defaults issue."""
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open"),
+        PHONE,
+        group_subentry("Pagers", "pagers", actions=[{"action": "notify.pager"}]),
+        options={"default_groups": ["phones", "pagers"], "fallback_group": "pagers"},
+    )
+    hass.config_entries.async_remove_subentry(entry, "pagers")
+    await hass.async_block_till_done()
+    assert entry.options["default_groups"] == ["phones"]
+    assert entry.options["fallback_group"] is None
+
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, ISSUE_DEFAULT_GROUPS_UNSET) is None
+    hass.config_entries.async_remove_subentry(entry, "phones")
+    await hass.async_block_till_done()
+    assert entry.options["default_groups"] == []
+    assert registry.async_get_issue(DOMAIN, ISSUE_DEFAULT_GROUPS_UNSET) is not None
+    assert hass.states.get(DOOR).attributes["notifier_groups"] == ["Fallback"]
