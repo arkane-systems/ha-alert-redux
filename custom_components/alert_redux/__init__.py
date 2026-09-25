@@ -10,11 +10,15 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ALERTS_DEVICE_ID,
+    ALERTS_DEVICE_NAME,
     ATTR_DATA,
     ATTR_KIND,
     ATTR_NAME,
@@ -82,6 +86,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     _async_forget_deleted_alerts(hass, entry, store)
+    await _async_create_alerts_device(hass, entry)
 
     component: EntityComponent[AlertEntity] = data[DATA_COMPONENT]
     if not await component.async_setup_entry(entry):
@@ -133,6 +138,24 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
         data[DATA_SETTINGS].update(Settings.from_options(entry.options))
         for entity in entities.values():
             entity.async_settings_changed()
+
+
+async def _async_create_alerts_device(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Create the device every alert entity belongs to (spec §11.5).
+
+    It's created against the config entry itself, not only through the alerts'
+    subentries, so that it exists (and keeps its ID) even when there are no alerts.
+    """
+    integration = await async_get_integration(hass, DOMAIN)
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, ALERTS_DEVICE_ID)},
+        name=ALERTS_DEVICE_NAME,
+        manufacturer="Arkane Systems",
+        model="Alert Redux",
+        sw_version=str(integration.version),
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
 
 
 def _alert_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]]]:

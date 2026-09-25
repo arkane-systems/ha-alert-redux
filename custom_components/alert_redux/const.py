@@ -24,6 +24,10 @@ DATA_SUBENTRIES = "subentries"
 DATA_OPTIONS = "options"
 DATA_STARTUP_UNTIL = "startup_until"
 
+# The virtual device every alert entity belongs to (spec §11.5).
+ALERTS_DEVICE_ID = "alerts"
+ALERTS_DEVICE_NAME = "Alert Redux alerts"
+
 # Persistent alert state (spec §15.1).
 STORAGE_KEY = DOMAIN
 STORAGE_VERSION = 1
