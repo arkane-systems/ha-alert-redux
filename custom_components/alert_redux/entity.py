@@ -64,6 +64,7 @@ from .const import (
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
     CONF_USER_DISMISSABLE,
+    DATA_LABEL,
     DATA_STARTUP_UNTIL,
     DEFAULT_PRIORITY_ICONS,
     DOMAIN,
@@ -77,6 +78,7 @@ from .const import (
     EndReason,
     Priority,
 )
+from .labels import async_apply_label
 from .messages import Messages, MessageTracker, message_context
 from .model import AlertRuntime, Change, Settings, Timing, Transition, to_timedelta
 from .sources import AndSource, Source, StateSource, TemplateSource
@@ -114,6 +116,8 @@ class AlertEntity(Entity):
         self._messages: Messages | None = None
         self._message_tracker: MessageTracker | None = None
         self._message_key: tuple[Any, ...] | None = None
+        # Whether this alert has been given the alerts label (spec §11.5).
+        self._labelled = False
         self._attr_unique_id = subentry.subentry_id
         self._configure(subentry)
 
@@ -167,11 +171,21 @@ class AlertEntity(Entity):
         return attributes
 
     async def async_added_to_hass(self) -> None:
-        """Restore the persisted state, or announce a new alert."""
+        """Restore the persisted state, or announce a new alert.
+
+        An alert that hasn't been given the alerts label yet gets it now, whether
+        it's new or existed before the label did. That happens once per alert, so
+        removing the label from an alert is left alone.
+        """
         assert self.unique_id is not None
         record = self._store.get_alert(self.unique_id)
         if record is not None:
             self._runtime = AlertRuntime.from_dict(record["runtime"])
+            self._labelled = record.get("labelled", False)
+        if not self._labelled:
+            self._labelled = True
+            if (label_id := self.hass.data[DOMAIN].get(DATA_LABEL)) is not None:
+                async_apply_label(self.hass, self.entity_id, label_id)
         self._async_restored()
         self._persist()
         if record is None:
@@ -337,6 +351,7 @@ class AlertEntity(Entity):
                 ATTR_KIND: self._kind,
                 ATTR_PRIORITY: self._priority,
                 "runtime": self._runtime.to_dict(),
+                "labelled": self._labelled,
             },
         )
 

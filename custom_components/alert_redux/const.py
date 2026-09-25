@@ -23,6 +23,12 @@ DATA_ENTITIES = "entities"
 DATA_SUBENTRIES = "subentries"
 DATA_OPTIONS = "options"
 DATA_STARTUP_UNTIL = "startup_until"
+DATA_LABEL = "label"
+
+# The label applied to every alert (spec §11.5).
+ALERTS_LABEL_NAME = "Alert Redux"
+ALERTS_LABEL_ICON = "mdi:alert-rhombus"
+ALERTS_LABEL_DESCRIPTION = "Every Alert Redux alert. New alerts get it automatically."
 
 # Persistent alert state (spec §15.1).
 STORAGE_KEY = DOMAIN

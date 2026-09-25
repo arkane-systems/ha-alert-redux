@@ -25,6 +25,7 @@ from .const import (
     DATA_ADD_ENTITIES,
     DATA_COMPONENT,
     DATA_ENTITIES,
+    DATA_LABEL,
     DATA_OPTIONS,
     DATA_SETTINGS,
     DATA_STARTUP_UNTIL,
@@ -40,6 +41,7 @@ from .const import (
 )
 from .entity import AlertEntity, create_alert_entity
 from .frontend import async_register_frontend, async_setup_websocket
+from .labels import async_setup_label
 from .model import AlertRuntime, Settings
 from .store import AlertStore
 
@@ -82,6 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     _async_forget_deleted_alerts(hass, entry, store)
+    data[DATA_LABEL] = async_setup_label(hass, store)
 
     component: EntityComponent[AlertEntity] = data[DATA_COMPONENT]
     if not await component.async_setup_entry(entry):
