@@ -777,6 +777,41 @@ tells the whole story and nothing has to be inferred:
 - A logbook platform describes Alert Redux events in readable text, including who did
   what, e.g. "Back Door Open acknowledged by Alistair". This is what lets a standard
   Activity card stand in for Alert2's history view.
+- **Known limitation: grey dots.** The Activity card colours each entry's dot from
+  theme variables (`--state-<domain>-<state>-color`), but the HA frontend only
+  looks these up for a hard-coded list of built-in domains (`STATE_COLORED_DOMAIN`
+  in its `state_color.ts`). `alert_redux` isn't on the list, so our entries always
+  get a grey dot, and themes can't change that. The only proper fix is upstream: a
+  frontend change to look up those variables for any domain whose theme defines
+  them. With that in place, Alert Redux would ship default state colours.
+  [Deferred] An upstream request is left until after the phase plan is complete.
+
+### 11.5 The alerts device
+
+[Decided] All alert entities belong to one virtual device, **"Alert Redux alerts"**.
+Cards that take devices, such as the Activity card, can then show every alert,
+including alerts added later, by selecting that one device. Areas and labels stay
+free for your own uses.
+
+- The device is a *service* device (`entry_type: service`), with one fixed
+  identifier. Every alert entity reports it in its `device_info`, so HA links the
+  device to each alert's subentry. Deleting an alert removes only that alert's link.
+- It's also created against the main config entry when the integration sets up. The
+  device then exists even when there are no alerts, and keeps its device ID, so cards
+  that point at it don't break.
+- Alert names and entity IDs don't change. The entities don't use HA's "has entity
+  name" naming, so the device's name isn't added to them.
+- **Only alert entities** belong to it. Generated alerts are alert entities, so they
+  join automatically. Summary sensors (§11.2), generator entities (§12.3), and voice
+  proxy switches (§14) don't belong to it. The summary sensors in particular change
+  constantly and would flood an Activity card.
+- The device has no area. Setting one would put every alert in that area, since
+  entities without their own area follow their device's. Individual alerts can still
+  be given areas.
+- HA's "Disable device" would registry-disable every alert at once. That's HA's
+  disable, not ours (§6.3); it's no worse than the per-entity option, but worth
+  documenting. The device can't be deleted from the UI.
+- Built as release 0.3.1, between phases 3 and 4.
 
 ## 12. Configuration
 
@@ -1137,6 +1172,7 @@ Decisions with their reasons, in the order they were made.
 | Done notifications throttle along with on notifications | Throttling is exceptional; the throttling summary covers it [§9.7]. |
 | Quiet-hours summary gives start and end times | For alerts announced before quiet hours, the summary is where you learn they ended [§9.9]. |
 | Priority palette: red, orange, yellow, green, blue | The two original reds were too close, and the darker one looked less urgent than Critical [§13.1]. |
+| All alerts on one virtual device | One selection covers every present and future alert on device-based cards, leaving areas and labels free [§11.5]. |
 | Notifications after the main card, split into three phases | The card makes notification behaviour easier to debug; smaller phases [§20]. |
 | Events built in from phase 1 | Easier than retrofitting every transition; useful for debugging [§20]. |
 | Separate events per change, with a common prefix | Easy to filter; list-based event triggers cover listening for several [§11.3]. |
