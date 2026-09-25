@@ -18,6 +18,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import section
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import (
     BooleanSelector,
     DurationSelector,
@@ -32,6 +33,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
     TemplateSelector,
     TextSelector,
+    TriggerSelector,
 )
 
 from .const import (
@@ -47,8 +49,12 @@ from .const import (
     CONF_DELAY_ON,
     CONF_DISPLAY_MESSAGE,
     CONF_DONE_MESSAGE,
+    CONF_DURATION,
     CONF_ENTITIES,
     CONF_ENTITY_ID,
+    CONF_EVENT_DATA,
+    CONF_EVENT_DURATIONS,
+    CONF_EVENT_TYPE,
     CONF_FALLBACK_GROUP,
     CONF_ICON,
     CONF_KIND,
@@ -66,10 +72,12 @@ from .const import (
     CONF_TARGET,
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
+    CONF_TRIGGERS,
     CONF_USE_DEFAULT_GROUPS,
     CONF_USE_DEFAULT_REMINDERS,
     CONF_USER_DISMISSABLE,
     DOMAIN,
+    EVENT_KINDS,
     SECTION_NOTIFICATIONS,
     SUBENTRY_ALERT,
     SUBENTRY_NOTIFIER_GROUP,
@@ -77,6 +85,7 @@ from .const import (
     Priority,
 )
 from .model import Settings, format_schedule, parse_schedule
+from .triggers import async_validate_triggers, is_storable
 
 # notify actions that aren't legacy notifiers: offered through the other member kinds.
 _NOT_LEGACY_NOTIFIERS = frozenset({"send_message", "persistent_notification"})
@@ -123,6 +132,7 @@ class AlertReduxOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Show and save the defaults."""
         errors: dict[str, str] = {}
+        settings = Settings.from_options(self.config_entry.options)
         if user_input is not None:
             try:
                 schedule = parse_schedule(
@@ -139,10 +149,11 @@ class AlertReduxOptionsFlow(OptionsFlow):
                         CONF_DEFAULT_REMINDER_SCHEDULE: list(schedule),
                         CONF_FALLBACK_GROUP: user_input.get(CONF_FALLBACK_GROUP),
                         CONF_RETRY_TIMEOUT: user_input[CONF_RETRY_TIMEOUT],
+                        CONF_EVENT_DURATIONS: user_input.get(CONF_EVENT_DURATIONS)
+                        or _event_durations(settings),
                     }
                 )
 
-        settings = Settings.from_options(self.config_entry.options)
         defaults = user_input or {
             CONF_NO_DATA_GRACE: _duration_dict(settings.no_data_grace),
             CONF_STARTUP_DELAY: _duration_dict(settings.startup_delay),
@@ -180,10 +191,34 @@ class AlertReduxOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_RETRY_TIMEOUT, default=defaults[CONF_RETRY_TIMEOUT]
                     ): DurationSelector(),
+                    # No default: the frontend then builds the section's value from
+                    # its fields' defaults (see the alert form's section).
+                    vol.Optional(CONF_EVENT_DURATIONS): section(
+                        vol.Schema(
+                            {
+                                vol.Required(str(priority), default=duration): (
+                                    DurationSelector()
+                                )
+                                for priority, duration in (
+                                    defaults.get(CONF_EVENT_DURATIONS)
+                                    or _event_durations(settings)
+                                ).items()
+                            }
+                        ),
+                        {"collapsed": True},
+                    ),
                 }
             ),
             errors=errors,
         )
+
+
+def _event_durations(settings: Settings) -> dict[str, dict[str, int]]:
+    """Return the per-priority event durations in the options' form."""
+    return {
+        priority.value: _duration_dict(duration)
+        for priority, duration in settings.event_durations.items()
+    }
 
 
 def _duration_dict(value: timedelta) -> dict[str, int]:
@@ -306,6 +341,29 @@ def _alert_schema(
                 CONF_TEMPLATE, default=defaults.get(CONF_TEMPLATE, vol.UNDEFINED)
             )
         ] = TemplateSelector()
+    elif kind is AlertKind.TRIGGER:
+        schema[
+            vol.Required(
+                CONF_TRIGGERS, default=defaults.get(CONF_TRIGGERS, vol.UNDEFINED)
+            )
+        ] = TriggerSelector()
+    elif kind is AlertKind.EVENT:
+        schema[
+            vol.Required(
+                CONF_EVENT_TYPE, default=defaults.get(CONF_EVENT_TYPE, vol.UNDEFINED)
+            )
+        ] = TextSelector()
+        schema[
+            vol.Optional(
+                CONF_EVENT_DATA, description=_suggested(defaults, CONF_EVENT_DATA)
+            )
+        ] = ObjectSelector()
+    if kind in EVENT_KINDS:
+        for key, selector in (
+            (CONF_CONDITION, TemplateSelector()),
+            (CONF_DURATION, DurationSelector()),
+        ):
+            schema[vol.Optional(key, description=_suggested(defaults, key))] = selector
     if kind in CONDITION_KINDS:
         for key, selector in (
             (CONF_CONDITION, TemplateSelector()),
@@ -374,6 +432,18 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
         """Create a template alert."""
         return await self._async_step_alert(AlertKind.TEMPLATE, user_input)
 
+    async def async_step_trigger(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create a trigger alert."""
+        return await self._async_step_alert(AlertKind.TRIGGER, user_input)
+
+    async def async_step_event(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create a bus event alert."""
+        return await self._async_step_alert(AlertKind.EVENT, user_input)
+
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
@@ -399,6 +469,18 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
         """Edit a template alert."""
         return await self._async_step_alert(AlertKind.TEMPLATE, user_input, True)
 
+    async def async_step_reconfigure_trigger(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit a trigger alert."""
+        return await self._async_step_alert(AlertKind.TRIGGER, user_input, True)
+
+    async def async_step_reconfigure_event(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit a bus event alert."""
+        return await self._async_step_alert(AlertKind.EVENT, user_input, True)
+
     async def _async_step_alert(
         self,
         kind: AlertKind,
@@ -422,6 +504,9 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
                 data = {CONF_KIND: kind, **_alert_data(kind, user_input)}
             except ValueError:
                 errors["base"] = "invalid_schedule"
+            else:
+                if error := await _async_check_event_alert(self.hass, kind, data):
+                    errors["base"] = error
             if not errors:
                 if subentry is None:
                     return self.async_create_entry(title=name, data=data)
@@ -468,8 +553,12 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
     elif kind is AlertKind.STATE:
         data[CONF_ENTITY_ID] = user_input[CONF_ENTITY_ID]
         data[CONF_TARGET_STATE] = user_input[CONF_TARGET_STATE].strip()
-    else:
+    elif kind is AlertKind.TEMPLATE:
         data[CONF_TEMPLATE] = user_input[CONF_TEMPLATE]
+    elif kind is AlertKind.TRIGGER:
+        data[CONF_TRIGGERS] = user_input[CONF_TRIGGERS]
+    elif kind is AlertKind.EVENT:
+        data[CONF_EVENT_TYPE] = user_input[CONF_EVENT_TYPE].strip()
     optional = [
         CONF_ICON,
         CONF_SUBJECT_ENTITY,
@@ -480,8 +569,12 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
     ]
     if kind in CONDITION_KINDS:
         optional += [CONF_CONDITION, CONF_DELAY_ON, CONF_DELAY_OFF, CONF_NO_DATA_GRACE]
+    elif kind in EVENT_KINDS:
+        optional += [CONF_CONDITION, CONF_DURATION]
+        if kind is AlertKind.EVENT:
+            optional.append(CONF_EVENT_DATA)
     for key in optional:
-        if (value := user_input.get(key)) not in (None, ""):
+        if (value := user_input.get(key)) not in (None, "", {}):
             data[key] = value
     if not user_input.get(CONF_USE_DEFAULT_GROUPS, True):
         data[CONF_NOTIFIER_GROUPS] = list(user_input.get(CONF_NOTIFIER_GROUPS, []))
@@ -491,6 +584,26 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
             parse_schedule(user_input.get(CONF_REMINDER_SCHEDULE, ""))
         )
     return data
+
+
+async def _async_check_event_alert(
+    hass: HomeAssistant, kind: AlertKind, data: dict[str, Any]
+) -> str | None:
+    """Return an error key for an event alert's triggers or event data, if any."""
+    if kind is AlertKind.EVENT:
+        if not data[CONF_EVENT_TYPE]:
+            return "event_type_missing"
+        if not isinstance(data.get(CONF_EVENT_DATA, {}), dict):
+            return "invalid_event_data"
+    elif kind is AlertKind.TRIGGER:
+        triggers = data[CONF_TRIGGERS]
+        if not triggers or not is_storable(triggers):
+            return "invalid_trigger"
+        try:
+            await async_validate_triggers(hass, triggers)
+        except (vol.Invalid, HomeAssistantError):
+            return "invalid_trigger"
+    return None
 
 
 def _legacy_notifiers(hass: HomeAssistant) -> list[str]:

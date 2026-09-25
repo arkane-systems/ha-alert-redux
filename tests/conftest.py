@@ -62,6 +62,30 @@ def template_alert(
     )
 
 
+def trigger_alert(
+    title: str,
+    triggers: list[dict[str, Any]],
+    subentry_id: str | None = None,
+    **data: Any,
+) -> dict[str, Any]:
+    """Return subentry data for a trigger alert."""
+    return _subentry(
+        title, subentry_id, {"kind": "trigger", "triggers": triggers, **data}
+    )
+
+
+def event_alert(
+    title: str,
+    event_type: str,
+    subentry_id: str | None = None,
+    **data: Any,
+) -> dict[str, Any]:
+    """Return subentry data for a bus event alert."""
+    return _subentry(
+        title, subentry_id, {"kind": "event", "event_type": event_type, **data}
+    )
+
+
 def _subentry(
     title: str, subentry_id: str | None, data: dict[str, Any]
 ) -> dict[str, Any]:

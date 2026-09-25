@@ -41,6 +41,38 @@ _FALSE = frozenset({"false", "off", "no", "0"})
 _NO_DATA_RESULTS = frozenset({STATE_UNAVAILABLE, STATE_UNKNOWN, "none", ""})
 
 
+def template_truth(result: Any) -> bool | None:
+    """Judge a template's result: True, False, or None for no data (spec §4.1).
+
+    Only clear booleans count: true/on/yes/1 and false/off/no/0 (in any case), real
+    booleans, and numbers. Anything else is no data.
+    """
+    if result is None or isinstance(result, TemplateError):
+        return None
+    if isinstance(result, bool):
+        return result
+    if isinstance(result, (int, float)):
+        return result != 0
+    text = str(result).strip().lower()
+    if text in _TRUE:
+        return True
+    if text in _FALSE:
+        return False
+    return None
+
+
+def is_unexpected_result(result: Any) -> bool:
+    """Return whether a result is neither a boolean nor a recognised no-data value.
+
+    Such a result usually means a mistake in the template, so it's worth a warning.
+    """
+    if result is None or isinstance(result, TemplateError):
+        return False
+    return template_truth(result) is None and (
+        str(result).strip().lower() not in _NO_DATA_RESULTS
+    )
+
+
 class Source(ABC):
     """A condition alert's input, reporting through a callback once started."""
 
@@ -162,25 +194,15 @@ class TemplateSource(Source):
         self._report(value, [] if value is not None else self._missing_inputs())
 
     def _truth(self, result: Any) -> bool | None:
-        if result is None:
-            return None
-        if isinstance(result, bool):
-            return result
-        if isinstance(result, (int, float)):
-            return result != 0
-        text = str(result).strip().lower()
-        if text in _TRUE:
-            return True
-        if text in _FALSE:
-            return False
-        if text not in _NO_DATA_RESULTS and not self._warned:
+        value = template_truth(result)
+        if value is None and is_unexpected_result(result) and not self._warned:
             self._warned = True
             _LOGGER.warning(
                 "%s: template result %r isn't true or false; treating it as no data",
                 self._description,
                 result,
             )
-        return None
+        return value
 
     def _missing_inputs(self) -> list[str]:
         """Return the entities the template read that are missing data."""
