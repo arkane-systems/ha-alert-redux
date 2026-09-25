@@ -10,11 +10,14 @@ from custom_components.alert_redux.const import AlertState, EndReason
 from custom_components.alert_redux.model import (
     AlertRuntime,
     Change,
+    OnOffSides,
+    Reading,
     Timing,
     format_schedule,
     next_reminder_slot,
     parse_schedule,
     reminder_slots,
+    threshold_holds,
 )
 
 T0 = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
@@ -363,3 +366,117 @@ def test_fire_event_restarts_the_duration() -> None:
 
     runtime.end(later + timedelta(minutes=10), EndReason.RESOLVED)
     assert runtime.event_expires is None
+
+
+@pytest.mark.parametrize(
+    ("value", "firing", "expected"),
+    [
+        (30, False, False),  # At the maximum isn't above it.
+        (30.1, False, True),
+        (29, True, True),  # Inside, but not by the hysteresis.
+        (28, True, False),
+        (5, False, False),
+        (4.9, False, True),
+        (6.5, True, True),
+        (7, True, False),
+    ],
+)
+def test_threshold_holds(value: float, firing: bool, expected: bool) -> None:
+    reading = Reading(value, minimum=5, maximum=30)
+    assert threshold_holds(reading, 2, firing) is expected
+
+
+def test_threshold_one_limit() -> None:
+    assert threshold_holds(Reading(100, maximum=50), 0, False)
+    assert not threshold_holds(Reading(-100, maximum=50), 0, False)
+    assert threshold_holds(Reading(-1, minimum=0), 0, False)
+
+
+TEMPLATES = OnOffSides(
+    on_template=True, on_trigger=False, off_template=True, off_trigger=False
+)
+TRIGGERS = OnOffSides(
+    on_template=False, on_trigger=True, off_template=False, off_trigger=True
+)
+
+
+def _step(runtime: AlertRuntime, sides: OnOffSides, on, off) -> list[Change]:
+    """Judge and evaluate once, as the entity does."""
+    condition = runtime.on_off_condition(sides, on, off)
+    changes = [change for change, _ in runtime.evaluate(condition, [], T0, Timing())]
+    if Change.FIRED in changes:
+        runtime.on_off_fired()
+    if Change.ENDED in changes:
+        runtime.on_off_ended()
+    return changes
+
+
+def test_on_off_templates_are_edges() -> None:
+    runtime = AlertRuntime()
+    # A new alert is armed: an on side that's already true fires.
+    assert _step(runtime, TEMPLATES, True, False) == [Change.FIRED]
+    assert _step(runtime, TEMPLATES, True, True) == [Change.ENDED]
+    # Still on: no new edge, so no new firing.
+    assert _step(runtime, TEMPLATES, True, False) == []
+    assert _step(runtime, TEMPLATES, False, False) == []
+    assert _step(runtime, TEMPLATES, True, False) == [Change.FIRED]
+
+
+def test_on_off_off_side_needs_its_own_edge() -> None:
+    """An off criterion already true at the fire has to go false and true again."""
+    runtime = AlertRuntime()
+    assert _step(runtime, TEMPLATES, True, True) == [Change.FIRED]
+    assert _step(runtime, TEMPLATES, True, True) == []
+    assert _step(runtime, TEMPLATES, True, False) == []
+    assert _step(runtime, TEMPLATES, True, True) == [Change.ENDED]
+
+
+def test_on_off_rising_edge_while_firing_is_ignored() -> None:
+    runtime = AlertRuntime()
+    _step(runtime, TEMPLATES, True, False)
+    _step(runtime, TEMPLATES, False, False)
+    _step(runtime, TEMPLATES, True, False)
+    assert _step(runtime, TEMPLATES, True, True) == [Change.ENDED]
+    assert _step(runtime, TEMPLATES, True, False) == []
+
+
+def test_on_off_no_data_counts_only_the_live_side() -> None:
+    runtime = AlertRuntime()
+    assert runtime.on_off_condition(TEMPLATES, None, False) is None
+    assert runtime.on_off_condition(TEMPLATES, False, None) is False
+    _step(runtime, TEMPLATES, True, False)
+    assert runtime.on_off_condition(TEMPLATES, None, False) is True
+    assert runtime.on_off_condition(TEMPLATES, True, None) is None
+
+
+def test_on_off_edges_survive_storage() -> None:
+    runtime = AlertRuntime()
+    _step(runtime, TEMPLATES, True, False)
+    _step(runtime, TEMPLATES, True, True)
+    restored = AlertRuntime.from_dict(runtime.to_dict())
+    assert _step(restored, TEMPLATES, True, False) == []
+
+
+def test_on_off_triggers() -> None:
+    runtime = AlertRuntime()
+    assert _step(runtime, TRIGGERS, None, None) == []
+    runtime.on_off_pulse("off")  # Not firing: the off side doesn't count.
+    runtime.on_off_pulse("on")
+    assert _step(runtime, TRIGGERS, None, None) == [Change.FIRED]
+    runtime.on_off_pulse("on")  # Firing: the on side doesn't count.
+    assert _step(runtime, TRIGGERS, None, None) == []
+    runtime.on_off_pulse("off")
+    assert _step(runtime, TRIGGERS, None, None) == [Change.ENDED]
+    assert _step(runtime, TRIGGERS, None, None) == []
+
+
+def test_on_off_trigger_with_template_needs_it_to_hold() -> None:
+    sides = OnOffSides(
+        on_template=True, on_trigger=True, off_template=False, off_trigger=True
+    )
+    runtime = AlertRuntime()
+    runtime.on_off_pulse("on")
+    assert runtime.on_off_condition(sides, True, None) is True
+    # The template turning false before the fire (e.g. during delay_on) drops it.
+    assert runtime.on_off_condition(sides, False, None) is False
+    assert runtime.on_off_condition(sides, True, None) is False

@@ -71,7 +71,15 @@ async def test_create_alert(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
     )
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "user"
-    assert result["menu_options"] == ["manual", "state", "template", "trigger", "event"]
+    assert result["menu_options"] == [
+        "manual",
+        "state",
+        "on_off",
+        "threshold",
+        "template",
+        "trigger",
+        "event",
+    ]
 
     result = await _choose(hass, result, "manual")
     assert result["type"] is FlowResultType.FORM
@@ -733,3 +741,131 @@ async def test_options_event_durations(
     (key,) = [key for key in schema if str(key) == "event_durations"]
     fields = {str(k): k.default() for k in schema[key].schema.schema}
     assert fields["warning"] == {"hours": 0, "minutes": 20, "seconds": 0}
+
+
+CONDITION_FORM = {
+    "name": "Server Room Hot",
+    "priority": "critical",
+    "acknowledgeable": True,
+    "notifications": {},
+}
+
+
+async def test_create_threshold_alert(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    hass.states.async_set("sensor.server_room", "25")
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "threshold")
+    assert result["step_id"] == "threshold"
+
+    for fields, error in (
+        ({"maximum": "30"}, "value_source"),
+        (
+            {
+                "entity_id": "sensor.server_room",
+                "value_template": "{{ 1 }}",
+                "maximum": "30",
+            },
+            "value_source",
+        ),
+        (
+            {"attribute": "x", "value_template": "{{ 1 }}", "maximum": "30"},
+            "value_source",
+        ),
+        ({"entity_id": "sensor.server_room"}, "limit_required"),
+        (
+            {"entity_id": "sensor.server_room", "minimum": "30", "maximum": "10"},
+            "invalid_limits",
+        ),
+    ):
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {**CONDITION_FORM, **fields}
+        )
+        assert result["errors"] == {"base": error}, fields
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **CONDITION_FORM,
+            "entity_id": "sensor.server_room",
+            "maximum": " {{ states('input_number.max') }} ",
+            "hysteresis": 1.5,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (subentry,) = entry.subentries.values()
+    assert dict(subentry.data) == {
+        "kind": "threshold",
+        "priority": "critical",
+        "acknowledgeable": True,
+        "entity_id": "sensor.server_room",
+        "maximum": "{{ states('input_number.max') }}",
+        "hysteresis": 1.5,
+    }
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
+    )
+    assert result["step_id"] == "reconfigure_threshold"
+    assert _suggested(result["data_schema"].schema)["maximum"] == (
+        "{{ states('input_number.max') }}"
+    )
+
+
+async def test_create_on_off_alert(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "on_off")
+    assert result["step_id"] == "on_off"
+    triggers = [{"trigger": "event", "event_type": "garage_alarm"}]
+
+    for fields, error in (
+        ({"on_template": "{{ true }}"}, "criterion_required"),
+        (
+            {
+                "on_triggers": triggers,
+                "off_template": "{{ false }}",
+                "delay_on": {"minutes": 1},
+            },
+            "delay_needs_template",
+        ),
+        (
+            {
+                "on_template": "{{ true }}",
+                "off_triggers": triggers,
+                "delay_off": {"minutes": 1},
+            },
+            "delay_needs_template",
+        ),
+        (
+            {
+                "on_triggers": [{"trigger": "state", "entity_id": "x.y", "to": 5}],
+                "off_template": "{{ false }}",
+            },
+            "invalid_trigger",
+        ),
+    ):
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {**CONDITION_FORM, **fields}
+        )
+        assert result["errors"] == {"base": error}, fields
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **CONDITION_FORM,
+            "on_triggers": triggers,
+            "off_template": "{{ false }}",
+            "delay_off": {"minutes": 1},
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (subentry,) = entry.subentries.values()
+    data = dict(subentry.data)
+    assert data["kind"] == "on_off"
+    assert data["off_template"] == "{{ false }}"
+    assert data["on_triggers"][0]["event_type"] == "garage_alarm"
+    assert "on_template" not in data

@@ -1,16 +1,17 @@
 """The inputs of condition alerts (spec §4.1, §4.4).
 
-A source watches whatever a condition alert depends on and reports a tri-state
-result through a callback: True or False, or None when it has no data (an input is
-missing, unavailable, unknown, or won't parse), together with the inputs that are
-missing data.
+A source watches whatever a condition alert depends on and reports its result
+through a callback, together with the inputs that are missing data. The result is
+None when there's no data (an input is missing, unavailable, unknown, or won't
+parse); otherwise it's True or False, or for a threshold alert, a Reading.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 import logging
+import math
 from typing import Any
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -31,9 +32,11 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers.template import Template
 
+from .model import Reading
+
 _LOGGER = logging.getLogger(__name__)
 
-type SourceCallback = Callable[[bool | None, list[str]], None]
+type SourceCallback = Callable[[Any, list[str]], None]
 
 _NO_DATA_STATES = frozenset({STATE_UNAVAILABLE, STATE_UNKNOWN})
 _TRUE = frozenset({"true", "on", "yes", "1"})
@@ -100,7 +103,7 @@ class Source(ABC):
     def _async_stop(self) -> None: ...
 
     @callback
-    def _report(self, result: bool | None, missing_inputs: list[str]) -> None:
+    def _report(self, result: Any, missing_inputs: list[str]) -> None:
         if self._on_update is not None:
             self._on_update(result, missing_inputs)
 
@@ -206,55 +209,154 @@ class TemplateSource(Source):
 
     def _missing_inputs(self) -> list[str]:
         """Return the entities the template read that are missing data."""
-        if self._info is None:
-            return []
-        entities = self._info.listeners.get("entities", set())
-        return sorted(
-            entity_id
-            for entity_id in entities
-            if (state := self.hass.states.get(entity_id)) is None
-            or state.state in _NO_DATA_STATES
+        return missing_entities(self.hass, self._info)
+
+
+def missing_entities(
+    hass: HomeAssistant, info: TrackTemplateResultInfo | None
+) -> list[str]:
+    """Return the entities tracked templates read that are missing data."""
+    if info is None:
+        return []
+    entities = info.listeners.get("entities", set())
+    return sorted(
+        entity_id
+        for entity_id in entities
+        if (state := hass.states.get(entity_id)) is None
+        or state.state in _NO_DATA_STATES
+    )
+
+
+def to_number(result: Any) -> float | None:
+    """Return a template result as a finite number, or None if it isn't one."""
+    if isinstance(result, bool) or result is None or isinstance(result, TemplateError):
+        return None
+    try:
+        number = float(result)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+class ThresholdSource(Source):
+    """A threshold alert's value and limits, as a Reading (spec §4.1).
+
+    The value is a template (an entity's state or attribute is turned into one);
+    so is each limit, which may be a plain number. A value, or a configured limit,
+    that isn't a number means no data.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        value: str,
+        minimum: str | None,
+        maximum: str | None,
+        description: str,
+    ) -> None:
+        """Initialize the source; description names it in log messages."""
+        super().__init__(hass)
+        self._templates = {
+            name: Template(template, hass)
+            for name, template in (
+                ("value", value),
+                ("minimum", minimum),
+                ("maximum", maximum),
+            )
+            if template is not None
+        }
+        self._description = description
+        self._results: dict[Template, Any] = {}
+        self._info: TrackTemplateResultInfo | None = None
+
+    def _async_start(self) -> None:
+        self._results = {}
+        self._info = async_track_template_result(
+            self.hass,
+            [TrackTemplate(template, None) for template in self._templates.values()],
+            self._async_result,
+            log_fn=self._log,
+        )
+        self._info.async_refresh()
+
+    def _async_stop(self) -> None:
+        if self._info is not None:
+            self._info.async_remove()
+            self._info = None
+
+    def _log(self, level: int, message: str) -> None:
+        _LOGGER.log(level, "%s: %s", self._description, message)
+
+    @callback
+    def _async_result(
+        self,
+        event: Event[EventStateChangedData] | None,
+        updates: list[TrackTemplateResult],
+    ) -> None:
+        for update in updates:
+            self._results[update.template] = update.result
+        numbers = {
+            name: to_number(self._results.get(template))
+            for name, template in self._templates.items()
+        }
+        if any(number is None for number in numbers.values()):
+            self._report(None, missing_entities(self.hass, self._info))
+            return
+        self._report(
+            Reading(
+                value=numbers["value"],  # type: ignore[arg-type]
+                minimum=numbers.get("minimum"),
+                maximum=numbers.get("maximum"),
+            ),
+            [],
         )
 
 
-class AndSource(Source):
-    """Both sources must be true: a condition alert's extra condition (spec §4.1).
+def value_template(entity_id: str, attribute: str | None) -> str:
+    """Return a template reading an entity's state, or one of its attributes."""
+    if attribute:
+        return f"{{{{ state_attr({entity_id!r}, {attribute!r}) }}}}"
+    return f"{{{{ states({entity_id!r}) }}}}"
 
-    Either source having no data means no data, even if the other is false: the
-    alert depends on both (spec §4.4). Nothing is reported until both have
-    reported.
+
+class SourceSet:
+    """Several named sources, reported together once each has reported.
+
+    A condition alert combines its main criterion with the extra condition (and
+    an on/off alert its two sides) through this, so that its own rule decides
+    what the results mean together.
     """
 
-    def __init__(self, hass: HomeAssistant, first: Source, second: Source) -> None:
-        """Initialize the source."""
-        super().__init__(hass)
-        self._sources = (first, second)
-        self._results: list[tuple[bool | None, list[str]] | None] = [None, None]
-
-    def _async_start(self) -> None:
-        self._results = [None, None]
-        for index, source in enumerate(self._sources):
-            source.async_start(self._make_callback(index))
-
-    def _async_stop(self) -> None:
-        for source in self._sources:
-            source.async_stop()
-
-    def _make_callback(self, index: int) -> SourceCallback:
-        @callback
-        def _on_update(result: bool | None, missing_inputs: list[str]) -> None:
-            self._results[index] = (result, missing_inputs)
-            self._async_combine()
-
-        return _on_update
+    def __init__(self, sources: Mapping[str, Source]) -> None:
+        """Initialize the set."""
+        self._sources = dict(sources)
+        self._results: dict[str, tuple[Any, list[str]]] = {}
+        self._on_update: Callable[[dict[str, tuple[Any, list[str]]]], None] | None = (
+            None
+        )
 
     @callback
-    def _async_combine(self) -> None:
-        if any(result is None for result in self._results):
-            return
-        results = [result for result in self._results if result is not None]
-        if any(value is None for value, _ in results):
-            missing = sorted({entity for _, inputs in results for entity in inputs})
-            self._report(None, missing)
-        else:
-            self._report(all(value for value, _ in results), [])
+    def async_start(
+        self, on_update: Callable[[dict[str, tuple[Any, list[str]]]], None]
+    ) -> None:
+        """Start every source; results are reported once all have reported."""
+        self._on_update = on_update
+        self._results = {}
+        for name, source in self._sources.items():
+            source.async_start(self._make_callback(name))
+
+    @callback
+    def async_stop(self) -> None:
+        """Stop every source."""
+        self._on_update = None
+        for source in self._sources.values():
+            source.async_stop()
+
+    def _make_callback(self, name: str) -> SourceCallback:
+        @callback
+        def _on_update(result: Any, missing_inputs: list[str]) -> None:
+            self._results[name] = (result, missing_inputs)
+            if self._on_update is not None and len(self._results) == len(self._sources):
+                self._on_update(dict(self._results))
+
+        return _on_update

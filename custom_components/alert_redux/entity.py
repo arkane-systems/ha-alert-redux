@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
 import logging
 from typing import Any
@@ -16,6 +17,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_ACKNOWLEDGEABLE,
+    ATTR_ATTRIBUTE,
     ATTR_CONDITION,
     ATTR_DELAY_OFF,
     ATTR_DELAY_OFF_UNTIL,
@@ -30,6 +32,7 @@ from .const import (
     ATTR_FIRE_COUNT,
     ATTR_FIRE_DATA,
     ATTR_FIRING_SINCE,
+    ATTR_HYSTERESIS,
     ATTR_KIND,
     ATTR_LAST_ACKED,
     ATTR_LAST_ACKED_BY,
@@ -37,16 +40,22 @@ from .const import (
     ATTR_LAST_FIRED,
     ATTR_LAST_UNACKED,
     ATTR_LAST_UNACKED_BY,
+    ATTR_MAXIMUM,
     ATTR_MESSAGE,
+    ATTR_MINIMUM,
     ATTR_MISSING_INPUTS,
     ATTR_NAME,
     ATTR_NEW_STATE,
     ATTR_NEXT_REMINDER,
+    ATTR_NOTIFIER_GROUPS,
     ATTR_NO_DATA_GRACE,
     ATTR_NO_DATA_GRACE_UNTIL,
     ATTR_NO_DATA_SINCE,
-    ATTR_NOTIFIER_GROUPS,
+    ATTR_OFF_TEMPLATE,
+    ATTR_OFF_TRIGGERS,
     ATTR_OLD_STATE,
+    ATTR_ON_TEMPLATE,
+    ATTR_ON_TRIGGERS,
     ATTR_PRIORITY,
     ATTR_REASON,
     ATTR_REMINDER_SCHEDULE,
@@ -54,12 +63,15 @@ from .const import (
     ATTR_SUBJECT_ENTITY,
     ATTR_TARGET_STATE,
     ATTR_TEMPLATE,
-    ATTR_TRIGGER_DATA,
     ATTR_TRIGGERS,
+    ATTR_TRIGGER_DATA,
     ATTR_USER_DISMISSABLE,
     ATTR_USER_ID,
+    ATTR_VALUE,
+    ATTR_VALUE_TEMPLATE,
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_ATTRIBUTE,
     CONF_CONDITION,
     CONF_DELAY_OFF,
     CONF_DELAY_ON,
@@ -69,11 +81,18 @@ from .const import (
     CONF_ENTITY_ID,
     CONF_EVENT_DATA,
     CONF_EVENT_TYPE,
+    CONF_HYSTERESIS,
     CONF_ICON,
     CONF_KIND,
+    CONF_MAXIMUM,
     CONF_MESSAGE,
-    CONF_NO_DATA_GRACE,
+    CONF_MINIMUM,
     CONF_NOTIFIER_GROUPS,
+    CONF_NO_DATA_GRACE,
+    CONF_OFF_TEMPLATE,
+    CONF_OFF_TRIGGERS,
+    CONF_ON_TEMPLATE,
+    CONF_ON_TRIGGERS,
     CONF_PRIORITY,
     CONF_REMINDER_MESSAGE,
     CONF_REMINDER_SCHEDULE,
@@ -82,6 +101,7 @@ from .const import (
     CONF_TEMPLATE,
     CONF_TRIGGERS,
     CONF_USER_DISMISSABLE,
+    CONF_VALUE_TEMPLATE,
     DATA_LABEL,
     DATA_STARTUP_UNTIL,
     DEFAULT_PRIORITY_ICONS,
@@ -100,7 +120,17 @@ from .const import (
 )
 from .labels import async_apply_label
 from .messages import Messages, MessageTracker, message_context
-from .model import AlertRuntime, Change, Settings, Timing, Transition, to_timedelta
+from .model import (
+    AlertRuntime,
+    Change,
+    OnOffSides,
+    Reading,
+    Settings,
+    Timing,
+    Transition,
+    threshold_holds,
+    to_timedelta,
+)
 from .notifications import (
     REASON_DONE,
     REASON_ON,
@@ -110,11 +140,13 @@ from .notifications import (
     group_names,
 )
 from .sources import (
-    AndSource,
     Source,
+    SourceSet,
     StateSource,
     TemplateSource,
+    ThresholdSource,
     template_truth,
+    value_template,
 )
 from .store import AlertStore
 from .triggers import TriggerWatcher, bus_event_trigger
@@ -427,6 +459,12 @@ class AlertEntity(Entity):
         """Prepare the restored (or new) runtime state, before it is saved."""
 
     @callback
+    def _async_trigger_failed(self) -> None:
+        """Show the alert as broken: its triggers couldn't be attached (§7.1)."""
+        self._attr_available = False
+        self.async_write_ha_state()
+
+    @callback
     def async_update_config(self, subentry: ConfigSubentry) -> None:
         """Apply an edited subentry in place, keeping the alert's state."""
         self._configure(subentry)
@@ -484,9 +522,7 @@ class AlertEntity(Entity):
 
     async def async_unack(self) -> None:
         """Remove the alert's acknowledgement."""
-        if (
-            transition := self._runtime.unack(dt_util.utcnow(), self._user_id)
-        ) is None:
+        if (transition := self._runtime.unack(dt_util.utcnow(), self._user_id)) is None:
             _LOGGER.debug("%s: unack ignored; not acknowledged", self.entity_id)
             return
         # Reminders resume on the firing's original schedule (spec §6.1, §6.2).
@@ -558,21 +594,34 @@ class AlertEntity(Entity):
 class ConditionAlertEntity(AlertEntity):
     """An alert that fires while its condition holds (spec §4.1).
 
-    A source reports the condition, or that it has no data; the runtime applies the
-    delays and the no-data grace period, and this entity keeps one timer for the
-    runtime's next deadline.
+    Sources report the inputs, or that they have no data; each kind's rule turns
+    them into the condition (_judge), the runtime applies the delays and the
+    no-data grace period, and this entity keeps one timer for the runtime's next
+    deadline.
     """
 
     _unrecorded_attributes = AlertEntity._unrecorded_attributes | frozenset(
-        {ATTR_TEMPLATE, ATTR_CONDITION}
+        {
+            ATTR_TEMPLATE,
+            ATTR_CONDITION,
+            ATTR_VALUE_TEMPLATE,
+            ATTR_MINIMUM,
+            ATTR_MAXIMUM,
+            ATTR_VALUE,
+            ATTR_ON_TEMPLATE,
+            ATTR_ON_TRIGGERS,
+            ATTR_OFF_TEMPLATE,
+            ATTR_OFF_TRIGGERS,
+        }
     )
 
     def __init__(
         self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
     ) -> None:
         """Initialize the alert from its subentry."""
-        self._source: Source | None = None
-        self._result: tuple[bool | None, list[str]] | None = None
+        self._sources: SourceSet | None = None
+        self._results: dict[str, tuple[Any, list[str]]] | None = None
+        self._watchers: list[TriggerWatcher] = []
         self._unsub_timer: CALLBACK_TYPE | None = None
         self._unsub_startup: CALLBACK_TYPE | None = None
         super().__init__(subentry, store, settings)
@@ -580,9 +629,27 @@ class ConditionAlertEntity(AlertEntity):
     def _configure(self, subentry: ConfigSubentry) -> None:
         super()._configure(subentry)
         data = subentry.data
-        self._source_entity: str | None = data.get(CONF_ENTITY_ID)
+        # The state kind's entity, or the threshold kind's value entity.
+        self._source_entity: str | None = data.get(CONF_ENTITY_ID) or None
         self._target_state: str | None = data.get(CONF_TARGET_STATE)
         self._template: str | None = data.get(CONF_TEMPLATE)
+        self._attribute: str | None = data.get(CONF_ATTRIBUTE) or None
+        self._value_template: str | None = data.get(CONF_VALUE_TEMPLATE) or None
+        self._minimum: str | None = data.get(CONF_MINIMUM) or None
+        self._maximum: str | None = data.get(CONF_MAXIMUM) or None
+        self._hysteresis = float(data.get(CONF_HYSTERESIS) or 0)
+        self._on_template: str | None = data.get(CONF_ON_TEMPLATE) or None
+        self._on_triggers: list[dict[str, Any]] = list(data.get(CONF_ON_TRIGGERS) or [])
+        self._off_template: str | None = data.get(CONF_OFF_TEMPLATE) or None
+        self._off_triggers: list[dict[str, Any]] = list(
+            data.get(CONF_OFF_TRIGGERS) or []
+        )
+        self._sides = OnOffSides(
+            on_template=self._on_template is not None,
+            on_trigger=bool(self._on_triggers),
+            off_template=self._off_template is not None,
+            off_trigger=bool(self._off_triggers),
+        )
         self._condition: str | None = data.get(CONF_CONDITION) or None
         self._delay_on = to_timedelta(data.get(CONF_DELAY_ON))
         self._delay_off = to_timedelta(data.get(CONF_DELAY_OFF))
@@ -590,7 +657,7 @@ class ConditionAlertEntity(AlertEntity):
 
     @property
     def subject_entity(self) -> str | None:
-        """Return the explicit subject, or else the state kind's entity."""
+        """Return the explicit subject, or else the state or value entity."""
         return self._explicit_subject or self._source_entity
 
     @property
@@ -611,6 +678,26 @@ class ConditionAlertEntity(AlertEntity):
         if self._kind is AlertKind.STATE:
             attributes[ATTR_SOURCE_ENTITY] = self._source_entity
             attributes[ATTR_TARGET_STATE] = self._target_state
+        elif self._kind is AlertKind.THRESHOLD:
+            reading = (
+                self._results.get("main", (None, []))[0] if self._results else None
+            )
+            attributes |= {
+                ATTR_SOURCE_ENTITY: self._source_entity,
+                ATTR_ATTRIBUTE: self._attribute,
+                ATTR_VALUE_TEMPLATE: self._value_template,
+                ATTR_MINIMUM: self._minimum,
+                ATTR_MAXIMUM: self._maximum,
+                ATTR_HYSTERESIS: self._hysteresis,
+                ATTR_VALUE: reading.value if isinstance(reading, Reading) else None,
+            }
+        elif self._kind is AlertKind.ON_OFF:
+            attributes |= {
+                ATTR_ON_TEMPLATE: self._on_template,
+                ATTR_ON_TRIGGERS: self._on_triggers,
+                ATTR_OFF_TEMPLATE: self._off_template,
+                ATTR_OFF_TRIGGERS: self._off_triggers,
+            }
         else:
             attributes[ATTR_TEMPLATE] = self._template
         attributes |= {
@@ -676,45 +763,140 @@ class ConditionAlertEntity(AlertEntity):
         super().async_settings_changed()
         self._async_evaluate()
 
-    @callback
-    def _async_start_source(self) -> None:
-        main: Source
+    def _build_sources(self) -> dict[str, Source]:
+        """Return the kind's sources, by name, plus the extra condition's."""
+        sources: dict[str, Source] = {}
         if self._kind is AlertKind.STATE:
             assert self._source_entity is not None
             assert self._target_state is not None
-            main = StateSource(self.hass, self._source_entity, self._target_state)
+            sources["main"] = StateSource(
+                self.hass, self._source_entity, self._target_state
+            )
+        elif self._kind is AlertKind.THRESHOLD:
+            value = self._value_template or value_template(
+                str(self._source_entity), self._attribute
+            )
+            sources["main"] = ThresholdSource(
+                self.hass,
+                value,
+                self._minimum,
+                self._maximum,
+                f"{self.entity_id} threshold",
+            )
+        elif self._kind is AlertKind.ON_OFF:
+            for side, template in (
+                ("on", self._on_template),
+                ("off", self._off_template),
+            ):
+                if template is not None:
+                    sources[side] = TemplateSource(
+                        self.hass, template, f"{self.entity_id} {side} template"
+                    )
         else:
             assert self._template is not None
-            main = TemplateSource(
+            sources["main"] = TemplateSource(
                 self.hass, self._template, f"{self.entity_id} template"
             )
         if self._condition:
-            main = AndSource(
-                self.hass,
-                main,
-                TemplateSource(
-                    self.hass, self._condition, f"{self.entity_id} condition"
-                ),
+            sources["condition"] = TemplateSource(
+                self.hass, self._condition, f"{self.entity_id} condition"
             )
-        self._source = main
-        self._result = None
-        main.async_start(self._async_source_updated)
+        return sources
+
+    @callback
+    def _async_start_source(self) -> None:
+        sources = self._build_sources()
+        self._sources = SourceSet(sources)
+        self._results = None
+        if self._kind is AlertKind.ON_OFF:
+            for side, triggers in (
+                ("on", self._on_triggers),
+                ("off", self._off_triggers),
+            ):
+                if triggers:
+                    watcher = TriggerWatcher(
+                        self.hass,
+                        triggers,
+                        f"{self.entity_id} {side} trigger",
+                        self._make_pulse(side),
+                        self._async_trigger_failed,
+                    )
+                    self._watchers.append(watcher)
+                    watcher.async_start(None)
+        if sources:
+            self._sources.async_start(self._async_sources_updated)
+        else:
+            # Triggers alone: there's nothing to wait for.
+            self._async_sources_updated({})
 
     @callback
     def _async_stop_source(self) -> None:
-        if self._source is not None:
-            self._source.async_stop()
-            self._source = None
+        if self._sources is not None:
+            self._sources.async_stop()
+            self._sources = None
+        for watcher in self._watchers:
+            watcher.async_stop()
+        self._watchers = []
         if self._unsub_timer is not None:
             self._unsub_timer()
             self._unsub_timer = None
 
     @callback
-    def _async_source_updated(
-        self, result: bool | None, missing_inputs: list[str]
-    ) -> None:
-        self._result = (result, missing_inputs)
-        self._async_evaluate()
+    def _async_sources_updated(self, results: dict[str, tuple[Any, list[str]]]) -> None:
+        # A threshold alert shows its value, which can change without the state.
+        value_changed = self._kind is AlertKind.THRESHOLD and (
+            self._results or {}
+        ).get("main") != results.get("main")
+        self._results = results
+        self._async_evaluate(write=value_changed)
+
+    def _make_pulse(
+        self, side: str
+    ) -> Callable[[dict[str, Any], Context | None], None]:
+        @callback
+        def _pulse(_trigger: dict[str, Any], _context: Context | None) -> None:
+            """An on/off side's trigger fired: it counts if its template is true."""
+            template = self._on_template if side == "on" else self._off_template
+            results = self._results or {}
+            if template is not None and results.get(side, (None, []))[0] is not True:
+                return
+            self._runtime.on_off_pulse(side)
+            self._async_evaluate()
+
+        return _pulse
+
+    def _judge(
+        self, results: dict[str, tuple[Any, list[str]]]
+    ) -> tuple[bool | None, list[str]]:
+        """Return the condition from the sources' results, and the missing inputs.
+
+        The extra condition is ANDed in; either having no data means no data
+        (spec §4.1, §4.4).
+        """
+        runtime = self._runtime
+        if self._kind is AlertKind.ON_OFF:
+            on, on_missing = results.get("on", (None, []))
+            off, off_missing = results.get("off", (None, []))
+            main = runtime.on_off_condition(self._sides, on, off)
+            missing = off_missing if runtime.firing else on_missing
+        elif self._kind is AlertKind.THRESHOLD:
+            reading, missing = results["main"]
+            main = (
+                None
+                if reading is None
+                else threshold_holds(reading, self._hysteresis, runtime.firing)
+            )
+        else:
+            main, missing = results["main"]
+        if "condition" not in results:
+            return main, missing if main is None else []
+        condition, condition_missing = results["condition"]
+        if main is None or condition is None:
+            return None, sorted(
+                set(missing if main is None else [])
+                | set(condition_missing if condition is None else [])
+            )
+        return main and condition, []
 
     @callback
     def _async_timer(self, _now: datetime) -> None:
@@ -722,18 +904,28 @@ class ConditionAlertEntity(AlertEntity):
         self._async_evaluate()
 
     @callback
-    def _async_evaluate(self) -> None:
-        """Apply the latest result, publish any changes, and set the next timer."""
-        if self._result is None:
+    def _async_evaluate(self, write: bool = False) -> None:
+        """Apply the latest results, publish any changes, and set the next timer.
+
+        write forces the state to be written, e.g. for a changed attribute.
+        """
+        if self._results is None:
             return
         # Changes here are the alert's own, not those of the last user action.
         self._context = None
         timing = self._timing
         before = self._runtime.to_dict()
         now = dt_util.utcnow()
-        changes = self._runtime.evaluate(*self._result, now, timing)
+        condition, missing = self._judge(self._results)
+        changes = self._runtime.evaluate(condition, missing, now, timing)
         if any(change is Change.FIRED for change, _ in changes):
             self._runtime.plan_reminder(self._reminder_schedule, now)
+            if self._kind is AlertKind.ON_OFF:
+                self._runtime.on_off_fired()
+        if self._kind is AlertKind.ON_OFF and any(
+            change is Change.ENDED for change, _ in changes
+        ):
+            self._runtime.on_off_ended()
 
         if self._unsub_timer is not None:
             self._unsub_timer()
@@ -747,6 +939,8 @@ class ConditionAlertEntity(AlertEntity):
             self._async_update_reminder_timer()
             self.async_write_ha_state()
             self._persist()
+        elif write:
+            self.async_write_ha_state()
         for change, transition in changes:
             if change is Change.FIRED:
                 self._fire_event(
@@ -888,12 +1082,6 @@ class EventAlertEntity(AlertEntity):
         if self._watcher is not None:
             self._watcher.async_stop()
             self._watcher = None
-
-    @callback
-    def _async_trigger_failed(self) -> None:
-        """Show the alert as broken: its triggers couldn't be attached (§7.1)."""
-        self._attr_available = False
-        self.async_write_ha_state()
 
     @callback
     def _async_triggered(

@@ -5,11 +5,14 @@ from __future__ import annotations
 import pytest
 from homeassistant.core import HomeAssistant
 
+from custom_components.alert_redux.model import Reading
 from custom_components.alert_redux.sources import (
-    AndSource,
     Source,
+    SourceSet,
     StateSource,
     TemplateSource,
+    ThresholdSource,
+    value_template,
 )
 
 DOOR = "binary_sensor.door"
@@ -142,35 +145,73 @@ async def test_template_undefined_variable(hass: HomeAssistant) -> None:
     assert recorder.last[0] is None
 
 
-async def test_and_source(hass: HomeAssistant) -> None:
+async def test_source_set(hass: HomeAssistant) -> None:
+    """Results are reported together, once every source has reported."""
     hass.states.async_set(DOOR, "on")
     hass.states.async_set(TEMP, "30")
-    source = AndSource(
-        hass,
-        StateSource(hass, DOOR, "on"),
-        TemplateSource(hass, "{{ states('sensor.temperature') | float > 25 }}", "t"),
+    sources = SourceSet(
+        {
+            "main": StateSource(hass, DOOR, "on"),
+            "condition": TemplateSource(
+                hass, "{{ states('sensor.temperature') | float > 25 }}", "t"
+            ),
+        }
     )
-    recorder = await _start(hass, source)
-    # Nothing is reported until both inputs have been.
-    assert recorder.results[0] == (True, [])
-    assert recorder.last == (True, [])
+    reports: list[dict] = []
+    sources.async_start(reports.append)
+    await hass.async_block_till_done()
+    assert reports[0] == {"main": (True, []), "condition": (True, [])}
 
     hass.states.async_set(TEMP, "20")
     await hass.async_block_till_done()
-    assert recorder.last == (False, [])
+    assert reports[-1] == {"main": (True, []), "condition": (False, [])}
 
-    # No data on either side is no data, even when the other side is false.
     hass.states.async_set(DOOR, "unavailable")
     await hass.async_block_till_done()
-    assert recorder.last == (None, [DOOR])
+    assert reports[-1]["main"] == (None, [DOOR])
 
-    hass.states.async_set(DOOR, "off")
-    hass.states.async_set(TEMP, "unavailable")
-    await hass.async_block_till_done()
-    assert recorder.last == (None, [TEMP])
-
-    source.async_stop()
-    hass.states.async_set(TEMP, "30")
+    sources.async_stop()
+    count = len(reports)
     hass.states.async_set(DOOR, "on")
     await hass.async_block_till_done()
-    assert recorder.last == (None, [TEMP])
+    assert len(reports) == count
+
+
+async def test_threshold_source(hass: HomeAssistant) -> None:
+    hass.states.async_set(TEMP, "30")
+    hass.states.async_set("input_number.max", "28")
+    recorder = await _start(
+        hass,
+        ThresholdSource(
+            hass,
+            value_template(TEMP, None),
+            "5",
+            "{{ states('input_number.max') }}",
+            "t",
+        ),
+    )
+    assert recorder.last == (Reading(30.0, 5.0, 28.0), [])
+
+    hass.states.async_set("input_number.max", "unavailable")
+    await hass.async_block_till_done()
+    assert recorder.last == (None, ["input_number.max"])
+
+    hass.states.async_set("input_number.max", "35")
+    hass.states.async_set(TEMP, "hot")
+    await hass.async_block_till_done()
+    assert recorder.last == (None, [])
+
+
+async def test_threshold_attribute(hass: HomeAssistant) -> None:
+    hass.states.async_set("climate.lounge", "heat", {"current_temperature": 19.5})
+    recorder = await _start(
+        hass,
+        ThresholdSource(
+            hass,
+            value_template("climate.lounge", "current_temperature"),
+            "18",
+            None,
+            "t",
+        ),
+    )
+    assert recorder.last == (Reading(19.5, 18.0, None), [])
