@@ -78,6 +78,7 @@ from .const import (
     CONF_REMINDER_MESSAGE,
     CONF_REMINDER_SCHEDULE,
     CONF_RETRY_TIMEOUT,
+    CONF_SNOOZE_REMINDER_WINDOW,
     CONF_STARTUP_DELAY,
     CONF_SUBJECT_ENTITY,
     CONF_TARGET,
@@ -161,6 +162,9 @@ class AlertReduxOptionsFlow(OptionsFlow):
                         CONF_DEFAULT_REMINDER_SCHEDULE: list(schedule),
                         CONF_FALLBACK_GROUP: user_input.get(CONF_FALLBACK_GROUP),
                         CONF_RETRY_TIMEOUT: user_input[CONF_RETRY_TIMEOUT],
+                        CONF_SNOOZE_REMINDER_WINDOW: user_input[
+                            CONF_SNOOZE_REMINDER_WINDOW
+                        ],
                         CONF_EVENT_DURATIONS: user_input.get(CONF_EVENT_DURATIONS)
                         or _event_durations(settings),
                     }
@@ -173,6 +177,9 @@ class AlertReduxOptionsFlow(OptionsFlow):
             CONF_DEFAULT_REMINDER_SCHEDULE: format_schedule(settings.reminder_schedule),
             CONF_FALLBACK_GROUP: settings.fallback_group,
             CONF_RETRY_TIMEOUT: _duration_dict(settings.retry_timeout),
+            CONF_SNOOZE_REMINDER_WINDOW: _duration_dict(
+                settings.snooze_reminder_window
+            ),
         }
         return self.async_show_form(
             step_id="init",
@@ -200,6 +207,10 @@ class AlertReduxOptionsFlow(OptionsFlow):
                     ): _groups_selector(self.config_entry, multiple=False),
                     vol.Required(
                         CONF_RETRY_TIMEOUT, default=defaults[CONF_RETRY_TIMEOUT]
+                    ): DurationSelector(),
+                    vol.Required(
+                        CONF_SNOOZE_REMINDER_WINDOW,
+                        default=defaults[CONF_SNOOZE_REMINDER_WINDOW],
                     ): DurationSelector(),
                     # No default: the frontend then builds the section's value from
                     # its fields' defaults (see the alert form's section).

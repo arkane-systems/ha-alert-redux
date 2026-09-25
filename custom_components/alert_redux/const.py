@@ -175,6 +175,9 @@ DEFAULT_REMINDER_SCHEDULE: tuple[float, ...] = (10, 20, 30, 60)
 CONF_FALLBACK_GROUP = "fallback_group"
 CONF_RETRY_TIMEOUT = "retry_timeout"
 DEFAULT_RETRY_TIMEOUT = timedelta(minutes=5)
+# The snooze-end reminder rule's window (spec §6.2).
+CONF_SNOOZE_REMINDER_WINDOW = "snooze_reminder_window"
+DEFAULT_SNOOZE_REMINDER_WINDOW = timedelta(minutes=5)
 # Event alerts' default durations, by priority (spec §4.2, §5): a mapping of
 # priority to a duration selector's dict. The options form shows it as a section.
 CONF_EVENT_DURATIONS = "event_durations"
@@ -194,6 +197,7 @@ SERVICE_FIRE = "fire"
 SERVICE_DISMISS = "dismiss"
 SERVICE_ACK = "ack"
 SERVICE_UNACK = "unack"
+SERVICE_SNOOZE = "snooze"
 
 ATTR_DATA = "data"
 
@@ -202,6 +206,8 @@ EVENT_FIRED = f"{DOMAIN}_fired"
 EVENT_ENDED = f"{DOMAIN}_ended"
 EVENT_ACKED = f"{DOMAIN}_acked"
 EVENT_UNACKED = f"{DOMAIN}_unacked"
+EVENT_SNOOZED = f"{DOMAIN}_snoozed"
+EVENT_SNOOZE_EXPIRED = f"{DOMAIN}_snooze_expired"
 EVENT_NO_DATA = f"{DOMAIN}_no_data"
 EVENT_CREATED = f"{DOMAIN}_created"
 EVENT_DELETED = f"{DOMAIN}_deleted"
@@ -220,6 +226,9 @@ ATTR_LAST_ACKED = "last_acked"
 ATTR_LAST_ACKED_BY = "last_acked_by"
 ATTR_LAST_UNACKED = "last_unacked"
 ATTR_LAST_UNACKED_BY = "last_unacked_by"
+ATTR_SNOOZED_UNTIL = "snoozed_until"
+ATTR_LAST_SNOOZED = "last_snoozed"
+ATTR_LAST_SNOOZED_BY = "last_snoozed_by"
 ATTR_NAME = "name"
 ATTR_OLD_STATE = "old_state"
 ATTR_NEW_STATE = "new_state"

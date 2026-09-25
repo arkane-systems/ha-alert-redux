@@ -21,6 +21,7 @@ from custom_components.alert_redux.const import (
     EVENT_ENDED,
     EVENT_FIRED,
     EVENT_NO_DATA,
+    EVENT_UNACKED,
     STORAGE_KEY,
 )
 
@@ -286,3 +287,59 @@ async def test_event_alert_expired_during_restart(
     assert hass.states.get(DOORBELL).state == "idle"
     assert [event.data["reason"] for event in ended] == ["resolved"]
     assert calls[-1].data["message"] == "Doorbell stopped firing after 10 minutes."
+
+
+async def test_snooze_resumes(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A snooze still running after a restart runs out on time."""
+    entry = await setup_alerts(alert_subentry("Back Door Open"))
+    await hass.services.async_call(DOMAIN, "fire", {"entity_id": DOOR}, blocking=True)
+    await hass.services.async_call(
+        DOMAIN,
+        "snooze",
+        {"entity_id": DOOR, "duration": {"minutes": 30}},
+        blocking=True,
+    )
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=10))
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(DOOR).state == "ack"
+
+    freezer.tick(timedelta(minutes=20))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert hass.states.get(DOOR).state == "active"
+
+
+async def test_snooze_expired_during_restart(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A snooze that ran out while HA was down ends at once, with its reminder."""
+    calls = async_mock_service(hass, "notify", "phone")
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open"),
+        group_subentry("Phones", "phones", actions=[{"action": "notify.phone"}]),
+        options={"default_groups": ["phones"]},
+    )
+    await hass.services.async_call(DOMAIN, "fire", {"entity_id": DOOR}, blocking=True)
+    await hass.services.async_call(
+        DOMAIN,
+        "snooze",
+        {"entity_id": DOOR, "duration": {"minutes": 15}},
+        blocking=True,
+    )
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=40))
+    unacked = async_capture_events(hass, EVENT_UNACKED)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert hass.states.get(DOOR).state == "active"
+    assert len(unacked) == 1
+    assert calls[-1].data["message"] == "Back Door Open is still firing (40 minutes)."

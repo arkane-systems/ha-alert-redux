@@ -22,6 +22,8 @@ export interface HomeAssistant {
 export interface AlertReduxCardConfig {
   type: string;
   title?: string;
+  /** The snooze menu's durations, in minutes. */
+  snooze_durations?: number[];
 }
 
 export type Priority = "emergency" | "critical" | "warning" | "notice" | "informational";
@@ -44,4 +46,6 @@ export interface Alert {
   eventExpires: Date | null;
   noDataSince: Date | null;
   missingInputs: string[];
+  /** While snoozed: when the snooze runs out (spec §6.2). */
+  snoozedUntil: Date | null;
 }

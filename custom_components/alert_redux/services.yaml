@@ -27,3 +27,15 @@ unack:
     entity:
       integration: alert_redux
       domain: alert_redux
+
+snooze:
+  target:
+    entity:
+      integration: alert_redux
+      domain: alert_redux
+  fields:
+    duration:
+      required: true
+      example: "00:30:00"
+      selector:
+        duration:

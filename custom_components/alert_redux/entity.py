@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigSubentry
-from homeassistant.core import CALLBACK_TYPE, Context, callback
+from homeassistant.core import CALLBACK_TYPE, Context, HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError, TemplateError
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_point_in_utc_time
@@ -38,6 +38,8 @@ from .const import (
     ATTR_LAST_ACKED_BY,
     ATTR_LAST_ENDED,
     ATTR_LAST_FIRED,
+    ATTR_LAST_SNOOZED,
+    ATTR_LAST_SNOOZED_BY,
     ATTR_LAST_UNACKED,
     ATTR_LAST_UNACKED_BY,
     ATTR_MAXIMUM,
@@ -59,6 +61,7 @@ from .const import (
     ATTR_PRIORITY,
     ATTR_REASON,
     ATTR_REMINDER_SCHEDULE,
+    ATTR_SNOOZED_UNTIL,
     ATTR_SOURCE_ENTITY,
     ATTR_SUBJECT_ENTITY,
     ATTR_TARGET_STATE,
@@ -112,6 +115,8 @@ from .const import (
     EVENT_FIRED,
     EVENT_KINDS,
     EVENT_NO_DATA,
+    EVENT_SNOOZE_EXPIRED,
+    EVENT_SNOOZED,
     EVENT_UNACKED,
     AlertKind,
     AlertState,
@@ -128,6 +133,7 @@ from .model import (
     Settings,
     Timing,
     Transition,
+    snooze_end_reminder,
     threshold_holds,
     to_timedelta,
 )
@@ -152,6 +158,56 @@ from .store import AlertStore
 from .triggers import TriggerWatcher, bus_event_trigger
 
 _LOGGER = logging.getLogger(__name__)
+
+# The event announcing each kind of change (spec §11.3).
+_CHANGE_EVENTS = {
+    Change.FIRED: EVENT_FIRED,
+    Change.ENDED: EVENT_ENDED,
+    Change.NO_DATA: EVENT_NO_DATA,
+    Change.ACKED: EVENT_ACKED,
+    Change.UNACKED: EVENT_UNACKED,
+    Change.SNOOZED: EVENT_SNOOZED,
+    Change.SNOOZE_EXPIRED: EVENT_SNOOZE_EXPIRED,
+}
+
+
+class PointTimer:
+    """A one-shot timer that runs an action at a point in time."""
+
+    def __init__(self, action: Callable[[datetime], None]) -> None:
+        """Initialize the timer, unset."""
+        self._action = action
+        self._unsub: CALLBACK_TYPE | None = None
+        self.when: datetime | None = None
+
+    @property
+    def pending(self) -> bool:
+        """Return whether the timer is set."""
+        return self._unsub is not None
+
+    @callback
+    def at(self, hass: HomeAssistant, when: datetime | None) -> None:
+        """Run the action at when, or never for None; the same time isn't re-set."""
+        if when == self.when and (when is None or self.pending):
+            return
+        self.cancel()
+        if when is not None:
+            self.when = when
+            self._unsub = async_track_point_in_utc_time(hass, self._run, when)
+
+    @callback
+    def cancel(self) -> None:
+        """Unset the timer."""
+        if self._unsub is not None:
+            self._unsub()
+            self._unsub = None
+        self.when = None
+
+    @callback
+    def _run(self, now: datetime) -> None:
+        self._unsub = None
+        self.when = None
+        self._action(now)
 
 
 def create_alert_entity(
@@ -188,8 +244,8 @@ class AlertEntity(Entity):
         self._message_key: tuple[Any, ...] | None = None
         # Whether this alert has been given the alerts label (spec §11.5).
         self._labelled = False
-        self._unsub_reminder: CALLBACK_TYPE | None = None
-        self._reminder_at: datetime | None = None
+        self._reminder_timer = PointTimer(self._async_reminder_due)
+        self._snooze_timer = PointTimer(self._async_snooze_due)
         self._attr_unique_id = subentry.subentry_id
         self._configure(subentry)
 
@@ -244,6 +300,9 @@ class AlertEntity(Entity):
             ATTR_LAST_ACKED_BY: runtime.last_acked_by,
             ATTR_LAST_UNACKED: runtime.last_unacked,
             ATTR_LAST_UNACKED_BY: runtime.last_unacked_by,
+            ATTR_SNOOZED_UNTIL: runtime.snoozed_until,
+            ATTR_LAST_SNOOZED: runtime.last_snoozed,
+            ATTR_LAST_SNOOZED_BY: runtime.last_snoozed_by,
             ATTR_MESSAGE: self._messages.message if self._messages else None,
             ATTR_DISPLAY_MESSAGE: (
                 self._messages.display_message if self._messages else None
@@ -279,16 +338,17 @@ class AlertEntity(Entity):
         if self._runtime.state is AlertState.ACTIVE and not self._runtime.next_reminder:
             # E.g. an alert that was firing before reminders existed.
             self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
-        # A reminder that fell due while Home Assistant was down is sent now.
-        self._async_update_reminder_timer()
+        # A reminder that fell due, or a snooze that ran out, while Home Assistant
+        # was down is dealt with now (spec §15.1).
+        self._async_update_timers()
         self._persist()
         if record is None:
             self._fire_event(EVENT_CREATED, None)
 
     async def async_will_remove_from_hass(self) -> None:
-        """Stop rendering the messages, and the reminders."""
+        """Stop rendering the messages, and the timers."""
         self._async_stop_messages()
-        self._async_cancel_reminder_timer()
+        self._async_cancel_timers()
 
     @callback
     def async_write_ha_state(self) -> None:
@@ -392,36 +452,35 @@ class AlertEntity(Entity):
         )
 
     @callback
-    def _async_update_reminder_timer(self) -> None:
-        """Set the reminder timer to the runtime's next reminder, if it changed."""
-        due = self._runtime.next_reminder
-        if due == self._reminder_at and (due is None or self._unsub_reminder):
-            return
-        self._async_cancel_reminder_timer()
-        if due is not None:
-            self._reminder_at = due
-            self._unsub_reminder = async_track_point_in_utc_time(
-                self.hass, self._async_reminder_due, due
-            )
+    def _async_update_timers(self) -> None:
+        """Set the timers to the runtime's deadlines: reminder and snooze."""
+        self._reminder_timer.at(self.hass, self._runtime.next_reminder)
+        self._snooze_timer.at(self.hass, self._runtime.snoozed_until)
 
     @callback
-    def _async_cancel_reminder_timer(self) -> None:
-        if self._unsub_reminder is not None:
-            self._unsub_reminder()
-            self._unsub_reminder = None
-        self._reminder_at = None
+    def _async_cancel_timers(self) -> None:
+        self._reminder_timer.cancel()
+        self._snooze_timer.cancel()
 
     @callback
-    def _async_reminder_due(self, now: datetime) -> None:
-        """Send a reminder, with the real firing duration, and plan the next one."""
-        self._unsub_reminder = None
-        self._reminder_at = None
+    def _async_reminder_due(self, _now: datetime) -> None:
+        """Send a reminder, and plan the next one."""
         runtime = self._runtime
         if runtime.state is not AlertState.ACTIVE or runtime.next_reminder is None:
             return
         # The reminder is the alert's own doing, not the last user action's.
         self._context = None
         now = dt_util.utcnow()
+        self._async_send_reminder(now)
+        runtime.plan_reminder(self._reminder_schedule, now)
+        self._async_update_timers()
+        self.async_write_ha_state()
+        self._persist()
+
+    @callback
+    def _async_send_reminder(self, now: datetime) -> None:
+        """Send a reminder, giving the real firing duration."""
+        runtime = self._runtime
         duration = (
             (now - runtime.firing_since).total_seconds() if runtime.firing_since else 0
         )
@@ -430,16 +489,35 @@ class AlertEntity(Entity):
             self._reminder_message,
             self._message_context(REASON_REMINDER, duration_seconds=duration),
         )
-        runtime.plan_reminder(self._reminder_schedule, now)
-        self._async_update_reminder_timer()
-        self.async_write_ha_state()
-        self._persist()
+
+    @callback
+    def _async_snooze_due(self, _now: datetime) -> None:
+        """End the snooze: active again, with the snooze-end reminder rule (§6.2)."""
+        runtime = self._runtime
+        if runtime.snoozed_until is None:
+            return
+        self._context = None
+        # The timer may run a moment early; the snooze ends at its deadline.
+        now = max(dt_util.utcnow(), runtime.snoozed_until)
+        if not (changes := runtime.snooze_expire(now)):
+            return
+        remind = False
+        if runtime.firing_since is not None:
+            remind, runtime.next_reminder = snooze_end_reminder(
+                runtime.firing_since,
+                self._reminder_schedule,
+                now,
+                self._settings.snooze_reminder_window,
+            )
+        self._apply_changes(changes)
+        if remind:
+            self._async_send_reminder(now)
 
     @callback
     def _async_replan_reminder(self) -> None:
         """Plan the next reminder afresh, e.g. after the schedule changed."""
         self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
-        self._async_update_reminder_timer()
+        self._async_update_timers()
 
     @callback
     def _async_stop_messages(self) -> None:
@@ -508,17 +586,23 @@ class AlertEntity(Entity):
         self._async_notify_done(transition)
 
     async def async_ack(self) -> None:
-        """Acknowledge the alert."""
-        if not self._acknowledgeable:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="not_acknowledgeable",
-                translation_placeholders={"entity_id": self.entity_id},
-            )
+        """Acknowledge the alert, or make a snooze a lasting acknowledgement."""
+        self._require_acknowledgeable()
         if (transition := self._runtime.ack(dt_util.utcnow(), self._user_id)) is None:
-            _LOGGER.debug("%s: ack ignored; not active", self.entity_id)
+            _LOGGER.debug("%s: ack ignored; not active or snoozed", self.entity_id)
             return
         self._apply(EVENT_ACKED, transition)
+
+    async def async_snooze(self, duration: timedelta) -> None:
+        """Acknowledge the alert for a while (spec §6.2)."""
+        self._require_acknowledgeable()
+        now = dt_util.utcnow()
+        if not (changes := self._runtime.snooze(now, now + duration, self._user_id)):
+            _LOGGER.debug("%s: snooze ignored; not firing", self.entity_id)
+            return
+        self._apply_changes(
+            changes, {Change.SNOOZED: {ATTR_SNOOZED_UNTIL: self._runtime.snoozed_until}}
+        )
 
     async def async_unack(self) -> None:
         """Remove the alert's acknowledgement."""
@@ -533,6 +617,14 @@ class AlertEntity(Entity):
     def _user_id(self) -> str | None:
         """Return the user behind the action being handled, if any."""
         return self._context.user_id if self._context else None
+
+    def _require_acknowledgeable(self) -> None:
+        if not self._acknowledgeable:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_acknowledgeable",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
 
     def _require_manual(self) -> None:
         if self._kind is not AlertKind.MANUAL:
@@ -549,10 +641,24 @@ class AlertEntity(Entity):
         extra: dict[str, Any] | None = None,
     ) -> None:
         """Publish an applied transition: state, storage, and event."""
-        self._async_update_reminder_timer()
+        self._async_update_timers()
         self.async_write_ha_state()
         self._persist()
         self._fire_event(event_type, transition.old_state, extra)
+
+    def _apply_changes(
+        self,
+        changes: list[tuple[Change, Transition]],
+        extra: dict[Change, dict[str, Any]] | None = None,
+    ) -> None:
+        """Publish applied changes: state and storage once, then each event."""
+        self._async_update_timers()
+        self.async_write_ha_state()
+        self._persist()
+        for change, transition in changes:
+            self._fire_event(
+                _CHANGE_EVENTS[change], transition.old_state, (extra or {}).get(change)
+            )
 
     def _persist(self) -> None:
         assert self.unique_id is not None
@@ -622,8 +728,8 @@ class ConditionAlertEntity(AlertEntity):
         self._sources: SourceSet | None = None
         self._results: dict[str, tuple[Any, list[str]]] | None = None
         self._watchers: list[TriggerWatcher] = []
-        self._unsub_timer: CALLBACK_TYPE | None = None
-        self._unsub_startup: CALLBACK_TYPE | None = None
+        self._deadline_timer = PointTimer(self._async_timer)
+        self._startup_timer = PointTimer(self._async_startup_done)
         super().__init__(subentry, store, settings)
 
     def _configure(self, subentry: ConfigSubentry) -> None:
@@ -723,23 +829,18 @@ class ConditionAlertEntity(AlertEntity):
         await super().async_added_to_hass()
         startup_until: datetime | None = self.hass.data[DOMAIN].get(DATA_STARTUP_UNTIL)
         if startup_until is not None and dt_util.utcnow() < startup_until:
-            self._unsub_startup = async_track_point_in_utc_time(
-                self.hass, self._async_startup_done, startup_until
-            )
+            self._startup_timer.at(self.hass, startup_until)
         else:
             self._async_start_source()
 
     @callback
     def _async_startup_done(self, _now: datetime) -> None:
-        self._unsub_startup = None
         self._async_start_source()
 
     async def async_will_remove_from_hass(self) -> None:
         """Stop watching the condition."""
         await super().async_will_remove_from_hass()
-        if self._unsub_startup is not None:
-            self._unsub_startup()
-            self._unsub_startup = None
+        self._startup_timer.cancel()
         self._async_stop_source()
 
     @callback
@@ -754,7 +855,7 @@ class ConditionAlertEntity(AlertEntity):
         self._runtime.delay_on_until = None
         self._runtime.delay_off_until = None
         super().async_update_config(subentry)
-        if self._unsub_startup is None:
+        if not self._startup_timer.pending:
             self._async_start_source()
 
     @callback
@@ -837,9 +938,7 @@ class ConditionAlertEntity(AlertEntity):
         for watcher in self._watchers:
             watcher.async_stop()
         self._watchers = []
-        if self._unsub_timer is not None:
-            self._unsub_timer()
-            self._unsub_timer = None
+        self._deadline_timer.cancel()
 
     @callback
     def _async_sources_updated(self, results: dict[str, tuple[Any, list[str]]]) -> None:
@@ -900,7 +999,6 @@ class ConditionAlertEntity(AlertEntity):
 
     @callback
     def _async_timer(self, _now: datetime) -> None:
-        self._unsub_timer = None
         self._async_evaluate()
 
     @callback
@@ -927,16 +1025,10 @@ class ConditionAlertEntity(AlertEntity):
         ):
             self._runtime.on_off_ended()
 
-        if self._unsub_timer is not None:
-            self._unsub_timer()
-            self._unsub_timer = None
-        if (deadline := self._runtime.next_deadline(timing)) is not None:
-            self._unsub_timer = async_track_point_in_utc_time(
-                self.hass, self._async_timer, deadline
-            )
+        self._deadline_timer.at(self.hass, self._runtime.next_deadline(timing))
 
         if changes or self._runtime.to_dict() != before:
-            self._async_update_reminder_timer()
+            self._async_update_timers()
             self.async_write_ha_state()
             self._persist()
         elif write:
@@ -979,7 +1071,7 @@ class EventAlertEntity(AlertEntity):
     ) -> None:
         """Initialize the alert from its subentry."""
         self._watcher: TriggerWatcher | None = None
-        self._unsub_expiry: CALLBACK_TYPE | None = None
+        self._expiry_timer = PointTimer(self._async_expired)
         super().__init__(subentry, store, settings)
 
     def _configure(self, subentry: ConfigSubentry) -> None:
@@ -1045,14 +1137,13 @@ class EventAlertEntity(AlertEntity):
         if runtime.event_expires is not None and runtime.event_expires <= now:
             self._async_expired(now)
         else:
-            self._async_update_expiry_timer()
+            self._async_update_timers()
         self._async_start_watcher()
 
     async def async_will_remove_from_hass(self) -> None:
         """Stop watching the triggers, and the duration."""
         await super().async_will_remove_from_hass()
         self._async_stop_watcher()
-        self._async_cancel_expiry_timer()
 
     @callback
     def async_update_config(self, subentry: ConfigSubentry) -> None:
@@ -1097,7 +1188,6 @@ class EventAlertEntity(AlertEntity):
         transition = self._runtime.fire_event(now, trigger, self._duration)
         if transition.fire_count == 1:
             self._runtime.plan_reminder(self._reminder_schedule, now)
-        self._async_update_expiry_timer()
         self._apply(
             EVENT_FIRED,
             transition,
@@ -1131,18 +1221,15 @@ class EventAlertEntity(AlertEntity):
         return value
 
     @callback
-    def _async_update_expiry_timer(self) -> None:
-        self._async_cancel_expiry_timer()
-        if (expires := self._runtime.event_expires) is not None:
-            self._unsub_expiry = async_track_point_in_utc_time(
-                self.hass, self._async_expired, expires
-            )
+    def _async_update_timers(self) -> None:
+        """Add the duration's timer."""
+        super()._async_update_timers()
+        self._expiry_timer.at(self.hass, self._runtime.event_expires)
 
     @callback
-    def _async_cancel_expiry_timer(self) -> None:
-        if self._unsub_expiry is not None:
-            self._unsub_expiry()
-            self._unsub_expiry = None
+    def _async_cancel_timers(self) -> None:
+        super()._async_cancel_timers()
+        self._expiry_timer.cancel()
 
     @callback
     def _async_expired(self, _now: datetime) -> None:
@@ -1150,7 +1237,6 @@ class EventAlertEntity(AlertEntity):
 
         It ended at its expiry, even if that passed while Home Assistant was down.
         """
-        self._unsub_expiry = None
         self._context = None
         ended = self._runtime.event_expires or dt_util.utcnow()
         if (transition := self._runtime.end(ended, EndReason.RESOLVED)) is None:

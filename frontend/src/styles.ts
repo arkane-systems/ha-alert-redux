@@ -242,6 +242,41 @@ export const cardStyles = css`
     background: color-mix(in srgb, var(--primary-color) 85%, #000);
   }
 
+  button .caret {
+    margin: 0 -6px 0 -4px;
+  }
+  button.snoozed {
+    border-color: color-mix(in srgb, var(--primary-color) 60%, var(--divider-color));
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  }
+
+  /* The snooze durations, opened below the controls. */
+  .snooze-menu {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--divider-color);
+  }
+  .snooze-menu .label {
+    flex-basis: 100%;
+    text-align: right;
+    font-size: 0.85rem;
+    color: var(--secondary-text-color);
+  }
+  .snooze-menu .break {
+    flex-basis: 100%;
+    height: 0;
+  }
+  button.chip-button {
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 0.8rem;
+    --mdc-icon-size: 16px;
+  }
+
   /* --- Empty state, no-data section, version banner --- */
   .empty {
     color: var(--secondary-text-color);
