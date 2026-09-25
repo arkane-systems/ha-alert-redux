@@ -46,7 +46,7 @@
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
-            "message": "Optional. The message shown on the card and, from a later release, sent when the alert starts firing. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, and entity states. Leave empty for the default, \"{{ name }} is firing.\"",
+            "message": "Optional. The message shown on the card and, from a later release, sent when the alert starts firing. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
             "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template."
           }
         },
