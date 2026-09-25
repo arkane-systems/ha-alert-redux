@@ -82,20 +82,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await async_register_frontend(hass, store)
 
-    # DIAGNOSTIC (temporary): has anything replaced the options-saving code?
-    for name, func in (
-        ("async_update_entry", hass.config_entries.async_update_entry),
-        ("options.async_finish_flow", hass.config_entries.options.async_finish_flow),
-        ("options.async_configure", hass.config_entries.options.async_configure),
-    ):
-        underlying = getattr(func, "__func__", func)
-        _LOGGER.warning(
-            "DIAGNOSTIC %s is %s.%s",
-            name,
-            getattr(underlying, "__module__", "?"),
-            getattr(underlying, "__qualname__", repr(underlying)),
-        )
-
     settings = data[DATA_SETTINGS] = Settings.from_options(entry.options)
     # The startup delay holds back condition alerts' first evaluation, but only
     # while Home Assistant is starting, not on later reloads (spec §15.3).
@@ -141,8 +127,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Add, edit, and forget alerts, and apply new defaults, without a reload."""
-    # DIAGNOSTIC (temporary): what Home Assistant stored.
-    _LOGGER.warning("DIAGNOSTIC stored options: %r", dict(entry.options))
     data = hass.data[DOMAIN]
     entities: dict[str, AlertEntity] = data[DATA_ENTITIES]
     old: dict[str, tuple[str, dict[str, Any]]] = data[DATA_SUBENTRIES]
