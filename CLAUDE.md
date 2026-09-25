@@ -52,8 +52,8 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `store.py` — `AlertStore`, the single persistent `Store` (no `RestoreEntity`);
     also remembers the card version the user was last told to refresh for, and the
     alerts label's ID.
-  - `labels.py` — the "Alert Redux" label: created once and applied to existing
-    alerts, then applied to each new alert; never forced back if removed.
+  - `labels.py` — the "Alert Redux" label: created once; each alert is given it
+    once, tracked by `labelled` in its stored record; never forced back.
     **Don't give alert entities a device**: since HA 2026.4 the device name is
     prefixed to their names and entity IDs (spec §11.5).
   - `config_flow.py` — single-instance config flow (`single_config_entry` in the

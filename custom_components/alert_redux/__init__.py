@@ -84,7 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     _async_forget_deleted_alerts(hass, entry, store)
-    data[DATA_LABEL] = async_setup_label(hass, entry, store)
+    data[DATA_LABEL] = async_setup_label(hass, store)
 
     component: EntityComponent[AlertEntity] = data[DATA_COMPONENT]
     if not await component.async_setup_entry(entry):

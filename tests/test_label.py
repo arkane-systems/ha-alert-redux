@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
+from typing import Any
 
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant
@@ -12,10 +13,11 @@ from homeassistant.helpers import label_registry as lr
 from custom_components.alert_redux.const import (
     ALERTS_LABEL_NAME,
     DOMAIN,
+    STORAGE_KEY,
     SUBENTRY_ALERT,
 )
 
-from .conftest import SetupAlerts, alert_subentry
+from .conftest import SetupAlerts, alert_subentry, state_alert, template_alert
 
 LEAK = "alert_redux.leak"
 DOOR = "alert_redux.back_door_open"
@@ -57,16 +59,44 @@ async def test_label_created_and_applied(
 
 
 async def test_existing_alerts_labelled_on_upgrade(
-    hass: HomeAssistant, setup_alerts: SetupAlerts
+    hass: HomeAssistant, setup_alerts: SetupAlerts, hass_storage: dict[str, Any]
 ) -> None:
-    """Alerts registered before the label existed (0.3.0) get it once."""
-    er.async_get(hass).async_get_or_create(
-        DOMAIN, DOMAIN, "leak", suggested_object_id="leak"
+    """Alerts stored before the label existed (0.3.0) get it once; alerts already
+    given it keep whatever they have now."""
+    hass.states.async_set("binary_sensor.back_door", "off")
+    hass_storage[STORAGE_KEY] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": STORAGE_KEY,
+        "data": {
+            "alerts": {
+                subentry_id: {
+                    "entity_id": entity_id,
+                    "name": name,
+                    "kind": kind,
+                    "priority": "warning",
+                    "runtime": {"firing": False},
+                    **extra,
+                }
+                for subentry_id, entity_id, name, kind, extra in (
+                    ("leak", LEAK, "Leak", "manual", {}),
+                    ("door", DOOR, "Back Door Open", "state", {}),
+                    ("old", "alert_redux.old", "Old", "manual", {"labelled": True}),
+                )
+            }
+        },
+    }
+
+    await setup_alerts(
+        alert_subentry("Leak", subentry_id="leak"),
+        state_alert("Back Door Open", "binary_sensor.back_door", subentry_id="door"),
+        alert_subentry("Old", subentry_id="old"),
     )
 
-    await setup_alerts(alert_subentry("Leak", subentry_id="leak"))
-
-    assert _label_id(hass) in _labels(hass, LEAK)
+    label_id = _label_id(hass)
+    assert label_id in _labels(hass, LEAK)
+    assert label_id in _labels(hass, DOOR)
+    assert _labels(hass, "alert_redux.old") == set()
 
 
 async def test_removed_label_not_reapplied(
@@ -104,3 +134,22 @@ async def test_existing_label_with_same_name_reused(
 
     assert _labels(hass, LEAK) == {existing.label_id}
     assert len(lr.async_get(hass).async_list_labels()) == 1
+
+
+async def test_condition_alerts_labelled(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """State and template alerts get the label, on upgrade and when new."""
+    hass.states.async_set("binary_sensor.back_door", "off")
+    er.async_get(hass).async_get_or_create(
+        DOMAIN, DOMAIN, "door", suggested_object_id="back_door_open"
+    )
+
+    await setup_alerts(
+        state_alert("Back Door Open", "binary_sensor.back_door", subentry_id="door"),
+        template_alert("Test Condition", "{{ false }}", subentry_id="tmpl"),
+    )
+
+    label_id = _label_id(hass)
+    assert label_id in _labels(hass, DOOR)
+    assert label_id in _labels(hass, "alert_redux.test_condition")

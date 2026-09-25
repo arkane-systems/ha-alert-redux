@@ -794,9 +794,10 @@ by selecting that one label. Entities can carry several labels, so this doesn't 
 up labels you want for other things, and areas stay free.
 
 - The label is created the first time the integration sets up (or, if a label with
-  that name already exists, that one is used). Its ID is kept in the store, and it's
-  applied to every alert that exists at that point.
-- After that, each new alert gets it when it's first added. That includes generated
+  that name already exists, that one is used). Its ID is kept in the store.
+- Each alert is given the label **once**: a new alert when it's first added, and an
+  alert that existed before the label the first time it's added afterwards. The
+  alert's stored record remembers that it's been done. That includes generated
   alerts (§12.3).
 - It's never forced back. If you remove it from an alert, it stays removed. If you
   delete the label, it isn't recreated.
