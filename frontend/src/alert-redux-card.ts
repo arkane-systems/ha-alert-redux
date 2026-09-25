@@ -7,6 +7,7 @@ import {
   compareFiring,
   compareNoData,
   isAlertEntity,
+  remainingFraction,
   isFiring,
 } from "./alerts";
 import { clockTime, elapsed } from "./format";
@@ -21,6 +22,8 @@ declare global {
 
 /** Re-render this often, to keep the "firing for" times current. */
 const TICK_MS = 30_000;
+/** While an event alert's progress bar is showing, re-render this often. */
+const PROGRESS_TICK_MS = 1_000;
 
 /**
  * The main card (spec §13.1): a sub-card for each firing alert, the alerts that
@@ -42,6 +45,9 @@ export class AlertReduxCard extends LitElement {
   declare _busy: Set<string>;
 
   private _tick?: number;
+  private _progressTick?: number;
+  /** Whether the last render showed a progress bar, which needs frequent updates. */
+  private _hasProgress = false;
   private _versionChecked = false;
 
   static styles = cardStyles;
@@ -83,6 +89,8 @@ export class AlertReduxCard extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.clearInterval(this._tick);
+    window.clearTimeout(this._progressTick);
+    this._progressTick = undefined;
   }
 
   /** Skip renders for state changes that don't touch any alert. */
@@ -104,6 +112,14 @@ export class AlertReduxCard extends LitElement {
   }
 
   protected updated(): void {
+    // Progress bars drain smoothly: each render moves them on a second's worth,
+    // with a matching transition, until the next render.
+    if (this._hasProgress && this._progressTick === undefined && this.isConnected) {
+      this._progressTick = window.setTimeout(() => {
+        this._progressTick = undefined;
+        this.requestUpdate();
+      }, PROGRESS_TICK_MS);
+    }
     if (this.hass && !this._versionChecked) {
       this._versionChecked = true;
       void this._checkVersion();
@@ -123,6 +139,7 @@ export class AlertReduxCard extends LitElement {
   }
 
   render() {
+    this._hasProgress = false;
     if (!this.hass || !this._config) return nothing;
     const alerts = collectAlerts(this.hass);
     const firing = alerts.filter(isFiring).sort(compareFiring);
@@ -187,6 +204,20 @@ export class AlertReduxCard extends LitElement {
         </div>
         ${message ? html`<div class="message">${message}</div>` : nothing}
         ${this._renderControls(alert)}
+        ${this._renderProgress(alert)}
+      </div>
+    `;
+  }
+
+  /** An event alert's duration, as a bar that drains as it runs out (spec §13.1). */
+  private _renderProgress(alert: Alert) {
+    const fraction = remainingFraction(alert);
+    if (fraction === null || !alert.eventExpires) return nothing;
+    this._hasProgress = true;
+    const ends = clockTime(alert.eventExpires, this.hass?.locale?.language);
+    return html`
+      <div class="progress" title="Ends at ${ends}">
+        <div class="progress-fill" style="width: ${(fraction * 100).toFixed(2)}%"></div>
       </div>
     `;
   }

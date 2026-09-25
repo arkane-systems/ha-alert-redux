@@ -39,6 +39,9 @@ export interface Alert {
   message: string | null;
   displayMessage: string | null;
   firingSince: Date | null;
+  lastFired: Date | null;
+  /** Event alerts: when the current firing's duration runs out (spec §4.2). */
+  eventExpires: Date | null;
   noDataSince: Date | null;
   missingInputs: string[];
 }

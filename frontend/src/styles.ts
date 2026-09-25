@@ -108,6 +108,32 @@ export const cardStyles = css`
     opacity: 0.7;
   }
 
+  /* Event alerts: the time left, as a bar along the foot of the box that drains
+     as the duration runs out. It moves a step per render, smoothed by the
+     transition. */
+  .progress {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 4px;
+    border-radius: 0 0 11px 11px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--c) 15%, transparent);
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--c);
+    transition: width 1s linear;
+  }
+  .alert.p-warning .progress-fill {
+    background: color-mix(in oklch, var(--c) 80%, #000);
+  }
+  .alert.ack .progress-fill {
+    opacity: 0.55;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .progress-fill { transition: none; }
+  }
+
   .head {
     display: flex;
     align-items: center;

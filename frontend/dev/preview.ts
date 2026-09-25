@@ -59,6 +59,14 @@ customElements.define("ha-icon", StubIcon);
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
+/** An event alert's attributes: fired minutesAgo, with a duration of minutes. */
+const event = (kind: string, minutesAgo: number, minutes: number) => ({
+  kind,
+  firing_since: ago(minutesAgo),
+  last_fired: ago(minutesAgo),
+  event_expires: ago(minutesAgo - minutes),
+});
+
 function alert(
   objectId: string,
   name: string,
@@ -121,6 +129,21 @@ const ALERTS: HassEntity[] = [
     user_dismissable: true,
     message: "The washing machine has finished. Hang the washing out.",
     firing_since: ago(1),
+  }),
+  alert("garden_motion", "Garden Motion", "warning", "active", {
+    icon: "mdi:motion-sensor",
+    message: "Motion in the back garden.",
+    ...event("trigger", 7, 15),
+  }),
+  alert("doorbell", "Doorbell", "notice", "active", {
+    icon: "mdi:doorbell",
+    message: "Someone is at the front door.",
+    ...event("event", 0.2, 5),
+  }),
+  alert("parcel", "Parcel Delivered", "informational", "ack", {
+    icon: "mdi:package-variant-closed",
+    message: "A parcel was left in the porch.",
+    ...event("event", 4, 5),
   }),
   alert("bin_day", "Bin Day", "informational", "active", {
     icon: "mdi:trash-can",
