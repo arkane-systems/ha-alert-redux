@@ -9,6 +9,11 @@ to ``add_extra_js_url``, which loads the module app-wide.
 The resource URL carries a ``?v=<version>`` query so that browsers pick up a new
 bundle after an upgrade; an existing resource pointing at an older version is updated
 in place rather than duplicated.
+
+Browsers only load dashboard resources when the page loads, so after an install or
+upgrade the new card isn't used until the page is refreshed. We can't do that from
+here: instead a persistent notification asks for it, once per version, and the card
+itself offers a reload when its version differs from ours (``alert_redux/info``).
 """
 
 from __future__ import annotations
@@ -16,18 +21,44 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from typing import Any
+
+import voluptuous as vol
+
+from homeassistant.components import persistent_notification, websocket_api
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.loader import async_get_integration
 
 from .const import CARD_URL, CARD_URL_BASE, DOMAIN
+from .store import AlertStore
 
 _LOGGER = logging.getLogger(__name__)
 
 _DATA_REGISTERED = "frontend_registered"
 
+REFRESH_NOTIFICATION_ID = f"{DOMAIN}_card_updated"
 
-async def async_register_frontend(hass: HomeAssistant) -> None:
+
+@callback
+def async_setup_websocket(hass: HomeAssistant) -> None:
+    """Register the websocket commands the cards use."""
+    websocket_api.async_register_command(hass, _websocket_info)
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/info"})
+@websocket_api.async_response
+async def _websocket_info(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return the integration's version, which the card compares with its own."""
+    integration = await async_get_integration(hass, DOMAIN)
+    connection.send_result(msg["id"], {"version": str(integration.version)})
+
+
+async def async_register_frontend(hass: HomeAssistant, store: AlertStore) -> None:
     """Serve the card bundle and make dashboards load it. Idempotent; never raises."""
     data = hass.data.setdefault(DOMAIN, {})
     if data.get(_DATA_REGISTERED):
@@ -59,6 +90,24 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         _LOGGER.debug("Loaded Alert Redux card via add_extra_js_url")
 
     data[_DATA_REGISTERED] = True
+    _async_announce_version(hass, store, str(integration.version))
+
+
+@callback
+def _async_announce_version(hass: HomeAssistant, store: AlertStore, version: str) -> None:
+    """Ask for a browser refresh the first time this card version is served."""
+    if store.card_version == version:
+        return
+    persistent_notification.async_create(
+        hass,
+        f"The Alert Redux card is now version {version}. Refresh your browser "
+        "(or, in the companion app, reload the page or clear its frontend cache) "
+        "to start using it. Until then, dashboards may show an older card, or "
+        "\"Custom element not found\".",
+        title="Alert Redux card updated",
+        notification_id=REFRESH_NOTIFICATION_ID,
+    )
+    store.set_card_version(version)
 
 
 async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> bool:
