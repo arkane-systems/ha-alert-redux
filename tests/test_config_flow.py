@@ -321,6 +321,7 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
     assert defaults == {
         "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
         "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
+        "retry_timeout": {"hours": 0, "minutes": 5, "seconds": 0},
     }
     assert _suggested(schema) == {"default_reminder_schedule": "10, 20, 30, 60"}
 
@@ -572,3 +573,21 @@ async def test_options_notification_defaults(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["default_groups"] == ["phones"]
     assert entry.options["default_reminder_schedule"] == []
+    assert entry.options["fallback_group"] is None
+    assert entry.options["retry_timeout"] == {"hours": 0, "minutes": 5, "seconds": 0}
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    (fallback_key,) = [
+        key for key in result["data_schema"].schema if str(key) == "fallback_group"
+    ]
+    assert result["data_schema"].schema[fallback_key].config["multiple"] is False
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **form,
+            "fallback_group": "phones",
+            "retry_timeout": {"hours": 0, "minutes": 2, "seconds": 0},
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["fallback_group"] == "phones"

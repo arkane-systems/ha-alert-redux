@@ -471,13 +471,17 @@
           "no_data_grace": "No-data grace period",
           "startup_delay": "Startup delay",
           "default_groups": "Default notifier groups",
-          "default_reminder_schedule": "Default reminder schedule"
+          "default_reminder_schedule": "Default reminder schedule",
+          "fallback_group": "Fallback group",
+          "retry_timeout": "Retry timeout"
         },
         "data_description": {
           "no_data_grace": "How long a firing alert keeps firing while its inputs have no data, unless the alert sets its own.",
           "startup_delay": "When Home Assistant starts, wait this long before evaluating condition alerts. Zero to evaluate straight away.",
-          "default_groups": "The groups alerts send to unless they choose their own. With none set, those alerts send to a persistent notification instead.",
-          "default_reminder_schedule": "Minutes between reminders while an alert is firing and unacknowledged, unless it sets its own, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders."
+          "default_groups": "The groups alerts send to unless they choose their own. With none set, those alerts send to the fallback instead.",
+          "default_reminder_schedule": "Minutes between reminders while an alert is firing and unacknowledged, unless it sets its own, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+          "fallback_group": "Receives a notification when no member of any group it was sent to could be notified. Leave empty to use a persistent notification.",
+          "retry_timeout": "How long a notifier that is missing or failing keeps being retried before it's given up on."
         }
       }
     },
@@ -488,7 +492,11 @@
   "issues": {
     "default_groups_unset": {
       "title": "No default notifier groups are set",
-      "description": "{count} alerts use the default notifier groups, but none are set, so their notifications go to a persistent notification instead: {alerts}.\n\nTo fix this, add a notifier group, then choose it as a default in the Alert Redux integration's options (Settings > Devices & services > Alert Redux > Configure). Alternatively, give each alert its own notifier groups."
+      "description": "{count} alerts use the default notifier groups, but none are set, so their notifications go to the fallback instead (a persistent notification, unless you've chosen a fallback group): {alerts}.\n\nTo fix this, add a notifier group, then choose it as a default in the Alert Redux integration's options (Settings > Devices & services > Alert Redux > Configure). Alternatively, give each alert its own notifier groups."
+    },
+    "notify_action_missing": {
+      "title": "Notifier group {group} uses a missing action",
+      "description": "The notifier group **{group}** sends to `{action}`, but that action doesn't exist, so it can't be notified. Notifications still reach the group's other members, or the fallback if none of them can be notified.\n\nIntegrations are gradually replacing their legacy notify actions with notify entities. If that has happened here, edit the group to use the notify entity instead. If the action should exist, check the integration that provides it. This issue clears itself once the action exists again or the group no longer uses it."
     }
   }
 }

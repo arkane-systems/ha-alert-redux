@@ -37,6 +37,8 @@ STORAGE_KEY = DOMAIN
 STORAGE_VERSION = 1
 STORAGE_MINOR_VERSION = 1
 STORAGE_SAVE_DELAY = 1  # seconds
+# The notifier module's own store: its retry queue (spec §15.2).
+NOTIFIER_STORAGE_KEY = f"{DOMAIN}.notifier"
 
 
 class Priority(StrEnum):
@@ -146,6 +148,9 @@ DEFAULT_STARTUP_DELAY = timedelta(0)
 CONF_DEFAULT_GROUPS = "default_groups"
 CONF_DEFAULT_REMINDER_SCHEDULE = "default_reminder_schedule"
 DEFAULT_REMINDER_SCHEDULE: tuple[float, ...] = (10, 20, 30, 60)
+CONF_FALLBACK_GROUP = "fallback_group"
+CONF_RETRY_TIMEOUT = "retry_timeout"
+DEFAULT_RETRY_TIMEOUT = timedelta(minutes=5)
 
 # Repairs issues.
 ISSUE_DEFAULT_GROUPS_UNSET = "default_groups_unset"

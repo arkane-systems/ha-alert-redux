@@ -35,6 +35,7 @@ from .const import (
     DATA_SUBENTRIES,
     DOMAIN,
     EVENT_DELETED,
+    NOTIFIER_STORAGE_KEY,
     SERVICE_ACK,
     SERVICE_DISMISS,
     SERVICE_FIRE,
@@ -91,9 +92,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _async_forget_deleted_alerts(hass, entry, store)
     data[DATA_LABEL] = async_setup_label(hass, store)
 
-    notifier = data[DATA_NOTIFIER] = Notifier(hass)
+    notifier = data[DATA_NOTIFIER] = Notifier(
+        hass, store_key=NOTIFIER_STORAGE_KEY, issue_domain=DOMAIN
+    )
+    await notifier.async_load()
+    _async_configure_notifier(notifier, settings)
     groups = data[DATA_GROUPS] = _group_subentries(entry)
     notifier.async_set_groups(_group_configs(groups))
+    notifier.async_start()
     async_check_default_groups(hass, entry, settings)
 
     component: EntityComponent[AlertEntity] = data[DATA_COMPONENT]
@@ -112,6 +118,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload an Alert Redux config entry."""
     data = hass.data[DOMAIN]
     unloaded = await data[DATA_COMPONENT].async_unload_entry(entry)
+    await data[DATA_NOTIFIER].async_stop()
     await data[DATA_STORE].async_flush()
     return unloaded
 
@@ -150,6 +157,7 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if dict(entry.options) != data[DATA_OPTIONS]:
         data[DATA_OPTIONS] = dict(entry.options)
         data[DATA_SETTINGS].update(Settings.from_options(entry.options))
+        _async_configure_notifier(data[DATA_NOTIFIER], data[DATA_SETTINGS])
         for entity in entities.values():
             entity.async_settings_changed()
     elif groups_changed:
@@ -168,6 +176,12 @@ def _alert_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]
         for subentry_id, subentry in entry.subentries.items()
         if subentry.subentry_type == SUBENTRY_ALERT
     }
+
+
+def _async_configure_notifier(notifier: Notifier, settings: Settings) -> None:
+    notifier.async_configure(
+        fallback_group=settings.fallback_group, retry_timeout=settings.retry_timeout
+    )
 
 
 def _group_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]]]:
