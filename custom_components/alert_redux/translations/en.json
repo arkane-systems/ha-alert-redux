@@ -23,6 +23,8 @@
           "menu_options": {
             "manual": "Manual: fired and dismissed by actions",
             "state": "State: an entity is in a given state",
+            "on_off": "On/off: separate criteria turn it on and off",
+            "threshold": "Threshold: a value is above or below a limit",
             "template": "Template: a template is true",
             "trigger": "Trigger: fires on a Home Assistant trigger, for a while",
             "event": "Bus event: fires on an event, for a while"
@@ -538,6 +540,252 @@
               }
             }
           }
+        },
+        "threshold": {
+          "title": "Add a threshold alert",
+          "description": "A threshold alert fires while a value is outside its limits. Set a value entity or a value template, and at least one limit.",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "entity_id": "Value entity",
+            "attribute": "Attribute",
+            "value_template": "Value template",
+            "minimum": "Minimum",
+            "maximum": "Maximum",
+            "hysteresis": "Hysteresis",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "entity_id": "The entity whose state (or attribute) is the value. Leave empty to use a value template instead.",
+            "attribute": "Optional. Use this attribute of the value entity instead of its state.",
+            "value_template": "A template for the value, instead of an entity. A result that isn't a number means the alert has no data.",
+            "minimum": "The alert fires while the value is below this. A plain number, or a template that reads an entity. Leave empty for no minimum.",
+            "maximum": "The alert fires while the value is above this. A number, or a template. Leave empty for no maximum.",
+            "hysteresis": "Once firing, the value must come back inside the limits by this much before the alert stops.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
+          }
+        },
+        "on_off": {
+          "title": "Add an on/off alert",
+          "description": "An on/off alert turns on and off on separate criteria. Each side needs a template, triggers, or both.",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "on_template": "On template",
+            "on_triggers": "On triggers",
+            "off_template": "Off template",
+            "off_triggers": "Off triggers",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "on_template": "The alert turns on when this becomes true. It must become true: if it's already true when the alert stops, it has to go false first.",
+            "on_triggers": "The alert turns on when one of these fires (and the on template, if set, is true).",
+            "off_template": "The alert turns off when this becomes true.",
+            "off_triggers": "The alert turns off when one of these fires (and the off template, if set, is true).",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "How long the on template must stay true before the alert fires. Needs an on template.",
+            "delay_off": "How long the off template must stay true before the alert stops. Needs an off template.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
+          }
+        },
+        "reconfigure_on_off": {
+          "title": "Edit alert",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "on_template": "On template",
+            "on_triggers": "On triggers",
+            "off_template": "Off template",
+            "off_triggers": "Off triggers",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "on_template": "The alert turns on when this becomes true. It must become true: if it's already true when the alert stops, it has to go false first.",
+            "on_triggers": "The alert turns on when one of these fires (and the on template, if set, is true).",
+            "off_template": "The alert turns off when this becomes true.",
+            "off_triggers": "The alert turns off when one of these fires (and the off template, if set, is true).",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "How long the on template must stay true before the alert fires. Needs an on template.",
+            "delay_off": "How long the off template must stay true before the alert stops. Needs an off template.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
+          }
+        },
+        "reconfigure_threshold": {
+          "title": "Edit alert",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "entity_id": "Value entity",
+            "attribute": "Attribute",
+            "value_template": "Value template",
+            "minimum": "Minimum",
+            "maximum": "Maximum",
+            "hysteresis": "Hysteresis",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "entity_id": "The entity whose state (or attribute) is the value. Leave empty to use a value template instead.",
+            "attribute": "Optional. Use this attribute of the value entity instead of its state.",
+            "value_template": "A template for the value, instead of an entity. A result that isn't a number means the alert has no data.",
+            "minimum": "The alert fires while the value is below this. A plain number, or a template that reads an entity. Leave empty for no minimum.",
+            "maximum": "The alert fires while the value is above this. A number, or a template. Leave empty for no maximum.",
+            "hysteresis": "Once firing, the value must come back inside the limits by this much before the alert stops.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
+          }
         }
       },
       "error": {
@@ -545,7 +793,12 @@
         "invalid_schedule": "A reminder schedule must be a list of positive numbers of minutes, e.g. `10, 20, 30, 60`.",
         "invalid_trigger": "The triggers aren't valid. Triggers that set variables, or are enabled by a template, can't be used.",
         "event_type_missing": "Enter an event type.",
-        "invalid_event_data": "The event data must be a mapping of keys to values."
+        "invalid_event_data": "The event data must be a mapping of keys to values.",
+        "value_source": "Set either a value entity (with an optional attribute) or a value template, not both.",
+        "limit_required": "Set a minimum, a maximum, or both.",
+        "invalid_limits": "The minimum must be less than the maximum.",
+        "criterion_required": "Each side needs a template, triggers, or both.",
+        "delay_needs_template": "A delay needs a template on its side: triggers alone can't stay true for the delay."
       },
       "abort": {
         "reconfigure_successful": "Re-configuration was successful"

@@ -23,6 +23,8 @@
           "menu_options": {
             "manual": "Manual: fired and dismissed by actions",
             "state": "State: an entity is in a given state",
+            "on_off": "On/off: separate criteria turn it on and off",
+            "threshold": "Threshold: a value is above or below a limit",
             "template": "Template: a template is true",
             "trigger": "Trigger: fires on a Home Assistant trigger, for a while",
             "event": "Bus event: fires on an event, for a while"
@@ -538,6 +540,252 @@
               }
             }
           }
+        },
+        "threshold": {
+          "title": "Add a threshold alert",
+          "description": "A threshold alert fires while a value is outside its limits. Set a value entity or a value template, and at least one limit.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "entity_id": "Value entity",
+            "attribute": "Attribute",
+            "value_template": "Value template",
+            "minimum": "Minimum",
+            "maximum": "Maximum",
+            "hysteresis": "Hysteresis",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "entity_id": "The entity whose state (or attribute) is the value. Leave empty to use a value template instead.",
+            "attribute": "Optional. Use this attribute of the value entity instead of its state.",
+            "value_template": "A template for the value, instead of an entity. A result that isn't a number means the alert has no data.",
+            "minimum": "The alert fires while the value is below this. A plain number, or a template that reads an entity. Leave empty for no minimum.",
+            "maximum": "The alert fires while the value is above this. A number, or a template. Leave empty for no maximum.",
+            "hysteresis": "Once firing, the value must come back inside the limits by this much before the alert stops.",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            }
+          }
+        },
+        "on_off": {
+          "title": "Add an on/off alert",
+          "description": "An on/off alert turns on and off on separate criteria. Each side needs a template, triggers, or both.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "on_template": "On template",
+            "on_triggers": "On triggers",
+            "off_template": "Off template",
+            "off_triggers": "Off triggers",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "on_template": "The alert turns on when this becomes true. It must become true: if it's already true when the alert stops, it has to go false first.",
+            "on_triggers": "The alert turns on when one of these fires (and the on template, if set, is true).",
+            "off_template": "The alert turns off when this becomes true.",
+            "off_triggers": "The alert turns off when one of these fires (and the off template, if set, is true).",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "How long the on template must stay true before the alert fires. Needs an on template.",
+            "delay_off": "How long the off template must stay true before the alert stops. Needs an off template.",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            }
+          }
+        },
+        "reconfigure_on_off": {
+          "title": "Edit alert",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "on_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::on_template%]",
+            "on_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::on_triggers%]",
+            "off_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::off_template%]",
+            "off_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::off_triggers%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "on_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::on_template%]",
+            "on_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::on_triggers%]",
+            "off_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::off_template%]",
+            "off_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::off_triggers%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            }
+          }
+        },
+        "reconfigure_threshold": {
+          "title": "Edit alert",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "entity_id": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::entity_id%]",
+            "attribute": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::attribute%]",
+            "value_template": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::value_template%]",
+            "minimum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::minimum%]",
+            "maximum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::maximum%]",
+            "hysteresis": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::hysteresis%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "entity_id": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::entity_id%]",
+            "attribute": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::attribute%]",
+            "value_template": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::value_template%]",
+            "minimum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::minimum%]",
+            "maximum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::maximum%]",
+            "hysteresis": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::hysteresis%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            }
+          }
         }
       },
       "error": {
@@ -545,7 +793,12 @@
         "invalid_schedule": "A reminder schedule must be a list of positive numbers of minutes, e.g. `10, 20, 30, 60`.",
         "invalid_trigger": "The triggers aren't valid. Triggers that set variables, or are enabled by a template, can't be used.",
         "event_type_missing": "Enter an event type.",
-        "invalid_event_data": "The event data must be a mapping of keys to values."
+        "invalid_event_data": "The event data must be a mapping of keys to values.",
+        "value_source": "Set either a value entity (with an optional attribute) or a value template, not both.",
+        "limit_required": "Set a minimum, a maximum, or both.",
+        "invalid_limits": "The minimum must be less than the maximum.",
+        "criterion_required": "Each side needs a template, triggers, or both.",
+        "delay_needs_template": "A delay needs a template on its side: triggers alone can't stay true for the delay."
       },
       "abort": {
         "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"

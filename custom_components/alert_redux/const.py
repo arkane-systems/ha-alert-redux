@@ -79,13 +79,17 @@ class AlertKind(StrEnum):
 
     MANUAL = "manual"
     STATE = "state"
+    ON_OFF = "on_off"
+    THRESHOLD = "threshold"
     TEMPLATE = "template"
     TRIGGER = "trigger"
     # A bus event alert: a trigger alert with an event trigger (spec §4.2, F23).
     EVENT = "event"
 
 
-CONDITION_KINDS = frozenset({AlertKind.STATE, AlertKind.TEMPLATE})
+CONDITION_KINDS = frozenset(
+    {AlertKind.STATE, AlertKind.ON_OFF, AlertKind.THRESHOLD, AlertKind.TEMPLATE}
+)
 EVENT_KINDS = frozenset({AlertKind.TRIGGER, AlertKind.EVENT})
 
 
@@ -116,6 +120,18 @@ CONF_DELAY_ON = "delay_on"
 CONF_DELAY_OFF = "delay_off"
 CONF_NO_DATA_GRACE = "no_data_grace"
 CONF_TRIGGERS = "triggers"
+# Threshold alerts: the value (an entity, with an optional attribute, or a
+# template), the limits (templates), and the hysteresis.
+CONF_ATTRIBUTE = "attribute"
+CONF_VALUE_TEMPLATE = "value_template"
+CONF_MINIMUM = "minimum"
+CONF_MAXIMUM = "maximum"
+CONF_HYSTERESIS = "hysteresis"
+# On/off alerts: each side is a template, triggers, or both.
+CONF_ON_TEMPLATE = "on_template"
+CONF_ON_TRIGGERS = "on_triggers"
+CONF_OFF_TEMPLATE = "off_template"
+CONF_OFF_TRIGGERS = "off_triggers"
 CONF_EVENT_TYPE = "event_type"
 CONF_EVENT_DATA = "event_data"
 CONF_DURATION = "duration"
@@ -234,3 +250,13 @@ ATTR_TRIGGER_DATA = "trigger_data"
 ATTR_TRIGGERS = "triggers"
 ATTR_EVENT_TYPE = "event_type"
 ATTR_EVENT_DATA = "event_data"
+ATTR_ATTRIBUTE = "attribute"
+ATTR_VALUE_TEMPLATE = "value_template"
+ATTR_MINIMUM = "minimum"
+ATTR_MAXIMUM = "maximum"
+ATTR_HYSTERESIS = "hysteresis"
+ATTR_VALUE = "value"
+ATTR_ON_TEMPLATE = "on_template"
+ATTR_ON_TRIGGERS = "on_triggers"
+ATTR_OFF_TEMPLATE = "off_template"
+ATTR_OFF_TRIGGERS = "off_triggers"

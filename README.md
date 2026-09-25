@@ -3,10 +3,10 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.4.0). Manual, state, and template alerts work,
-> the card shows and acknowledges them, and they send on, reminder, and done
-> notifications. Other condition kinds, event alerts, snoozing, and the rest arrive
-> in later releases; see the
+> **Status:** early development (0.5.0). Every alert kind works except alert state:
+> manual, state, on/off, threshold, template, trigger, and bus event alerts. The card
+> shows and acknowledges them, and they send on, reminder, and done notifications.
+> Snoozing, supersession, and the rest arrive in later releases; see the
 > [phase plan](docs/SPEC.md#20-phase-plan). The design is in [docs/SPEC.md](docs/SPEC.md).
 
 ## Installation
@@ -51,7 +51,8 @@ and otherwise the on message. Leave both empty for the default, "{{ name }} is
 firing." That's deliberately generic, so give real alerts a specific message.
 Templates can use `name`, `subject_entity_name` (the subject entity's name, or else
 the alert's), `subject_entity_id`, `entity_id`, `priority`, `fire_count`,
-`fire_data` (manual alerts), `duration`, and entity states, e.g.
+`fire_data` (manual alerts), `trigger` (trigger and bus event alerts), `duration`,
+and entity states, e.g.
 `Server room is {{ states('sensor.server_room') }} °C.` While an alert is firing,
 the rendered messages are in its `message` and `display_message` attributes, and
 they update as the entities they read change.
@@ -61,18 +62,29 @@ they update as the entities they read change.
 A manual alert is fired and dismissed by actions, e.g. from your automations. You can
 choose whether the card should offer to dismiss it.
 
-### State and template alerts
+### Condition alerts: state, on/off, threshold, and template
 
 These alerts fire by themselves while their condition holds, and stop when it ends:
 
 - A **state** alert watches one entity, and fires while it's in a given state, e.g.
   `binary_sensor.back_door` is `on`. Targeting `unavailable` gives an "is offline"
   alert.
+- An **on/off** alert turns on and off on separate criteria. Each side is a
+  template, triggers, or both, and counts when it *becomes* true: "Garage
+  intruder" can turn on when motion is detected and off only when the door is
+  locked. An on side that's still true after the alert stops has to go false
+  before it can fire again.
+- A **threshold** alert fires while a value is above a maximum or below a minimum.
+  The value is an entity's state, one of its attributes, or a template; each limit
+  is a number or a template (e.g. `{{ states('input_number.max') }}`). The
+  **hysteresis** is how far back inside the limits the value must come before the
+  alert stops: "Server room hot" with a maximum of 30 and hysteresis 2 fires above
+  30 °C and ends at 28 °C. The current value is in the `value` attribute.
 - A **template** alert fires while a template renders true. The result has to be
   clearly true or false: anything else (an error, `unknown`, `none`, …) counts as no
   data, not as false.
 
-Both can have:
+All of them can have:
 
 - an **extra condition**, a template that must also be true;
 - **delay before firing** (`delay_on`): the condition must hold this long first.
@@ -80,6 +92,9 @@ Both can have:
 - **delay before ending** (`delay_off`): the condition must stay false this long
   before the alert stops firing, absorbing brief flickers;
 - a **no-data grace period**; see below.
+
+On/off delays need a template on their side, since triggers alone can't stay true
+for the delay.
 
 #### Missing data
 
@@ -92,6 +107,28 @@ runs out, the firing ends.
 
 After a restart, alerts wait in `no_data` for their inputs. Alerts that were firing
 stay firing while they wait, and resume quietly if their condition still holds.
+
+### Event alerts: trigger and bus event
+
+These fire on a momentary occurrence, and stay firing for a **duration**:
+
+- A **trigger** alert fires on any Home Assistant trigger, as in an automation.
+- A **bus event** alert fires on an event type, optionally only when the event's
+  data matches, e.g. `doorbell_pressed` with `button: front`.
+
+Either can have a **condition**, a template checked when the trigger fires. If it
+can't be judged (an error, `unknown`), the alert fires anyway and a warning is
+logged, so a broken condition never silences it. Messages can use the trigger's
+variables as `trigger`, as automations do: `trigger.to_state.state`, or
+`trigger.event.data` for a bus event alert.
+
+The duration is the alert's own, or else its priority's default (Emergency 60,
+Critical 30, Warning 15, Notice 10, Informational 5 minutes; see
+[Global defaults](#global-defaults)). Firing again while it's still firing restarts
+the duration and adds to the fire count, but keeps the acknowledgement. An event
+alert only sends reminders if its duration is longer than the first reminder
+interval. Triggers start once Home Assistant has started (and after the startup
+delay), so entities loading at startup don't fire them.
 
 ### Actions
 
@@ -176,8 +213,8 @@ message says when an alert stopped because its data was lost.
   alert can have its own schedule, or none. Acknowledging stops reminders;
   removing the acknowledgement resumes them on the original schedule, counted from
   when the alert started firing.
-- **Firing again:** a manual alert fired while it's already firing sends its on
-  message again, with the new `fire_count`, unless it has been acknowledged.
+- **Firing again:** a manual or event alert fired while it's already firing sends
+  its on message again, with the new `fire_count`, unless it has been acknowledged.
 - **Restarts:** an alert that was firing resumes without a new on notification. A
   reminder that fell due while Home Assistant was down is sent when it's back.
 
@@ -203,9 +240,10 @@ The integration's **Configure** button sets:
 
 - the default no-data grace period;
 - an optional **startup delay**: how long to wait after Home Assistant starts before
-  evaluating condition alerts;
+  evaluating condition alerts and starting triggers;
 - the default notifier groups and reminder schedule;
-- the fallback group, and the retry timeout.
+- the fallback group, and the retry timeout;
+- the default event alert duration for each priority.
 
 ## Lovelace card
 
@@ -227,7 +265,8 @@ priority. Emergency and Critical alerts glow (an unacknowledged Emergency pulses
 and Warning alerts have caution stripes; acknowledging an alert tones this down.
 Each box shows the alert's icon, name, how long it's been firing, and its message,
 with buttons to acknowledge it (or remove the acknowledgement) and, for manual
-alerts set as dismissable from the card, to dismiss it. Click the icon or name for
+alerts set as dismissable from the card, to dismiss it. Event alerts have a bar
+along the bottom that drains as their duration runs out. Click the icon or name for
 the alert's details.
 
 Alerts that have no data are listed in their own section at the bottom, with the

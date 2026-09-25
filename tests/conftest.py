@@ -62,6 +62,24 @@ def template_alert(
     )
 
 
+def threshold_alert(
+    title: str,
+    subentry_id: str | None = None,
+    **data: Any,
+) -> dict[str, Any]:
+    """Return subentry data for a threshold alert."""
+    return _subentry(title, subentry_id, {"kind": "threshold", "hysteresis": 0, **data})
+
+
+def on_off_alert(
+    title: str,
+    subentry_id: str | None = None,
+    **data: Any,
+) -> dict[str, Any]:
+    """Return subentry data for an on/off alert."""
+    return _subentry(title, subentry_id, {"kind": "on_off", **data})
+
+
 def trigger_alert(
     title: str,
     triggers: list[dict[str, Any]],

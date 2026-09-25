@@ -25,6 +25,9 @@ from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
     IconSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     ObjectSelector,
     ObjectSelectorConfig,
     SelectOptionDict,
@@ -41,6 +44,7 @@ from .const import (
     CONF_ACKNOWLEDGEABLE,
     CONF_ACTION,
     CONF_ACTIONS,
+    CONF_ATTRIBUTE,
     CONF_CONDITION,
     CONF_DATA,
     CONF_DEFAULT_GROUPS,
@@ -56,12 +60,19 @@ from .const import (
     CONF_EVENT_DURATIONS,
     CONF_EVENT_TYPE,
     CONF_FALLBACK_GROUP,
+    CONF_HYSTERESIS,
     CONF_ICON,
     CONF_KIND,
     CONF_LOUD,
+    CONF_MAXIMUM,
     CONF_MESSAGE,
-    CONF_NO_DATA_GRACE,
+    CONF_MINIMUM,
     CONF_NOTIFIER_GROUPS,
+    CONF_NO_DATA_GRACE,
+    CONF_OFF_TEMPLATE,
+    CONF_OFF_TRIGGERS,
+    CONF_ON_TEMPLATE,
+    CONF_ON_TRIGGERS,
     CONF_PERSISTENT,
     CONF_PRIORITY,
     CONF_REMINDER_MESSAGE,
@@ -73,9 +84,10 @@ from .const import (
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
     CONF_TRIGGERS,
+    CONF_USER_DISMISSABLE,
     CONF_USE_DEFAULT_GROUPS,
     CONF_USE_DEFAULT_REMINDERS,
-    CONF_USER_DISMISSABLE,
+    CONF_VALUE_TEMPLATE,
     DOMAIN,
     EVENT_KINDS,
     SECTION_NOTIFICATIONS,
@@ -84,7 +96,7 @@ from .const import (
     AlertKind,
     Priority,
 )
-from .model import Settings, format_schedule, parse_schedule
+from .model import Settings, format_schedule, parse_schedule, to_timedelta
 from .triggers import async_validate_triggers, is_storable
 
 # notify actions that aren't legacy notifiers: offered through the other member kinds.
@@ -158,9 +170,7 @@ class AlertReduxOptionsFlow(OptionsFlow):
             CONF_NO_DATA_GRACE: _duration_dict(settings.no_data_grace),
             CONF_STARTUP_DELAY: _duration_dict(settings.startup_delay),
             CONF_DEFAULT_GROUPS: list(settings.default_groups),
-            CONF_DEFAULT_REMINDER_SCHEDULE: format_schedule(
-                settings.reminder_schedule
-            ),
+            CONF_DEFAULT_REMINDER_SCHEDULE: format_schedule(settings.reminder_schedule),
             CONF_FALLBACK_GROUP: settings.fallback_group,
             CONF_RETRY_TIMEOUT: _duration_dict(settings.retry_timeout),
         }
@@ -341,6 +351,28 @@ def _alert_schema(
                 CONF_TEMPLATE, default=defaults.get(CONF_TEMPLATE, vol.UNDEFINED)
             )
         ] = TemplateSelector()
+    elif kind is AlertKind.THRESHOLD:
+        for key, selector in (
+            (CONF_ENTITY_ID, EntitySelector()),
+            (CONF_ATTRIBUTE, TextSelector()),
+            (CONF_VALUE_TEMPLATE, TemplateSelector()),
+            (CONF_MINIMUM, TemplateSelector()),
+            (CONF_MAXIMUM, TemplateSelector()),
+        ):
+            schema[vol.Optional(key, description=_suggested(defaults, key))] = selector
+        schema[
+            vol.Required(CONF_HYSTERESIS, default=defaults.get(CONF_HYSTERESIS, 0))
+        ] = NumberSelector(
+            NumberSelectorConfig(min=0, step="any", mode=NumberSelectorMode.BOX)
+        )
+    elif kind is AlertKind.ON_OFF:
+        for key, selector in (
+            (CONF_ON_TEMPLATE, TemplateSelector()),
+            (CONF_ON_TRIGGERS, TriggerSelector()),
+            (CONF_OFF_TEMPLATE, TemplateSelector()),
+            (CONF_OFF_TRIGGERS, TriggerSelector()),
+        ):
+            schema[vol.Optional(key, description=_suggested(defaults, key))] = selector
     elif kind is AlertKind.TRIGGER:
         schema[
             vol.Required(
@@ -432,6 +464,18 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
         """Create a template alert."""
         return await self._async_step_alert(AlertKind.TEMPLATE, user_input)
 
+    async def async_step_on_off(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create an on/off alert."""
+        return await self._async_step_alert(AlertKind.ON_OFF, user_input)
+
+    async def async_step_threshold(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create a threshold alert."""
+        return await self._async_step_alert(AlertKind.THRESHOLD, user_input)
+
     async def async_step_trigger(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
@@ -469,6 +513,18 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
         """Edit a template alert."""
         return await self._async_step_alert(AlertKind.TEMPLATE, user_input, True)
 
+    async def async_step_reconfigure_on_off(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit an on/off alert."""
+        return await self._async_step_alert(AlertKind.ON_OFF, user_input, True)
+
+    async def async_step_reconfigure_threshold(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit a threshold alert."""
+        return await self._async_step_alert(AlertKind.THRESHOLD, user_input, True)
+
     async def async_step_reconfigure_trigger(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
@@ -505,7 +561,7 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
             except ValueError:
                 errors["base"] = "invalid_schedule"
             else:
-                if error := await _async_check_event_alert(self.hass, kind, data):
+                if error := await _async_check_alert(self.hass, kind, data):
                     errors["base"] = error
             if not errors:
                 if subentry is None:
@@ -555,6 +611,8 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         data[CONF_TARGET_STATE] = user_input[CONF_TARGET_STATE].strip()
     elif kind is AlertKind.TEMPLATE:
         data[CONF_TEMPLATE] = user_input[CONF_TEMPLATE]
+    elif kind is AlertKind.THRESHOLD:
+        data[CONF_HYSTERESIS] = user_input.get(CONF_HYSTERESIS) or 0
     elif kind is AlertKind.TRIGGER:
         data[CONF_TRIGGERS] = user_input[CONF_TRIGGERS]
     elif kind is AlertKind.EVENT:
@@ -569,12 +627,30 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
     ]
     if kind in CONDITION_KINDS:
         optional += [CONF_CONDITION, CONF_DELAY_ON, CONF_DELAY_OFF, CONF_NO_DATA_GRACE]
+        if kind is AlertKind.THRESHOLD:
+            optional += [
+                CONF_ENTITY_ID,
+                CONF_ATTRIBUTE,
+                CONF_VALUE_TEMPLATE,
+                CONF_MINIMUM,
+                CONF_MAXIMUM,
+            ]
+        elif kind is AlertKind.ON_OFF:
+            optional += [
+                CONF_ON_TEMPLATE,
+                CONF_ON_TRIGGERS,
+                CONF_OFF_TEMPLATE,
+                CONF_OFF_TRIGGERS,
+            ]
     elif kind in EVENT_KINDS:
         optional += [CONF_CONDITION, CONF_DURATION]
         if kind is AlertKind.EVENT:
             optional.append(CONF_EVENT_DATA)
     for key in optional:
-        if (value := user_input.get(key)) not in (None, "", {}):
+        value = user_input.get(key)
+        if isinstance(value, str):
+            value = value.strip()
+        if value not in (None, "", {}, []):
             data[key] = value
     if not user_input.get(CONF_USE_DEFAULT_GROUPS, True):
         data[CONF_NOTIFIER_GROUPS] = list(user_input.get(CONF_NOTIFIER_GROUPS, []))
@@ -586,23 +662,76 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-async def _async_check_event_alert(
+async def _async_check_alert(
     hass: HomeAssistant, kind: AlertKind, data: dict[str, Any]
 ) -> str | None:
-    """Return an error key for an event alert's triggers or event data, if any."""
+    """Return an error key for a kind's own fields, if they don't make sense."""
     if kind is AlertKind.EVENT:
         if not data[CONF_EVENT_TYPE]:
             return "event_type_missing"
         if not isinstance(data.get(CONF_EVENT_DATA, {}), dict):
             return "invalid_event_data"
+    elif kind is AlertKind.THRESHOLD:
+        return _check_threshold(data)
+    elif kind is AlertKind.ON_OFF:
+        if error := _check_on_off(data):
+            return error
+        for key in (CONF_ON_TRIGGERS, CONF_OFF_TRIGGERS):
+            if key in data and not await _async_triggers_valid(hass, data[key]):
+                return "invalid_trigger"
     elif kind is AlertKind.TRIGGER:
-        triggers = data[CONF_TRIGGERS]
-        if not triggers or not is_storable(triggers):
+        if not await _async_triggers_valid(hass, data[CONF_TRIGGERS]):
             return "invalid_trigger"
-        try:
-            await async_validate_triggers(hass, triggers)
-        except (vol.Invalid, HomeAssistantError):
-            return "invalid_trigger"
+    return None
+
+
+async def _async_triggers_valid(hass: HomeAssistant, triggers: Any) -> bool:
+    """Return whether triggers are valid, and can be stored."""
+    if not triggers or not is_storable(triggers):
+        return False
+    try:
+        await async_validate_triggers(hass, triggers)
+    except (vol.Invalid, HomeAssistantError):
+        return False
+    return True
+
+
+def _check_threshold(data: dict[str, Any]) -> str | None:
+    """Check a threshold alert: one value source, and at least one limit."""
+    has_entity = CONF_ENTITY_ID in data
+    if has_entity == (CONF_VALUE_TEMPLATE in data) or (
+        CONF_ATTRIBUTE in data and not has_entity
+    ):
+        return "value_source"
+    if CONF_MINIMUM not in data and CONF_MAXIMUM not in data:
+        return "limit_required"
+    try:
+        low, high = float(data[CONF_MINIMUM]), float(data[CONF_MAXIMUM])
+    except (KeyError, ValueError):
+        # A limit that's missing, or a template: only known when it renders.
+        return None
+    return "invalid_limits" if low >= high else None
+
+
+def _check_on_off(data: dict[str, Any]) -> str | None:
+    """Check an on/off alert: each side needs a criterion, and delays a template.
+
+    A delay needs its side to hold, which a trigger on its own can't (§4.1).
+    """
+    for template, triggers in (
+        (CONF_ON_TEMPLATE, CONF_ON_TRIGGERS),
+        (CONF_OFF_TEMPLATE, CONF_OFF_TRIGGERS),
+    ):
+        if template not in data and triggers not in data:
+            return "criterion_required"
+    for delay, template in (
+        (CONF_DELAY_ON, CONF_ON_TEMPLATE),
+        (CONF_DELAY_OFF, CONF_OFF_TEMPLATE),
+    ):
+        if (to_timedelta(data.get(delay)) or timedelta(0)) > timedelta(0) and (
+            template not in data
+        ):
+            return "delay_needs_template"
     return None
 
 

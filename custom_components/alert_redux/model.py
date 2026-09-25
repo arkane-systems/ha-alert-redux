@@ -148,6 +148,40 @@ def next_reminder_slot(
 
 
 @dataclass(frozen=True, slots=True)
+class Reading:
+    """A threshold alert's value and limits (spec §4.1); a limit may be unset."""
+
+    value: float
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+def threshold_holds(reading: Reading, hysteresis: float, firing: bool) -> bool:
+    """Return whether a threshold alert's condition holds.
+
+    It starts to hold when the value goes above the maximum or below the minimum,
+    and a firing carries on until the value is back inside by the hysteresis.
+    """
+    value, low, high = reading.value, reading.minimum, reading.maximum
+    if not firing:
+        return (high is not None and value > high) or (low is not None and value < low)
+    back_inside = (high is None or value <= high - hysteresis) and (
+        low is None or value >= low + hysteresis
+    )
+    return not back_inside
+
+
+@dataclass(frozen=True, slots=True)
+class OnOffSides:
+    """Which criteria an on/off alert's sides have: a template, a trigger, or both."""
+
+    on_template: bool
+    on_trigger: bool
+    off_template: bool
+    off_trigger: bool
+
+
+@dataclass(frozen=True, slots=True)
 class Transition:
     """What an applied change did."""
 
@@ -202,6 +236,14 @@ class AlertRuntime:
     next_reminder: datetime | None = None
     # Event alerts: when the current firing's duration runs out (spec §4.2).
     event_expires: datetime | None = None
+    # On/off alerts' edges (spec §4.1). A template-only side counts only a
+    # false-to-true change: it's armed once it has been seen false. Unknown counts
+    # as false, so a new alert is armed. A side with a trigger is latched by the
+    # trigger firing, until it's used or its template turns false.
+    on_armed: bool = True
+    off_armed: bool = True
+    on_latched: bool = False
+    off_latched: bool = False
     # Not persisted: set while a restored alert waits for its first data, so that
     # the inputs still loading don't cancel the delays it was restored with.
     awaiting_data: bool = False
@@ -366,6 +408,62 @@ class AlertRuntime:
             assert transition is not None
             changes.append((Change.ENDED, transition))
         return changes
+
+    def on_off_pulse(self, side: str) -> None:
+        """Record an on/off alert's trigger firing on one side.
+
+        It counts only on the side that can change the state (on while not firing,
+        off while firing). The caller checks that side's template, if any, is true.
+        """
+        if side == "on" and not self.firing:
+            self.on_latched = True
+        elif side == "off" and self.firing:
+            self.off_latched = True
+
+    def on_off_condition(
+        self, sides: OnOffSides, on: bool | None, off: bool | None
+    ) -> bool | None:
+        """Return an on/off alert's condition as a level, for evaluate().
+
+        on and off are the sides' template results (None: no data, or no template).
+        Not firing, the condition holds once the on side has become true; firing,
+        it holds until the off side becomes true. Only the side that can change
+        the state counts for missing data. The caller disarms the on side when the
+        alert fires (on_off_fired).
+        """
+        if on is False:
+            self.on_armed = True
+            self.on_latched = False
+        elif on is True and self.firing:
+            self.on_armed = False
+        if off is False:
+            self.off_armed = True
+            self.off_latched = False
+        elif off is True and not self.firing:
+            self.off_armed = False
+
+        if not self.firing:
+            if sides.on_template and on is None:
+                return None
+            if sides.on_trigger:
+                return self.on_latched
+            return on is True and self.on_armed
+        if sides.off_template and off is None:
+            return None
+        if sides.off_trigger:
+            return not self.off_latched
+        return not (off is True and self.off_armed)
+
+    def on_off_fired(self) -> None:
+        """Use up the on side's edge: it must change again to fire again."""
+        self.on_armed = False
+        self.on_latched = False
+        self.off_latched = False
+
+    def on_off_ended(self) -> None:
+        """Use up the off side's edge."""
+        self.off_latched = False
+        self.on_latched = False
 
     def no_data_grace_until(self, timing: Timing) -> datetime | None:
         """Return when a firing alert without data stops firing, if it will."""
