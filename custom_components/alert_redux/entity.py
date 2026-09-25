@@ -9,7 +9,6 @@ from typing import Any
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
@@ -74,7 +73,6 @@ from .const import (
     EVENT_FIRED,
     EVENT_NO_DATA,
     EVENT_UNACKED,
-    ALERTS_DEVICE_ID,
     AlertKind,
     EndReason,
     Priority,
@@ -101,9 +99,6 @@ class AlertEntity(Entity):
 
     _attr_should_poll = False
     _attr_translation_key = "alert"
-    # Every alert belongs to the one alerts device, which the integration creates
-    # when it sets up (spec §11.5); naming it by its identifier is enough.
-    _attr_device_info = DeviceInfo(identifiers={(DOMAIN, ALERTS_DEVICE_ID)})
     _unrecorded_attributes = frozenset(
         {ATTR_FIRE_DATA, ATTR_MESSAGE, ATTR_DISPLAY_MESSAGE}
     )

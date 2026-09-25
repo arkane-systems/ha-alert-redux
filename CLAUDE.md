@@ -11,8 +11,7 @@ install: the card bundle ships inside the integration package and the integratio
 and registers it itself.
 
 Phases 1 (manual alerts) and 2 (state and template condition alerts, no-data
-handling) and 3 (the main card, with messages rendered for it) are implemented, plus
-0.3.1 (the alerts device, spec §11.5).
+handling) and 3 (the main card, with messages rendered for it) are implemented.
 
 ## Specification
 
@@ -34,8 +33,7 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `__init__.py` — creates the `EntityComponent` for the `alert_redux` entity domain
     and registers the actions; config entry setup/unload; applies subentry and
     option changes **in place** (adding, updating, and forgetting alert entities)
-    rather than reloading the entry; announces alerts deleted since the last run;
-    creates the alerts device against the entry itself, so it outlives its alerts.
+    rather than reloading the entry; announces alerts deleted since the last run.
   - `alert_redux.py` — the entity platform for our own domain, loaded by
     `EntityComponent.async_setup_entry`; adds one entity per alert subentry, linked
     with `config_subentry_id` so HA removes it with the subentry, and keeps the
