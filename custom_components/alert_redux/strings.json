@@ -35,7 +35,9 @@
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
             "user_dismissable": "Dismissable from the card",
-            "subject_entity": "Subject entity"
+            "subject_entity": "Subject entity",
+            "message": "On message",
+            "display_message": "Card message"
           },
           "data_description": {
             "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
@@ -43,7 +45,9 @@
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
-            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
+            "message": "Optional. The message shown on the card and, from a later release, sent when the alert starts firing. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+            "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template."
           }
         },
         "state": {
@@ -60,6 +64,8 @@
             "delay_off": "Delay before ending",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
             "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::display_message%]",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -73,6 +79,8 @@
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
             "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::display_message%]",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           }
         },
@@ -89,6 +97,8 @@
             "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
             "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::display_message%]",
             "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
           },
           "data_description": {
@@ -101,6 +111,8 @@
             "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
             "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::display_message%]",
             "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
           }
         },
@@ -112,7 +124,9 @@
             "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
             "user_dismissable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::user_dismissable%]",
-            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]"
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::display_message%]"
           },
           "data_description": {
             "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
@@ -120,7 +134,9 @@
             "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
             "user_dismissable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::user_dismissable%]",
-            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]"
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::display_message%]"
           }
         },
         "reconfigure_state": {
@@ -136,6 +152,8 @@
             "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
             "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::display_message%]",
             "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
           },
           "data_description": {
@@ -149,6 +167,8 @@
             "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
             "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::display_message%]",
             "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
           }
         },
@@ -164,6 +184,8 @@
             "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
             "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::display_message%]",
             "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
           },
           "data_description": {
@@ -176,6 +198,8 @@
             "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
             "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
             "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::message%]",
+            "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::display_message%]",
             "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
           }
         }

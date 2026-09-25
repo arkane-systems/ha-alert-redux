@@ -39,7 +39,7 @@ from .const import (
     SUBENTRY_ALERT,
 )
 from .entity import AlertEntity, create_alert_entity
-from .frontend import async_register_frontend
+from .frontend import async_register_frontend, async_setup_websocket
 from .model import AlertRuntime, Settings
 from .store import AlertStore
 
@@ -59,17 +59,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     component.async_register_entity_service(SERVICE_DISMISS, None, "async_dismiss")
     component.async_register_entity_service(SERVICE_ACK, None, "async_ack")
     component.async_register_entity_service(SERVICE_UNACK, None, "async_unack")
+    async_setup_websocket(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Alert Redux from a config entry."""
-    await async_register_frontend(hass)
-
     data = hass.data[DOMAIN]
     if (store := data.get(DATA_STORE)) is None:
         store = data[DATA_STORE] = AlertStore(hass)
         await store.async_load()
+
+    await async_register_frontend(hass, store)
 
     settings = data[DATA_SETTINGS] = Settings.from_options(entry.options)
     # The startup delay holds back condition alerts' first evaluation, but only

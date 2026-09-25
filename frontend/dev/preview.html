@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alert Redux card preview</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Roboto, "Segoe UI", system-ui, sans-serif;
+        font-size: 14px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        padding: 8px 16px;
+        border-bottom: 1px solid #ccc;
+      }
+      .columns {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      }
+      .column {
+        padding: 24px;
+        background: var(--primary-background-color);
+      }
+      /* The Home Assistant theme variables the card uses, default light and dark. */
+      [data-theme="light"] {
+        --primary-background-color: #fafafa;
+        --card-background-color: #ffffff;
+        --primary-text-color: #212121;
+        --secondary-text-color: #727272;
+        --divider-color: rgba(0, 0, 0, 0.12);
+        --primary-color: #03a9f4;
+        --text-primary-color: #ffffff;
+        --warning-color: #ffa600;
+        --info-color: #039be5;
+      }
+      [data-theme="dark"] {
+        --primary-background-color: #111111;
+        --card-background-color: #1c1c1c;
+        --primary-text-color: #e1e1e1;
+        --secondary-text-color: #9b9b9b;
+        --divider-color: rgba(225, 225, 225, 0.12);
+        --primary-color: #03a9f4;
+        --text-primary-color: #ffffff;
+        --warning-color: #ffa600;
+        --info-color: #039be5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <strong>Alert Redux card preview</strong>
+      <label><input id="empty" type="checkbox" /> Empty</label>
+      <label><input id="stale" type="checkbox" /> Version mismatch</label>
+      <button id="reset">Reset alerts</button>
+    </div>
+    <div class="columns">
+      <div class="column" data-theme="light"></div>
+      <div class="column" data-theme="dark"></div>
+    </div>
+    <script type="module" src="dist/preview.js"></script>
+  </body>
+</html>

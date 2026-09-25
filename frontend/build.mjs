@@ -20,7 +20,19 @@ const options = {
   logLevel: "info",
 };
 
-if (process.argv.includes("--watch")) {
+// The preview page (dev/preview.html): the card against a mock hass, for working on
+// its looks without Home Assistant. Not shipped.
+const preview = {
+  ...options,
+  entryPoints: ["dev/preview.ts"],
+  outfile: "dev/dist/preview.js",
+  minify: false,
+  define: { __CARD_VERSION__: JSON.stringify(`${manifest.version}-preview`) },
+};
+
+if (process.argv.includes("--preview")) {
+  await esbuild.build(preview);
+} else if (process.argv.includes("--watch")) {
   const ctx = await esbuild.context(options);
   await ctx.watch();
 } else {

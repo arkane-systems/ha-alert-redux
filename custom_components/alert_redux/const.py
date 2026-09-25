@@ -100,6 +100,11 @@ CONF_CONDITION = "condition"
 CONF_DELAY_ON = "delay_on"
 CONF_DELAY_OFF = "delay_off"
 CONF_NO_DATA_GRACE = "no_data_grace"
+CONF_MESSAGE = "message"
+CONF_DISPLAY_MESSAGE = "display_message"
+
+# Messages (spec §9.5).
+DEFAULT_ON_MESSAGE = "{{ name }} is firing."
 
 # Config entry options: the global defaults (spec §12.1).
 CONF_STARTUP_DELAY = "startup_delay"
@@ -156,3 +161,5 @@ ATTR_MISSING_INPUTS = "missing_inputs"
 ATTR_DELAY_ON_UNTIL = "delay_on_until"
 ATTR_DELAY_OFF_UNTIL = "delay_off_until"
 ATTR_NO_DATA_GRACE_UNTIL = "no_data_grace_until"
+ATTR_MESSAGE = "message"
+ATTR_DISPLAY_MESSAGE = "display_message"

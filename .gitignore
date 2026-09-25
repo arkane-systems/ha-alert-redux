@@ -219,3 +219,6 @@ __marimo__/
 
 # Frontend (card) build tooling
 node_modules/
+
+# Card preview build output
+frontend/dev/dist/

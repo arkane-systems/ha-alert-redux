@@ -35,11 +35,24 @@ class AlertStore:
             minor_version=STORAGE_MINOR_VERSION,
         )
         self._alerts: dict[str, dict[str, Any]] = {}
+        self._card_version: str | None = None
 
     async def async_load(self) -> None:
         """Load the persisted records."""
         data = await self._store.async_load() or {}
         self._alerts = data.get("alerts", {})
+        self._card_version = data.get("card_version")
+
+    @property
+    def card_version(self) -> str | None:
+        """Return the card version the user was last told to refresh for."""
+        return self._card_version
+
+    @callback
+    def set_card_version(self, version: str) -> None:
+        """Remember the card version the user was told to refresh for."""
+        self._card_version = version
+        self._async_schedule_save()
 
     @callback
     def alert_ids(self) -> set[str]:
@@ -73,4 +86,4 @@ class AlertStore:
 
     @callback
     def _data(self) -> dict[str, Any]:
-        return {"alerts": self._alerts}
+        return {"alerts": self._alerts, "card_version": self._card_version}

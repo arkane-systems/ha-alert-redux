@@ -7,12 +7,14 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
+    "preview": "node build.mjs --preview",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "lit": "3.3.3"
   },
   "devDependencies": {
+    "@mdi/js": "7.4.47",
     "esbuild": "0.28.2",
     "typescript": "7.0.2"
   }
