@@ -103,12 +103,15 @@ keeps the build free of decorator-transform configuration.
 ## Testing
 
 ```sh
-python3 -m venv .venv && source .venv/bin/activate
+python3.14 -m venv .venv && source .venv/bin/activate
 pip install -r requirements_test.txt
 pytest
 ```
 
-CI also runs HACS validation and hassfest.
+The test plugin tracks current HA, which needs Python 3.14; keep
+`requirements_test.txt` close to the HA version actually in use, since HA behaviour
+changes between releases (spec §11.5 records one that bit us). CI also runs HACS
+validation and hassfest.
 
 ## Versioning
 
