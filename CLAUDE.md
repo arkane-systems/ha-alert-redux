@@ -10,8 +10,8 @@ it. Both live in this one repository and are delivered by a single HACS *integra
 install: the card bundle ships inside the integration package and the integration serves
 and registers it itself.
 
-Phase 1 (manual alerts) is implemented; the card is still a placeholder until
-phase 3.
+Phases 1 (manual alerts) and 2 (state and template condition alerts, no-data
+handling) are implemented; the card is still a placeholder until phase 3.
 
 ## Specification
 
@@ -31,16 +31,24 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
 
 - **`custom_components/alert_redux/`** — the integration (what HACS installs).
   - `__init__.py` — creates the `EntityComponent` for the `alert_redux` entity domain
-    and registers the actions; config entry setup/unload; reloads the entry when
-    subentries change; announces alerts deleted since the last run.
+    and registers the actions; config entry setup/unload; applies subentry and
+    option changes **in place** (adding, updating, and forgetting alert entities)
+    rather than reloading the entry; announces alerts deleted since the last run.
   - `alert_redux.py` — the entity platform for our own domain, loaded by
     `EntityComponent.async_setup_entry`; adds one entity per alert subentry, linked
-    with `config_subentry_id` so HA removes it with the subentry.
-  - `entity.py` — `AlertEntity`: state, attributes, actions, events, persistence.
-  - `model.py` — `AlertRuntime`, the HA-free state machine and its serialization.
+    with `config_subentry_id` so HA removes it with the subentry, and keeps the
+    add-entities callback for alerts added later.
+  - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
+    persistence) and `ConditionAlertEntity` (state/template kinds: watches a source,
+    runs the delays and no-data grace period on one timer).
+  - `model.py` — `AlertRuntime`, the HA-free state machine (including condition
+    evaluation, `evaluate()`), its serialization, and the global `Settings`.
+  - `sources.py` — condition inputs reporting true/false/no data: `StateSource`,
+    `TemplateSource`, and `AndSource` for the extra condition.
   - `store.py` — `AlertStore`, the single persistent `Store` (no `RestoreEntity`).
   - `config_flow.py` — single-instance config flow (`single_config_entry` in the
-    manifest makes HA enforce the one-instance rule) and the alert subentry flow.
+    manifest makes HA enforce the one-instance rule), the options flow (global
+    defaults), and the alert subentry flow (a menu of kinds, then a form per kind).
   - `services.yaml`, `icons.json` — action definitions and icons.
   - `frontend.py` — serves `frontend/` via a static path and registers the card as a
     storage-mode Lovelace resource with a `?v=<manifest version>` cache-buster, updating

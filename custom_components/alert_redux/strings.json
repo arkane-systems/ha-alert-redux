@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Alert Redux",
-        "description": "Set up Alert Redux alerting."
+        "description": "Set up Alert Redux alerting. Global defaults can be changed afterwards in the integration's options."
       }
     },
     "abort": {
@@ -18,6 +18,15 @@
       },
       "step": {
         "user": {
+          "title": "Add an alert",
+          "description": "Choose the kind of alert.",
+          "menu_options": {
+            "manual": "Manual: fired and dismissed by actions",
+            "state": "State: an entity is in a given state",
+            "template": "Template: a template is true"
+          }
+        },
+        "manual": {
           "title": "Add a manual alert",
           "description": "A manual alert is fired and dismissed by the `alert_redux.fire` and `alert_redux.dismiss` actions.",
           "data": {
@@ -25,31 +34,149 @@
             "priority": "Priority",
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
-            "user_dismissable": "Dismissable from the card"
+            "user_dismissable": "Dismissable from the card",
+            "subject_entity": "Subject entity"
           },
           "data_description": {
             "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
             "priority": "Sets the alert's colour and sort order.",
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
-            "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to."
+            "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           }
         },
-        "reconfigure": {
+        "state": {
+          "title": "Add a state alert",
+          "description": "A state alert fires while an entity is in a given state, e.g. a door sensor is `on`.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "entity_id": "Entity",
+            "target_state": "State",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "entity_id": "The entity to watch.",
+            "target_state": "The alert fires while the entity is in this state, e.g. `on` or `open`. Targeting `unavailable` or `unknown` alerts on that state; otherwise those states mean the alert has no data.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          }
+        },
+        "template": {
+          "title": "Add a template alert",
+          "description": "A template alert fires while a template renders true.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "template": "Template",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "template": "The alert fires while this renders true. A result that isn't clearly true or false (an error, `unknown`, `unavailable`, `none`, or anything else) means the alert has no data.",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          }
+        },
+        "reconfigure_manual": {
           "title": "Edit alert",
           "data": {
-            "name": "[%key:component::alert_redux::config_subentries::alert::step::user::data::name%]",
-            "priority": "[%key:component::alert_redux::config_subentries::alert::step::user::data::priority%]",
-            "icon": "[%key:component::alert_redux::config_subentries::alert::step::user::data::icon%]",
-            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::user::data::acknowledgeable%]",
-            "user_dismissable": "[%key:component::alert_redux::config_subentries::alert::step::user::data::user_dismissable%]"
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "user_dismissable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::user_dismissable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]"
           },
           "data_description": {
             "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
-            "priority": "[%key:component::alert_redux::config_subentries::alert::step::user::data_description::priority%]",
-            "icon": "[%key:component::alert_redux::config_subentries::alert::step::user::data_description::icon%]",
-            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::user::data_description::acknowledgeable%]",
-            "user_dismissable": "[%key:component::alert_redux::config_subentries::alert::step::user::data_description::user_dismissable%]"
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "user_dismissable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::user_dismissable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]"
+          }
+        },
+        "reconfigure_state": {
+          "title": "Edit alert",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "entity_id": "[%key:component::alert_redux::config_subentries::alert::step::state::data::entity_id%]",
+            "target_state": "[%key:component::alert_redux::config_subentries::alert::step::state::data::target_state%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "entity_id": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::entity_id%]",
+            "target_state": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::target_state%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          }
+        },
+        "reconfigure_template": {
+          "title": "Edit alert",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "template": "[%key:component::alert_redux::config_subentries::alert::step::template::data::template%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "template": "[%key:component::alert_redux::config_subentries::alert::step::template::data_description::template%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
           }
         }
       },
@@ -67,7 +194,8 @@
         "state": {
           "idle": "Idle",
           "active": "Active",
-          "ack": "Acknowledged"
+          "ack": "Acknowledged",
+          "no_data": "No data"
         },
         "state_attributes": {
           "priority": {
@@ -124,6 +252,21 @@
     },
     "not_manual": {
       "message": "{entity_id} isn't a manual alert, so it can't be fired or dismissed by action."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Alert Redux defaults",
+        "data": {
+          "no_data_grace": "No-data grace period",
+          "startup_delay": "Startup delay"
+        },
+        "data_description": {
+          "no_data_grace": "How long a firing alert keeps firing while its inputs have no data, unless the alert sets its own.",
+          "startup_delay": "When Home Assistant starts, wait this long before evaluating condition alerts. Zero to evaluate straight away."
+        }
+      }
     }
   }
 }

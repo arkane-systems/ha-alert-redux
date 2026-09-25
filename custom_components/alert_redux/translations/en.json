@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Alert Redux",
-        "description": "Set up Alert Redux alerting."
+        "description": "Set up Alert Redux alerting. Global defaults can be changed afterwards in the integration's options."
       }
     },
     "abort": {
@@ -18,6 +18,15 @@
       },
       "step": {
         "user": {
+          "title": "Add an alert",
+          "description": "Choose the kind of alert.",
+          "menu_options": {
+            "manual": "Manual: fired and dismissed by actions",
+            "state": "State: an entity is in a given state",
+            "template": "Template: a template is true"
+          }
+        },
+        "manual": {
           "title": "Add a manual alert",
           "description": "A manual alert is fired and dismissed by the `alert_redux.fire` and `alert_redux.dismiss` actions.",
           "data": {
@@ -25,31 +34,149 @@
             "priority": "Priority",
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
-            "user_dismissable": "Dismissable from the card"
+            "user_dismissable": "Dismissable from the card",
+            "subject_entity": "Subject entity"
           },
           "data_description": {
             "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
             "priority": "Sets the alert's colour and sort order.",
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
-            "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to."
+            "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           }
         },
-        "reconfigure": {
+        "state": {
+          "title": "Add a state alert",
+          "description": "A state alert fires while an entity is in a given state, e.g. a door sensor is `on`.",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "entity_id": "Entity",
+            "target_state": "State",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "entity_id": "The entity to watch.",
+            "target_state": "The alert fires while the entity is in this state, e.g. `on` or `open`. Targeting `unavailable` or `unknown` alerts on that state; otherwise those states mean the alert has no data.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          }
+        },
+        "template": {
+          "title": "Add a template alert",
+          "description": "A template alert fires while a template renders true.",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "template": "Template",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "template": "The alert fires while this renders true. A result that isn't clearly true or false (an error, `unknown`, `unavailable`, `none`, or anything else) means the alert has no data.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          }
+        },
+        "reconfigure_manual": {
           "title": "Edit alert",
           "data": {
             "name": "Name",
             "priority": "Priority",
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
-            "user_dismissable": "Dismissable from the card"
+            "user_dismissable": "Dismissable from the card",
+            "subject_entity": "Subject entity"
           },
           "data_description": {
             "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
             "priority": "Sets the alert's colour and sort order.",
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
-            "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to."
+            "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
+          }
+        },
+        "reconfigure_state": {
+          "title": "Edit alert",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "entity_id": "Entity",
+            "target_state": "State",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "entity_id": "The entity to watch.",
+            "target_state": "The alert fires while the entity is in this state, e.g. `on` or `open`. Targeting `unavailable` or `unknown` alerts on that state; otherwise those states mean the alert has no data.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          }
+        },
+        "reconfigure_template": {
+          "title": "Edit alert",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "template": "Template",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "template": "The alert fires while this renders true. A result that isn't clearly true or false (an error, `unknown`, `unavailable`, `none`, or anything else) means the alert has no data.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           }
         }
       },
@@ -67,7 +194,8 @@
         "state": {
           "idle": "Idle",
           "active": "Active",
-          "ack": "Acknowledged"
+          "ack": "Acknowledged",
+          "no_data": "No data"
         },
         "state_attributes": {
           "priority": {
@@ -124,6 +252,21 @@
     },
     "not_manual": {
       "message": "{entity_id} isn't a manual alert, so it can't be fired or dismissed by action."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Alert Redux defaults",
+        "data": {
+          "no_data_grace": "No-data grace period",
+          "startup_delay": "Startup delay"
+        },
+        "data_description": {
+          "no_data_grace": "How long a firing alert keeps firing while its inputs have no data, unless the alert sets its own.",
+          "startup_delay": "When Home Assistant starts, wait this long before evaluating condition alerts. Zero to evaluate straight away."
+        }
+      }
     }
   }
 }

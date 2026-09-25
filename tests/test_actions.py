@@ -127,6 +127,7 @@ async def test_lifecycle(
     assert ended[0].data["new_state"] == "idle"
     assert ended[0].data["fire_count"] == 2
     assert ended[0].data["duration_seconds"] >= 0
+    assert ended[0].data["reason"] == "dismissed"
     assert ended[0].data["user_id"] == hass_admin_user.id
     # Ending clears the acknowledgement without an _unacked event.
     assert len(unacked) == 1

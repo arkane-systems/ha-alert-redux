@@ -9,4 +9,4 @@ var M=globalThis,N=M.ShadowRoot&&(M.ShadyCSS===void 0||M.ShadyCSS.nativeShadow)&
       padding: 0 16px 16px;
       color: var(--secondary-text-color);
     }
-  `;customElements.get("alert-redux-card")||(customElements.define("alert-redux-card",O),window.customCards=window.customCards??[],window.customCards.push({type:"alert-redux-card",name:"Alert Redux",description:"Shows and manages Alert Redux alerts."}),console.info("%c ALERT-REDUX-CARD %c 0.1.0 ","color:white;background:#b71c1c",""));
+  `;customElements.get("alert-redux-card")||(customElements.define("alert-redux-card",O),window.customCards=window.customCards??[],window.customCards.push({type:"alert-redux-card",name:"Alert Redux",description:"Shows and manages Alert Redux alerts."}),console.info("%c ALERT-REDUX-CARD %c 0.2.0 ","color:white;background:#b71c1c",""));
