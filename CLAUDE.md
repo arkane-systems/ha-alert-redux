@@ -12,7 +12,8 @@ and registers it itself.
 
 Phases 1 (manual alerts) and 2 (state and template condition alerts, no-data
 handling) and 3 (the main card, with messages rendered for it) are implemented, plus
-0.3.1 (the Alert Redux label, spec §11.5).
+0.3.1 (the Alert Redux label, spec §11.5) and phase 4 (notifications: groups, on /
+reminder / done, retries and the fallback).
 
 ## Specification
 
@@ -34,7 +35,8 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `__init__.py` — creates the `EntityComponent` for the `alert_redux` entity domain
     and registers the actions; config entry setup/unload; applies subentry and
     option changes **in place** (adding, updating, and forgetting alert entities)
-    rather than reloading the entry; announces alerts deleted since the last run.
+    rather than reloading the entry, including notifier group subentries (given to
+    the `Notifier` in place); announces alerts deleted since the last run.
   - `alert_redux.py` — the entity platform for our own domain, loaded by
     `EntityComponent.async_setup_entry`; adds one entity per alert subentry, linked
     with `config_subentry_id` so HA removes it with the subentry, and keeps the
@@ -47,8 +49,21 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `sources.py` — condition inputs reporting true/false/no data: `StateSource`,
     `TemplateSource`, and `AndSource` for the extra condition.
   - `messages.py` — the message template context (`message_context`, shared with
-    notifications from phase 4) and `MessageTracker`, which renders the on and display
-    messages and re-renders them as the entities they read change.
+    notifications) and `MessageTracker`, which renders the on and display messages
+    for the card and re-renders them as the entities they read change.
+  - `notifications.py` — the alert side of notifying: which groups an alert sends
+    to (its own, the defaults, or the fallback), rendering the on / reminder / done
+    messages, and handing them to the notifier. Reminder timing lives in `model.py`
+    (`AlertRuntime.next_reminder`, `next_reminder_slot`) and `entity.py`.
+  - `notifier/` — the **self-contained notifier module** (spec §9.1): groups and
+    members (`model.py`), delivery per member kind (`members.py`), the retry queue's
+    records (`retry.py`), missing-action Repairs issues (`repairs.py`), and the
+    `Notifier` (`__init__.py`). **It must not import anything Alert-Redux-specific**,
+    so it can be extracted later; its owner passes in the store key and issue domain.
+    It keeps its own `Store` (the retry queue). Named `notifier`, not `notify`: a
+    `notify.py` would be loaded as a notify platform.
+  - `issues.py` — Alert Redux's own Repairs issues (the unset default groups). Not
+    called `repairs.py`, which HA would take for the repairs platform.
   - `store.py` — `AlertStore`, the single persistent `Store` (no `RestoreEntity`);
     also remembers the card version the user was last told to refresh for, and the
     alerts label's ID.
@@ -58,7 +73,9 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     prefixed to their names and entity IDs (spec §11.5).
   - `config_flow.py` — single-instance config flow (`single_config_entry` in the
     manifest makes HA enforce the one-instance rule), the options flow (global
-    defaults), and the alert subentry flow (a menu of kinds, then a form per kind).
+    defaults), the alert subentry flow (a menu of kinds, then a form per kind, with a
+    collapsed notifications `section` flattened into the stored data), and the
+    notifier group subentry flow.
   - `services.yaml`, `icons.json` — action definitions and icons.
   - `frontend.py` — serves `frontend/` via a static path and registers the card as a
     storage-mode Lovelace resource with a `?v=<manifest version>` cache-buster, updating
@@ -68,8 +85,10 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     compares with its own), and the "refresh your browser" notification, raised once
     per card version.
   - `frontend/alert-redux-card.js` — **build output, do not edit by hand.**
-  - `strings.json` / `translations/en.json` — keep in sync manually; `en.json` is
-    `strings.json` with `[%key:...%]` references resolved to literal text.
+  - `strings.json` / `translations/en.json` — `en.json` is `strings.json` with
+    `[%key:...%]` references resolved to literal text. Edit `strings.json`, then
+    regenerate `en.json` with `resolve()` from `tests/test_translations.py`, whose
+    `test_en_matches_strings` fails if they drift.
   - `brand/icon.png`, `brand/icon@2x.png` — integration icon (256 and 512 px),
     rendered from `assets/alert-redux-icon.svg`.
 - **`frontend/`** — card source (TypeScript + Lit), bundled with esbuild.

@@ -3,9 +3,10 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.3.1). Manual, state, and template alerts work,
-> and the card shows and acknowledges them. Other condition kinds, event alerts, and
-> notifications arrive in later releases; see the
+> **Status:** early development (0.4.0). Manual, state, and template alerts work,
+> the card shows and acknowledges them, and they send on, reminder, and done
+> notifications. Other condition kinds, event alerts, snoozing, and the rest arrive
+> in later releases; see the
 > [phase plan](docs/SPEC.md#20-phase-plan). The design is in [docs/SPEC.md](docs/SPEC.md).
 
 ## Installation
@@ -44,12 +45,13 @@ choose its kind. Every alert has a name (which also sets its entity ID), a prior
 and optionally an icon, and can be made unacknowledgeable.
 
 Every alert can also have an **on message** and a **card message**, both templates.
-The card shows the card message if there is one, and otherwise the on message; from
-a later release, the on message is also what's sent when the alert fires. Leave
-both empty for the default, "{{ name }} is firing." That's deliberately generic, so
-give real alerts a specific message. Templates can use `name`, `subject_entity_name`
-(the subject entity's name, or else the alert's), `subject_entity_id`, `entity_id`,
-`priority`, `fire_count`, `fire_data` (manual alerts), and entity states, e.g.
+The on message is sent when the alert starts firing (see
+[Notifications](#notifications)); the card shows the card message if there is one,
+and otherwise the on message. Leave both empty for the default, "{{ name }} is
+firing." That's deliberately generic, so give real alerts a specific message.
+Templates can use `name`, `subject_entity_name` (the subject entity's name, or else
+the alert's), `subject_entity_id`, `entity_id`, `priority`, `fire_count`,
+`fire_data` (manual alerts), `duration`, and entity states, e.g.
 `Server room is {{ states('sensor.server_room') }} °C.` While an alert is firing,
 the rendered messages are in its `message` and `display_message` attributes, and
 they update as the entities they read change.
@@ -90,12 +92,6 @@ runs out, the firing ends.
 
 After a restart, alerts wait in `no_data` for their inputs. Alerts that were firing
 stay firing while they wait, and resume quietly if their condition still holds.
-
-#### Global defaults
-
-The integration's **Configure** button sets the default no-data grace period, and an
-optional **startup delay**: how long to wait after Home Assistant starts before
-evaluating condition alerts.
 
 ### Actions
 
@@ -139,6 +135,77 @@ label, it isn't recreated.
 
 The dots beside alert entries in an Activity card are always grey: Home Assistant's
 frontend only colours those for its own built-in domains.
+
+## Notifications
+
+Alerts don't name notifiers directly. They send to **notifier groups**, which you
+define in Alert Redux: **Settings → Devices & Services → Alert Redux → Add notifier
+group**. A group can hold any mix of:
+
+- **notify entities** (`notify.*` entities), which receive the message, and the
+  title if they can show one;
+- **legacy notify actions**, such as `notify.mobile_app_phone`. These can also take
+  extra `data` (e.g. a mobile notification channel) and a `target`. Values in `data`
+  can be templates, using the same variables as messages, e.g.
+  `group: "{{ priority }}"`;
+- a **persistent notification**.
+
+(Groups also have a **loud** flag, for notifiers that make a noise. It's stored now,
+for quiet hours in a later release.)
+
+The notification's title is the alert's name. An alert sends:
+
+| Notification | When | Default message |
+|---|---|---|
+| **On** | It starts firing. | "{{ name }} is firing." |
+| **Reminder** | On its reminder schedule, while firing and unacknowledged. | "{{ name }} is still firing ({{ duration }})." |
+| **Done** | It stops firing, even if acknowledged. | "{{ name }} stopped firing after {{ duration }}." |
+
+Each message can be replaced with your own template, in the alert's **Notifications
+and messages** section. There, `duration` is how long the alert has been firing (or
+fired, for the done message), `reason` is `on`, `reminder`, or `done`, and in the
+done message `end_reason` is `resolved`, `dismissed`, or `no_data`. The default done
+message says when an alert stopped because its data was lost.
+
+- **Which groups:** an alert uses the **default groups** unless you turn that off
+  and choose its own; choosing none means it notifies nobody. If no default groups
+  are set, alerts that rely on them send to the fallback, and a Repairs issue says
+  so.
+- **Reminders** follow a list of intervals in minutes, where the last one repeats.
+  The default, `10, 20, 30, 60`, reminds at 10, 30, and 60 minutes, then hourly. An
+  alert can have its own schedule, or none. Acknowledging stops reminders;
+  removing the acknowledgement resumes them on the original schedule, counted from
+  when the alert started firing.
+- **Firing again:** a manual alert fired while it's already firing sends its on
+  message again, with the new `fire_count`, unless it has been acknowledged.
+- **Restarts:** an alert that was firing resumes without a new on notification. A
+  reminder that fell due while Home Assistant was down is sent when it's back.
+
+### When a notifier fails
+
+A notifier that's missing (e.g. its integration hasn't loaded yet) or fails is
+retried, with increasing gaps, until the **retry timeout** (5 minutes by default).
+Each notifier is retried on its own, a legacy action is retried as soon as it
+appears, and pending retries survive a restart.
+
+If a notification reaches none of the notifiers it was sent to, it goes to the
+**fallback group**: a persistent notification, unless you choose a group of your
+own. It isn't used for alerts set to notify nobody.
+
+A legacy notify action that doesn't exist is raised as a Repairs issue naming its
+group. Integrations are gradually replacing legacy actions with notify entities; if
+one has, switch the group to the entity. The issue clears itself once the action
+exists again or the group no longer uses it.
+
+## Global defaults
+
+The integration's **Configure** button sets:
+
+- the default no-data grace period;
+- an optional **startup delay**: how long to wait after Home Assistant starts before
+  evaluating condition alerts;
+- the default notifier groups and reminder schedule;
+- the fallback group, and the retry timeout.
 
 ## Lovelace card
 
