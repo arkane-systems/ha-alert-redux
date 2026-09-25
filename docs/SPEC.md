@@ -68,8 +68,8 @@ changes. It can't be fired or dismissed manually [Decided, R3].
 | Kind | Configuration |
 |---|---|
 | **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. |
-| **On/off** | Separate *on* and *off* criteria, each a condition and/or trigger. Turns on when the on criterion becomes true, and off when the off criterion becomes true (edge-triggered, as in Alert2). |
-| **Threshold** | A numeric value (from an entity, attribute, or template) with a minimum and/or maximum, and hysteresis. The limits can themselves come from entities or templates [P18]. |
+| **On/off** | Separate *on* and *off* criteria, each a condition and/or trigger. Turns on when the on criterion becomes true, and off when the off criterion becomes true (edge-triggered, as in Alert2). [Decided, phase 5] Each side is a template, triggers, or both. A template-only side counts on its false-to-true change; a side with triggers counts when one fires while its template (if any) is true. The off side is edge-triggered too: an off criterion already true when the alert fires has to go false and true again. An unknown previous value counts as false, so an on criterion already true when a new alert is first evaluated fires it. The edge state is persisted, so a restart or a data dropout doesn't create a false edge. Only the side that can change the state counts for missing data (the on side while idle, the off side while firing). |
+| **Threshold** | A numeric value (from an entity, attribute, or template) with a minimum and/or maximum, and hysteresis. The limits can themselves come from entities or templates [P18]. [Decided, phase 5] The limits are templates, where a plain number works as-is. It fires when the value is strictly above the maximum or below the minimum, and a firing ends once the value is back inside by the hysteresis (an absolute amount, default 0). A value, or a configured limit, that isn't a number means no data. |
 | **Template** | A template that evaluates to true or false. The fully general option. [Decided, phase 2] Only a clearly true or false result counts (`true`/`on`/`yes`/`1`, `false`/`off`/`no`/`0`, or a real boolean or number). An error, an undefined variable, or a result of `none`, `unknown`, `unavailable`, or anything else means no data (§4.4). A template binary sensor would read those as false, but for an alert that silently hides a broken template. |
 | **Alert state** | [Decided, F24] Fires when another alert has been in a given state (e.g. `active`, meaning unacknowledged) for a given time. This gives escalation without templates (§8.4). |
 
@@ -91,6 +91,10 @@ All condition alerts support:
     then the alert ends.
   - [Decided, phase 2] If either the main criterion or the extra condition has no
     data, the alert has no data, even if the other one is false (§4.4).
+- [Decided, phase 5] On/off alerts' `delay_on` and `delay_off` need the side to
+  hold, so they need a template on that side; the form refuses a delay on a
+  trigger-only side. The extra condition gates the on edge, and ends a firing
+  (after `delay_off`) when it turns false, as for the other kinds.
 
 ### 4.2 Event alerts
 
@@ -115,6 +119,18 @@ duration runs out [Decided, R2, R3].
   alert that fires again sends nothing: keeping the acknowledgement is what stops
   the nagging. (Manual alerts do the same, §4.3.)
 - The card shows a draining progress bar for the remaining duration (§13.1).
+- [Decided, phase 5] The per-priority default durations are Emergency 60, Critical
+  30, Warning 15, Notice 10, and Informational 5 minutes. Changing a duration, or
+  the defaults, applies from the next fire; a running firing keeps its expiry.
+- [Decided, phase 5] A condition that has no data when the trigger fires (an
+  error, or a result that isn't clearly true or false) doesn't stop the alert: it
+  fires, and a warning is logged. A broken condition must never silence it (as
+  §12.4). The bus event kind also takes the optional condition, which comes free
+  with the shared engine.
+- [Decided, phase 5] Triggers attach once HA has started, as automations' do, and
+  after the startup delay (§15.3), so entities loading at startup don't fire them.
+  A trigger that can't be attached makes the alert `unavailable` (§7.1), and the
+  error is logged. There's no `no_data` state for event alerts.
 - [Decided, F23] Internally, both kinds share one engine: a bus event alert is a
   trigger alert with an `event` trigger. Keeping it as a separate kind is purely to
   make configuration simpler.
@@ -514,6 +530,10 @@ doesn't repeat it automatically. It can include the name deliberately through th
     `duration_seconds`;
   - the fire count;
   - the trigger or event data (event alerts), and `fire_data` (manual alerts);
+    [Decided, phase 5] event alerts' is `trigger`, as in automations (a bus event
+    alert reads `trigger.event.data`). It's stored with the firing in a JSON-safe
+    form (states and events as dictionaries, so `trigger.to_state.state` still
+    works), so it survives a restart and feeds the card and the done message.
   - the reason for the notification (`on`, `reminder`, or `done`);
   - [Decided, phase 4] for the done message, why the firing ended, as `end_reason`
     (`resolved`, `dismissed`, or `no_data`; §11.3).
@@ -572,7 +592,10 @@ doesn't repeat it automatically. It can include the name deliberately through th
   `next_reminder` attribute. A reminder that fell due while HA was down is sent
   once, when it's back, and the schedule then carries on (§15.1).
 - [Decided] Event alerts send reminders only if their duration is longer than the
-  first reminder interval. Short event alerts just fire and expire.
+  first reminder interval. Short event alerts just fire and expire. [Decided,
+  phase 5] This compares the alert's configured (or default) duration with its
+  schedule's first interval; the `reminder_schedule` attribute then shows the
+  effective, empty, schedule.
 
 ### 9.7 The done notification
 
@@ -747,6 +770,13 @@ built.
   actually sends to (the defaults, or the fallback, if it has none of its own), and
   `reminder_schedule` the effective schedule in minutes. `next_reminder` is when
   the next reminder is due, or null.
+  [Decided, phase 5] Event alerts show `duration` (seconds), `event_expires`,
+  `condition`, the latest trigger's variables as `trigger_data`, and their triggers
+  (`triggers`, or `event_type` and `event_data`). Threshold alerts show
+  `source_entity`, `attribute`, `value_template`, `minimum`, `maximum`,
+  `hysteresis`, and the current `value`; on/off alerts show `on_template`,
+  `on_triggers`, `off_template`, and `off_triggers`. Templates, trigger
+  configuration, trigger data, and `value` are kept out of the recorder.
 - **Generator provenance:** `generated_by` (§12.3).
 
 Attributes that can grow large, or change constantly, should be kept out of the
@@ -867,7 +897,8 @@ was meant to solve.
 
 - One integration config entry (already in place) holds the **global defaults**:
   the default and fallback notifier groups, reminder schedule, throttle, snooze
-  duration for notification buttons, the per-priority event durations and icons, the
+  duration for notification buttons, the per-priority event durations (phase 5)
+  and icons, the
   quiet-hours entity and priority threshold, and the no-data grace period. They're
   edited through its options flow.
 - Each **alert** is a **config subentry** of that entry, created and edited in the
@@ -965,6 +996,9 @@ To make sure it gets fixed:
   if one is running), and dismiss (manual alerts set as dismissable from the card;
   §4.3).
 - Event alerts show a **progress bar** that drains as their duration runs out.
+  [Decided, phase 5] It's a thin bar in the priority colour along the foot of the
+  alert's box, running from when the alert last fired to `event_expires`, and
+  toned down when acknowledged.
 - Superseded alerts are hidden behind a collapsed disclosure toggle under the alert
   that supersedes them [Decided, F7, §8.1].
 - A **no-data section** at the bottom lists alerts that currently lack data.
@@ -1105,6 +1139,8 @@ After a restart:
   `no_data`, and firing alerts keep their restored state.
 - Integrations or entities that disappear and come back are handled by the no-data
   mechanism (§4.4).
+- [Decided, phase 5] Triggers (event alerts, on/off sides) attach once HA has
+  started, and after the startup delay while HA is starting.
 
 ### 15.4 Logging
 
@@ -1266,6 +1302,14 @@ Decisions with their reasons, in the order they were made.
 | Done message wording depends on why the firing ended | A lost-data end must never read as resolved [§9.5]. |
 | Last retry at the timeout itself | So the timeout means what it says, rather than giving up at the last backoff that fits [§15.2]. |
 | The retry queue has its own store | Keeps the notifier module extractable [§15.2]. |
+| A new on/off alert whose on criterion is already true fires | An unknown previous value counts as false, which fails loud; persisting the edge state stops restarts and dropouts from creating false edges [§4.1]. |
+| On/off delays need a template on their side | A delay needs the criterion to hold, which a trigger alone can't [§4.1]. |
+| Threshold limits are templates | One field per limit covers a number, an entity, and anything computed, like the other template fields [§4.1]. |
+| Per-priority event durations 60/30/15/10/5 minutes | More serious events stay visible for longer [§4.2]. |
+| An event alert's condition with no data fires the alert | A broken condition must never silence the alert [§4.2, §12.4]. |
+| Triggers attach once HA has started, after the startup delay | Entities loading at startup would otherwise fire trigger alerts, as automations avoid [§4.2, §15.3]. |
+| Event alerts' trigger variables are `trigger`, stored JSON-safe | The same name as in automations; storing them keeps the card and done message right across restarts [§9.5]. |
+| Duration changes apply from the next fire | A running firing keeps the expiry it was given [§4.2]. |
 
 ## 20. Phase plan
 
@@ -1396,6 +1440,18 @@ the retry timeout. Decisions from building it are recorded in §4.2, §9.2, §9.
 - The card's progress bar for event alerts.
 
 *Done when* every alert kind except alert state works end to end.
+
+[Phase 5 as built] Built in two parts: 5a (trigger and bus event alerts, their
+shared trigger machinery in `triggers.py`, the per-priority durations, and the
+card's progress bar) and 5b (on/off and threshold alerts), released together as
+0.5.0. A condition alert's sources, including the extra condition, are reported
+together and judged by the kind's own rule, since threshold and on/off answers
+depend on whether the alert is firing. The per-priority durations are a collapsed
+**Event alert durations** section of the options. The card's bar drains a step per
+render, re-rendering every second while one is shown, with a matching transition,
+rather than with a CSS animation, which would restart whenever Lit reused an
+element for a different alert. Decisions from building it are recorded in §4.1,
+§4.2, §9.5, §9.6, §11.1, and §15.3.
 
 ### Phase 6 — Snooze, disable, suspend; admin card (0.6.0)
 

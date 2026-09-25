@@ -12,8 +12,9 @@ and registers it itself.
 
 Phases 1 (manual alerts) and 2 (state and template condition alerts, no-data
 handling) and 3 (the main card, with messages rendered for it) are implemented, plus
-0.3.1 (the Alert Redux label, spec §11.5) and phase 4 (notifications: groups, on /
-reminder / done, retries and the fallback).
+0.3.1 (the Alert Redux label, spec §11.5), phase 4 (notifications: groups, on /
+reminder / done, retries and the fallback), and phase 5 (on/off and threshold
+condition alerts, trigger and bus event alerts, and the card's progress bar).
 
 ## Specification
 
@@ -42,12 +43,21 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     with `config_subentry_id` so HA removes it with the subentry, and keeps the
     add-entities callback for alerts added later.
   - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
-    persistence, and the rendered messages while firing) and `ConditionAlertEntity` (state/template kinds: watches a source,
-    runs the delays and no-data grace period on one timer).
+    persistence, and the rendered messages while firing), `ConditionAlertEntity`
+    (state, on/off, threshold, and template kinds: watches its sources, judges them
+    by the kind's rule in `_judge`, and runs the delays and no-data grace period on
+    one timer), and `EventAlertEntity` (trigger and bus event kinds: fires on its
+    triggers, for a duration).
   - `model.py` — `AlertRuntime`, the HA-free state machine (including condition
-    evaluation, `evaluate()`), its serialization, and the global `Settings`.
-  - `sources.py` — condition inputs reporting true/false/no data: `StateSource`,
-    `TemplateSource`, and `AndSource` for the extra condition.
+    evaluation, `evaluate()`, event durations, and on/off edges), its
+    serialization, the threshold rule (`threshold_holds`), and the global
+    `Settings`.
+  - `sources.py` — condition inputs reporting their result or no data:
+    `StateSource`, `TemplateSource`, `ThresholdSource` (a `Reading`), and
+    `SourceSet`, which reports a kind's sources (and the extra condition) together.
+  - `triggers.py` — `TriggerWatcher`: attaches HA triggers once HA has started and
+    after the startup delay, handing on each firing's variables made JSON-safe.
+    Used by event alerts and on/off sides.
   - `messages.py` — the message template context (`message_context`, shared with
     notifications) and `MessageTracker`, which renders the on and display messages
     for the card and re-renders them as the entities they read change.
