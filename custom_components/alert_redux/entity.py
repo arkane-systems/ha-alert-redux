@@ -20,6 +20,7 @@ from .const import (
     ATTR_DELAY_OFF_UNTIL,
     ATTR_DELAY_ON,
     ATTR_DELAY_ON_UNTIL,
+    ATTR_DISPLAY_MESSAGE,
     ATTR_DURATION_SECONDS,
     ATTR_FIRE_COUNT,
     ATTR_FIRE_DATA,
@@ -31,6 +32,7 @@ from .const import (
     ATTR_LAST_FIRED,
     ATTR_LAST_UNACKED,
     ATTR_LAST_UNACKED_BY,
+    ATTR_MESSAGE,
     ATTR_MISSING_INPUTS,
     ATTR_NAME,
     ATTR_NEW_STATE,
@@ -51,9 +53,11 @@ from .const import (
     CONF_CONDITION,
     CONF_DELAY_OFF,
     CONF_DELAY_ON,
+    CONF_DISPLAY_MESSAGE,
     CONF_ENTITY_ID,
     CONF_ICON,
     CONF_KIND,
+    CONF_MESSAGE,
     CONF_NO_DATA_GRACE,
     CONF_PRIORITY,
     CONF_SUBJECT_ENTITY,
@@ -73,6 +77,7 @@ from .const import (
     EndReason,
     Priority,
 )
+from .messages import Messages, MessageTracker, message_context
 from .model import AlertRuntime, Change, Settings, Timing, Transition, to_timedelta
 from .sources import AndSource, Source, StateSource, TemplateSource
 from .store import AlertStore
@@ -94,7 +99,9 @@ class AlertEntity(Entity):
 
     _attr_should_poll = False
     _attr_translation_key = "alert"
-    _unrecorded_attributes = frozenset({ATTR_FIRE_DATA})
+    _unrecorded_attributes = frozenset(
+        {ATTR_FIRE_DATA, ATTR_MESSAGE, ATTR_DISPLAY_MESSAGE}
+    )
 
     def __init__(
         self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
@@ -104,6 +111,9 @@ class AlertEntity(Entity):
         self._settings = settings
         self._kind = AlertKind(subentry.data[CONF_KIND])
         self._runtime = AlertRuntime()
+        self._messages: Messages | None = None
+        self._message_tracker: MessageTracker | None = None
+        self._message_key: tuple[Any, ...] | None = None
         self._attr_unique_id = subentry.subentry_id
         self._configure(subentry)
 
@@ -114,6 +124,8 @@ class AlertEntity(Entity):
         self._acknowledgeable: bool = data[CONF_ACKNOWLEDGEABLE]
         self._user_dismissable: bool = data.get(CONF_USER_DISMISSABLE, False)
         self._explicit_subject: str | None = data.get(CONF_SUBJECT_ENTITY) or None
+        self._message: str | None = data.get(CONF_MESSAGE) or None
+        self._display_message: str | None = data.get(CONF_DISPLAY_MESSAGE) or None
         self._attr_name = subentry.title
         self._attr_icon = data.get(CONF_ICON) or DEFAULT_PRIORITY_ICONS[self._priority]
 
@@ -144,6 +156,10 @@ class AlertEntity(Entity):
             ATTR_LAST_ACKED_BY: runtime.last_acked_by,
             ATTR_LAST_UNACKED: runtime.last_unacked,
             ATTR_LAST_UNACKED_BY: runtime.last_unacked_by,
+            ATTR_MESSAGE: self._messages.message if self._messages else None,
+            ATTR_DISPLAY_MESSAGE: (
+                self._messages.display_message if self._messages else None
+            ),
         }
         if self._kind is AlertKind.MANUAL:
             attributes[ATTR_USER_DISMISSABLE] = self._user_dismissable
@@ -160,6 +176,75 @@ class AlertEntity(Entity):
         self._persist()
         if record is None:
             self._fire_event(EVENT_CREATED, None)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Stop rendering the messages."""
+        self._async_stop_messages()
+
+    @callback
+    def async_write_ha_state(self) -> None:
+        """Bring the rendered messages up to date, then write the state."""
+        self._async_sync_messages()
+        super().async_write_ha_state()
+
+    @callback
+    def _async_sync_messages(self) -> None:
+        """Render the messages while firing, restarting when their inputs change.
+
+        The context is the on notification's (spec §9.5), so the card shows the on
+        message as it would be sent.
+        """
+        runtime = self._runtime
+        key = (
+            (
+                self.name,
+                self._priority,
+                self.subject_entity,
+                self._message,
+                self._display_message,
+                runtime.fire_count,
+                runtime.fire_data,
+            )
+            if runtime.firing
+            else None
+        )
+        if key == self._message_key:
+            return
+        self._async_stop_messages()
+        self._message_key = key
+        if key is None:
+            return
+        self._message_tracker = MessageTracker(
+            self.hass,
+            self._message,
+            self._display_message,
+            message_context(
+                self.hass,
+                name=str(self.name),
+                entity_id=self.entity_id,
+                priority=self._priority,
+                subject_entity=self.subject_entity,
+                fire_count=runtime.fire_count,
+                fire_data=runtime.fire_data,
+                reason="on",
+            ),
+            f"{self.entity_id} message",
+            self._async_messages_updated,
+        )
+        self._messages = self._message_tracker.async_start()
+
+    @callback
+    def _async_stop_messages(self) -> None:
+        if self._message_tracker is not None:
+            self._message_tracker.async_stop()
+            self._message_tracker = None
+        self._messages = None
+        self._message_key = None
+
+    @callback
+    def _async_messages_updated(self, messages: Messages) -> None:
+        self._messages = messages
+        self.async_write_ha_state()
 
     @callback
     def _async_restored(self) -> None:
@@ -286,7 +371,9 @@ class ConditionAlertEntity(AlertEntity):
     runtime's next deadline.
     """
 
-    _unrecorded_attributes = frozenset({ATTR_TEMPLATE, ATTR_CONDITION})
+    _unrecorded_attributes = AlertEntity._unrecorded_attributes | frozenset(
+        {ATTR_TEMPLATE, ATTR_CONDITION}
+    )
 
     def __init__(
         self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
@@ -370,6 +457,7 @@ class ConditionAlertEntity(AlertEntity):
 
     async def async_will_remove_from_hass(self) -> None:
         """Stop watching the condition."""
+        await super().async_will_remove_from_hass()
         if self._unsub_startup is not None:
             self._unsub_startup()
             self._unsub_startup = None

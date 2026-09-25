@@ -321,3 +321,33 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
     assert hass.states.get("alert_redux.back_door_open").attributes[
         "no_data_grace"
     ] == 60
+
+
+async def test_messages_saved_and_prefilled(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """The on and card messages are saved, and pre-filled when editing."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**FORM, "message": "{{ name }} opened", "display_message": "Close it"},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    (subentry,) = entry.subentries.values()
+    assert subentry.data["message"] == "{{ name }} opened"
+    assert subentry.data["display_message"] == "Close it"
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
+    )
+    suggested = {
+        str(key): key.description["suggested_value"]
+        for key in result["data_schema"].schema
+        if key.description and "suggested_value" in key.description
+    }
+    assert suggested["message"] == "{{ name }} opened"
+    assert suggested["display_message"] == "Close it"

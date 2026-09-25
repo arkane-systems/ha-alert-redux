@@ -35,9 +35,11 @@ from .const import (
     CONF_CONDITION,
     CONF_DELAY_OFF,
     CONF_DELAY_ON,
+    CONF_DISPLAY_MESSAGE,
     CONF_ENTITY_ID,
     CONF_ICON,
     CONF_KIND,
+    CONF_MESSAGE,
     CONF_NO_DATA_GRACE,
     CONF_PRIORITY,
     CONF_STARTUP_DELAY,
@@ -186,6 +188,10 @@ def _alert_schema(kind: AlertKind, defaults: dict[str, Any]) -> vol.Schema:
             CONF_SUBJECT_ENTITY, description=_suggested(defaults, CONF_SUBJECT_ENTITY)
         )
     ] = EntitySelector()
+    for key in (CONF_MESSAGE, CONF_DISPLAY_MESSAGE):
+        schema[vol.Optional(key, description=_suggested(defaults, key))] = (
+            TemplateSelector()
+        )
     if kind in CONDITION_KINDS:
         schema[
             vol.Optional(
@@ -305,7 +311,7 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         data[CONF_TARGET_STATE] = user_input[CONF_TARGET_STATE].strip()
     else:
         data[CONF_TEMPLATE] = user_input[CONF_TEMPLATE]
-    optional = [CONF_ICON, CONF_SUBJECT_ENTITY]
+    optional = [CONF_ICON, CONF_SUBJECT_ENTITY, CONF_MESSAGE, CONF_DISPLAY_MESSAGE]
     if kind in CONDITION_KINDS:
         optional += [CONF_CONDITION, CONF_DELAY_ON, CONF_DELAY_OFF, CONF_NO_DATA_GRACE]
     for key in optional:
