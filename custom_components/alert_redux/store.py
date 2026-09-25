@@ -36,12 +36,14 @@ class AlertStore:
         )
         self._alerts: dict[str, dict[str, Any]] = {}
         self._card_version: str | None = None
+        self._label_id: str | None = None
 
     async def async_load(self) -> None:
         """Load the persisted records."""
         data = await self._store.async_load() or {}
         self._alerts = data.get("alerts", {})
         self._card_version = data.get("card_version")
+        self._label_id = data.get("label_id")
 
     @property
     def card_version(self) -> str | None:
@@ -52,6 +54,17 @@ class AlertStore:
     def set_card_version(self, version: str) -> None:
         """Remember the card version the user was told to refresh for."""
         self._card_version = version
+        self._async_schedule_save()
+
+    @property
+    def label_id(self) -> str | None:
+        """Return the ID of the alerts label, once it has been created."""
+        return self._label_id
+
+    @callback
+    def set_label_id(self, label_id: str) -> None:
+        """Remember the alerts label, so it's created only once."""
+        self._label_id = label_id
         self._async_schedule_save()
 
     @callback
@@ -86,4 +99,8 @@ class AlertStore:
 
     @callback
     def _data(self) -> dict[str, Any]:
-        return {"alerts": self._alerts, "card_version": self._card_version}
+        return {
+            "alerts": self._alerts,
+            "card_version": self._card_version,
+            "label_id": self._label_id,
+        }

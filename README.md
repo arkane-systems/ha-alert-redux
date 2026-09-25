@@ -3,7 +3,7 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.3.0). Manual, state, and template alerts work,
+> **Status:** early development (0.3.1). Manual, state, and template alerts work,
 > and the card shows and acknowledges them. Other condition kinds, event alerts, and
 > notifications arrive in later releases; see the
 > [phase plan](docs/SPEC.md#20-phase-plan). The design is in [docs/SPEC.md](docs/SPEC.md).
@@ -128,6 +128,17 @@ user). `alert_redux_ended` also carries a `reason` (`resolved`, `dismissed`, or
 `no_data`), and `alert_redux_no_data` the `missing_inputs`.
 
 Alert state is saved as it changes and restored after a restart.
+
+### The Alert Redux label
+
+Every alert gets the label **Alert Redux** when it's created (alerts that existed
+before 0.3.1 get it on upgrade). To show all your alerts' history in an Activity
+(logbook) card, including alerts you add later, choose that label as the card's
+target. If you remove the label from an alert, it isn't put back; if you delete the
+label, it isn't recreated.
+
+The dots beside alert entries in an Activity card are always grey: Home Assistant's
+frontend only colours those for its own built-in domains.
 
 ## Lovelace card
 

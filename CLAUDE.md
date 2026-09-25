@@ -11,7 +11,8 @@ install: the card bundle ships inside the integration package and the integratio
 and registers it itself.
 
 Phases 1 (manual alerts) and 2 (state and template condition alerts, no-data
-handling) and 3 (the main card, with messages rendered for it) are implemented.
+handling) and 3 (the main card, with messages rendered for it) are implemented, plus
+0.3.1 (the Alert Redux label, spec §11.5).
 
 ## Specification
 
@@ -49,7 +50,12 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     notifications from phase 4) and `MessageTracker`, which renders the on and display
     messages and re-renders them as the entities they read change.
   - `store.py` — `AlertStore`, the single persistent `Store` (no `RestoreEntity`);
-    also remembers the card version the user was last told to refresh for.
+    also remembers the card version the user was last told to refresh for, and the
+    alerts label's ID.
+  - `labels.py` — the "Alert Redux" label: created once and applied to existing
+    alerts, then applied to each new alert; never forced back if removed.
+    **Don't give alert entities a device**: since HA 2026.4 the device name is
+    prefixed to their names and entity IDs (spec §11.5).
   - `config_flow.py` — single-instance config flow (`single_config_entry` in the
     manifest makes HA enforce the one-instance rule), the options flow (global
     defaults), and the alert subentry flow (a menu of kinds, then a form per kind).

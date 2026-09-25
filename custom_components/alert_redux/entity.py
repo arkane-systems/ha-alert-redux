@@ -64,6 +64,7 @@ from .const import (
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
     CONF_USER_DISMISSABLE,
+    DATA_LABEL,
     DATA_STARTUP_UNTIL,
     DEFAULT_PRIORITY_ICONS,
     DOMAIN,
@@ -77,6 +78,7 @@ from .const import (
     EndReason,
     Priority,
 )
+from .labels import async_apply_label
 from .messages import Messages, MessageTracker, message_context
 from .model import AlertRuntime, Change, Settings, Timing, Transition, to_timedelta
 from .sources import AndSource, Source, StateSource, TemplateSource
@@ -167,7 +169,7 @@ class AlertEntity(Entity):
         return attributes
 
     async def async_added_to_hass(self) -> None:
-        """Restore the persisted state, or announce a new alert."""
+        """Restore the persisted state, or label and announce a new alert."""
         assert self.unique_id is not None
         record = self._store.get_alert(self.unique_id)
         if record is not None:
@@ -175,6 +177,8 @@ class AlertEntity(Entity):
         self._async_restored()
         self._persist()
         if record is None:
+            if (label_id := self.hass.data[DOMAIN].get(DATA_LABEL)) is not None:
+                async_apply_label(self.hass, self.entity_id, label_id)
             self._fire_event(EVENT_CREATED, None)
 
     async def async_will_remove_from_hass(self) -> None:
