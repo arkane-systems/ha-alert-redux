@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -87,6 +88,8 @@ from .const import (
 from .model import Settings, format_schedule, parse_schedule
 from .triggers import async_validate_triggers, is_storable
 
+_LOGGER = logging.getLogger(__name__)
+
 # notify actions that aren't legacy notifiers: offered through the other member kinds.
 _NOT_LEGACY_NOTIFIERS = frozenset({"send_message", "persistent_notification"})
 
@@ -141,18 +144,20 @@ class AlertReduxOptionsFlow(OptionsFlow):
             except ValueError:
                 errors["base"] = "invalid_schedule"
             else:
-                return self.async_create_entry(
-                    data={
-                        CONF_NO_DATA_GRACE: user_input[CONF_NO_DATA_GRACE],
-                        CONF_STARTUP_DELAY: user_input[CONF_STARTUP_DELAY],
-                        CONF_DEFAULT_GROUPS: user_input.get(CONF_DEFAULT_GROUPS, []),
-                        CONF_DEFAULT_REMINDER_SCHEDULE: list(schedule),
-                        CONF_FALLBACK_GROUP: user_input.get(CONF_FALLBACK_GROUP),
-                        CONF_RETRY_TIMEOUT: user_input[CONF_RETRY_TIMEOUT],
-                        CONF_EVENT_DURATIONS: user_input.get(CONF_EVENT_DURATIONS)
-                        or _event_durations(settings),
-                    }
-                )
+                # DIAGNOSTIC (temporary): what the options form received.
+                _LOGGER.warning("DIAGNOSTIC options input: %r", user_input)
+                options = {
+                    CONF_NO_DATA_GRACE: user_input[CONF_NO_DATA_GRACE],
+                    CONF_STARTUP_DELAY: user_input[CONF_STARTUP_DELAY],
+                    CONF_DEFAULT_GROUPS: user_input.get(CONF_DEFAULT_GROUPS, []),
+                    CONF_DEFAULT_REMINDER_SCHEDULE: list(schedule),
+                    CONF_FALLBACK_GROUP: user_input.get(CONF_FALLBACK_GROUP),
+                    CONF_RETRY_TIMEOUT: user_input[CONF_RETRY_TIMEOUT],
+                    CONF_EVENT_DURATIONS: user_input.get(CONF_EVENT_DURATIONS)
+                    or _event_durations(settings),
+                }
+                _LOGGER.warning("DIAGNOSTIC options returned: %r", options)
+                return self.async_create_entry(data=options)
 
         defaults = user_input or {
             CONF_NO_DATA_GRACE: _duration_dict(settings.no_data_grace),
