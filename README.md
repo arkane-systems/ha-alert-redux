@@ -3,9 +3,9 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.2.0). Manual, state, and template alerts work.
-> Other condition kinds, event alerts, notifications, and the real card arrive in
-> later releases; see the
+> **Status:** early development (0.3.0). Manual, state, and template alerts work,
+> and the card shows and acknowledges them. Other condition kinds, event alerts, and
+> notifications arrive in later releases; see the
 > [phase plan](docs/SPEC.md#20-phase-plan). The design is in [docs/SPEC.md](docs/SPEC.md).
 
 ## Installation
@@ -42,6 +42,17 @@ it's about), and so on.
 To add an alert, go to **Settings → Devices & Services → Alert Redux → Add alert** and
 choose its kind. Every alert has a name (which also sets its entity ID), a priority,
 and optionally an icon, and can be made unacknowledgeable.
+
+Every alert can also have an **on message** and a **card message**, both templates.
+The card shows the card message if there is one, and otherwise the on message; from
+a later release, the on message is also what's sent when the alert fires. Leave
+both empty for the default, "{{ name }} is firing." That's deliberately generic, so
+give real alerts a specific message. Templates can use `name`, `subject_entity_name`
+(the subject entity's name, or else the alert's), `subject_entity_id`, `entity_id`,
+`priority`, `fire_count`, `fire_data` (manual alerts), and entity states, e.g.
+`Server room is {{ states('sensor.server_room') }} °C.` While an alert is firing,
+the rendered messages are in its `message` and `display_message` attributes, and
+they update as the entities they read change.
 
 ### Manual alerts
 
@@ -125,12 +136,37 @@ install and no need to add a dashboard resource by hand. When the integration is
 up, it serves the card and registers it as a dashboard resource automatically. (On
 YAML-mode dashboards, it is loaded app-wide instead.)
 
-Add it to a dashboard as a **Custom: Alert Redux** card, or in YAML:
+Add it to a dashboard as **Alert Redux** from the card picker, or in YAML:
 
 ```yaml
 type: custom:alert-redux-card
-title: Alerts
+title: Alerts # optional
 ```
+
+It shows one box per firing alert, most important first: by priority, then
+unacknowledged before acknowledged, then newest first. Each is coloured by
+priority. Emergency and Critical alerts glow (an unacknowledged Emergency pulses),
+and Warning alerts have caution stripes; acknowledging an alert tones this down.
+Each box shows the alert's icon, name, how long it's been firing, and its message,
+with buttons to acknowledge it (or remove the acknowledgement) and, for manual
+alerts set as dismissable from the card, to dismiss it. Click the icon or name for
+the alert's details.
+
+Alerts that have no data are listed in their own section at the bottom, with the
+inputs they're missing. When nothing is firing, the card says so.
+
+The priority colours can be changed from a theme, with `alert-redux-emergency-color`,
+`alert-redux-critical-color`, `alert-redux-warning-color`, `alert-redux-notice-color`,
+and `alert-redux-informational-color`.
+
+### After installing or upgrading
+
+Browsers load dashboard resources only when the page loads, so a newly installed or
+upgraded card isn't used until you refresh the page. Until then, a dashboard may show
+"Custom element not found", or the old card. Alert Redux raises a notification when
+a new card version needs a refresh, and a card that's older than the integration
+offers a **Reload** button. In the companion app, pull down to reload, or reset
+the frontend cache from the app's own settings.
 
 ## License
 

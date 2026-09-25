@@ -136,7 +136,7 @@ export class AlertReduxCard extends LitElement {
           ${this._serverVersion ? this._renderBanner(this._serverVersion) : nothing}
           ${firing.length
             ? firing.map((alert) => this._renderAlert(alert))
-            : html`<div class="empty">No alerts are firing</div>`}
+            : html`<div class="empty">No alerts are firing.</div>`}
           ${noData.length ? this._renderNoData(noData) : nothing}
         </div>
       </ha-card>

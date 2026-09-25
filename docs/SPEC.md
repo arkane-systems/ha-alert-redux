@@ -513,6 +513,16 @@ doesn't repeat it automatically. It can include the name deliberately through th
     (N1).
 - [Decided, F22] The card shows the **on** message by default. An optional separate
   **display** message can be set for the card.
+  - [Decided, phase 3] With neither message configured, the card shows the default
+    on message, generic as it is. The default is only a fallback, and seeing it on
+    the card is a reminder to configure something specific; hiding it would need a
+    special case for something that shouldn't come up.
+  - [Decided, phase 3] The card's messages are rendered by the integration, with
+    the on notification's context (`reason` is `on`, and `duration` is as at
+    firing), so the card shows the on message as it would be sent. They're rendered
+    only while the alert is firing, and re-rendered as the entities they read
+    change. A message that fails to render is logged, and falls back to the
+    default (the on message) or to none (the display message).
 
 ### 9.6 Reminders
 
@@ -689,6 +699,9 @@ built.
   are given in seconds. The state kind shows `source_entity` and `target_state`,
   and the template kind shows `template`. Condition alerts also show `condition`
   and the effective `no_data_grace`. Templates are kept out of the recorder.
+  [Decided, phase 3] The rendered messages are `message` (the on message) and
+  `display_message` (null unless one is configured). Both are null while the alert
+  isn't firing, and both are kept out of the recorder.
 - **Generator provenance:** `generated_by` (§12.3).
 
 Attributes that can grow large, or change constantly, should be kept out of the
@@ -897,6 +910,25 @@ To make sure it gets fixed:
   they look (glow strength, stripe angle and width, whether the glow pulses) is
   settled when the card is built (phase 3), keeping them legible on both light and
   dark themes. Acknowledged alerts should tone the effects down.
+
+  [Decided, phase 3] As built, and approved on the preview page:
+  - Each alert is a bordered box with a priority-coloured bar down its left edge,
+    a faint priority tint, and the icon in a tinted, ringed circle.
+  - **Emergency**: a strong glow that **pulses** while unacknowledged (it stays
+    still when reduced motion is set). **Critical**: a weaker, steady glow. Both
+    also have a priority-coloured border.
+  - **Warning**: the bar is wider and striped diagonally (-45°) in yellow and
+    near-black, 6 px each.
+  - **Acknowledged**: the glow drops to a faint halo, the bar or stripes fade to
+    about half strength, and the icon dims.
+  - The Acknowledge button uses the theme's primary colour rather than the
+    priority colour, which is hard to read on orange and yellow. Themes can
+    override the priority colours (`alert-redux-<priority>-color`).
+- [Decided, phase 3] Each alert's box also shows its priority and how long it's
+  been firing. A firing alert in its no-data grace period (§4.4) gets a "No data"
+  badge. Clicking the icon or name opens the entity's more-info dialog. Alerts of
+  the same priority and acknowledgement are ordered newest first.
+- [Decided, phase 3] The card's text is English for now.
 - **Icon** [Decided]: a priority-coloured warning triangle with a circling arrow, on a
   deep indigo (`#26305A`) tile. Master SVG: `assets/alert-redux-icon.svg`.
 
@@ -1131,6 +1163,10 @@ Decisions with their reasons, in the order they were made.
 | Pending delays survive restarts | Restarting them from zero fails quiet [§15.1]. |
 | `_ended` carries a reason | Done messages must tell a resolved alert from one that lost its data (and, later, one that was disabled) [§11.3]. |
 | Subentry changes applied in place, not by reloading the entry | A reload made every alert briefly `unavailable`, and would push condition alerts through `no_data` [§20]. |
+| The card shows the default on message when none is configured | The default is a fallback; seeing it is a reminder to write a real message, and hiding it would special-case something that shouldn't happen [§9.5]. |
+| Card messages rendered by the integration, with the on notification's context | One template engine, and the card shows what the notification says [§9.5]. |
+| Browser refresh: a notification per new card version, plus a reload banner in the card | Resources load once per page; nothing server-side can reload a browser [§20]. |
+| An unacknowledged Emergency alert's glow pulses | The one level that should catch the eye from across the room; acknowledging it stops [§13.1]. |
 
 ## 20. Phase plan
 
@@ -1212,6 +1248,17 @@ otherwise lets `delay_off` run from the edit.
 
 *Done when* the card shows the alerts from phases 1–2 correctly, and acknowledging and
 dismissing from the card works.
+
+[Phase 3 as built] Every alert kind gets optional **on message** and **card
+message** (display message) templates; the integration renders them for the card
+(§9.5, §11.1). The on message is the one phase 4 sends. For the browser refresh:
+the frontend loads dashboard resources once per page load and never reloads them,
+so the integration can't force a refresh. Instead, it raises a persistent
+notification the first time it serves a new card version. The card also asks the
+integration for its version (the `alert_redux/info` websocket command), and shows a
+**Reload** banner if the two differ. The banner works only from 0.3.0 on, since
+older cards don't check. The card's styling was settled on a preview page
+(`frontend/dev/preview.html`), which runs the card against a mock `hass`.
 
 ### Phase 4 — Notifications I (0.4.0)
 

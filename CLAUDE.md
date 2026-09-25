@@ -11,7 +11,7 @@ install: the card bundle ships inside the integration package and the integratio
 and registers it itself.
 
 Phases 1 (manual alerts) and 2 (state and template condition alerts, no-data
-handling) are implemented; the card is still a placeholder until phase 3.
+handling) and 3 (the main card, with messages rendered for it) are implemented.
 
 ## Specification
 
@@ -39,13 +39,17 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     with `config_subentry_id` so HA removes it with the subentry, and keeps the
     add-entities callback for alerts added later.
   - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
-    persistence) and `ConditionAlertEntity` (state/template kinds: watches a source,
+    persistence, and the rendered messages while firing) and `ConditionAlertEntity` (state/template kinds: watches a source,
     runs the delays and no-data grace period on one timer).
   - `model.py` — `AlertRuntime`, the HA-free state machine (including condition
     evaluation, `evaluate()`), its serialization, and the global `Settings`.
   - `sources.py` — condition inputs reporting true/false/no data: `StateSource`,
     `TemplateSource`, and `AndSource` for the extra condition.
-  - `store.py` — `AlertStore`, the single persistent `Store` (no `RestoreEntity`).
+  - `messages.py` — the message template context (`message_context`, shared with
+    notifications from phase 4) and `MessageTracker`, which renders the on and display
+    messages and re-renders them as the entities they read change.
+  - `store.py` — `AlertStore`, the single persistent `Store` (no `RestoreEntity`);
+    also remembers the card version the user was last told to refresh for.
   - `config_flow.py` — single-instance config flow (`single_config_entry` in the
     manifest makes HA enforce the one-instance rule), the options flow (global
     defaults), and the alert subentry flow (a menu of kinds, then a form per kind).
@@ -53,13 +57,22 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `frontend.py` — serves `frontend/` via a static path and registers the card as a
     storage-mode Lovelace resource with a `?v=<manifest version>` cache-buster, updating
     an existing resource in place on upgrade; falls back to `add_extra_js_url` when the
-    resource collection isn't available (YAML-mode dashboards).
+    resource collection isn't available (YAML-mode dashboards). Also the
+    `alert_redux/info` websocket command (the integration version, which the card
+    compares with its own), and the "refresh your browser" notification, raised once
+    per card version.
   - `frontend/alert-redux-card.js` — **build output, do not edit by hand.**
   - `strings.json` / `translations/en.json` — keep in sync manually; `en.json` is
     `strings.json` with `[%key:...%]` references resolved to literal text.
   - `brand/icon.png`, `brand/icon@2x.png` — integration icon (256 and 512 px),
     rendered from `assets/alert-redux-icon.svg`.
 - **`frontend/`** — card source (TypeScript + Lit), bundled with esbuild.
+  - `src/alert-redux-card.ts` — the main card element; `alerts.ts` (reading, sorting,
+    and classifying alert entities), `format.ts`, `styles.ts`, `types.ts`.
+  - `dev/preview.html` + `dev/preview.ts` — the card against a mock `hass`, in light
+    and dark themes, with stub `ha-card`/`ha-icon`. `npm run preview` builds it into
+    `dev/dist/` (gitignored); serve `frontend/dev/` over HTTP and open
+    `preview.html` (`?empty` and `?stale` preset its toggles). Not shipped.
 - **`assets/`** — the icon's SVG master and the 32 px README header icon.
 - **`tests/`** — smoke tests using `pytest-homeassistant-custom-component`.
 
