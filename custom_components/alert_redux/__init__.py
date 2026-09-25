@@ -25,7 +25,9 @@ from .const import (
     DATA_ADD_ENTITIES,
     DATA_COMPONENT,
     DATA_ENTITIES,
+    DATA_GROUPS,
     DATA_LABEL,
+    DATA_NOTIFIER,
     DATA_OPTIONS,
     DATA_SETTINGS,
     DATA_STARTUP_UNTIL,
@@ -38,11 +40,14 @@ from .const import (
     SERVICE_FIRE,
     SERVICE_UNACK,
     SUBENTRY_ALERT,
+    SUBENTRY_NOTIFIER_GROUP,
 )
 from .entity import AlertEntity, create_alert_entity
 from .frontend import async_register_frontend, async_setup_websocket
 from .labels import async_setup_label
 from .model import AlertRuntime, Settings
+from .notifier import GroupConfig, Notifier
+from .issues import async_check_default_groups
 from .store import AlertStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -85,6 +90,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _async_forget_deleted_alerts(hass, entry, store)
     data[DATA_LABEL] = async_setup_label(hass, store)
+
+    notifier = data[DATA_NOTIFIER] = Notifier(hass)
+    groups = data[DATA_GROUPS] = _group_subentries(entry)
+    notifier.async_set_groups(_group_configs(groups))
+    async_check_default_groups(hass, entry, settings)
 
     component: EntityComponent[AlertEntity] = data[DATA_COMPONENT]
     if not await component.async_setup_entry(entry):
@@ -131,11 +141,24 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
         if new[subentry_id] != old[subentry_id] and subentry_id in entities:
             entities[subentry_id].async_update_config(entry.subentries[subentry_id])
 
+    groups = _group_subentries(entry)
+    groups_changed = groups != data[DATA_GROUPS]
+    if groups_changed:
+        data[DATA_GROUPS] = groups
+        data[DATA_NOTIFIER].async_set_groups(_group_configs(groups))
+
     if dict(entry.options) != data[DATA_OPTIONS]:
         data[DATA_OPTIONS] = dict(entry.options)
         data[DATA_SETTINGS].update(Settings.from_options(entry.options))
         for entity in entities.values():
             entity.async_settings_changed()
+    elif groups_changed:
+        # Alerts show their groups' names.
+        for entity in entities.values():
+            if entity.hass is not None:
+                entity.async_write_ha_state()
+
+    async_check_default_groups(hass, entry, data[DATA_SETTINGS])
 
 
 def _alert_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]]]:
@@ -145,6 +168,24 @@ def _alert_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]
         for subentry_id, subentry in entry.subentries.items()
         if subentry.subentry_type == SUBENTRY_ALERT
     }
+
+
+def _group_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]]]:
+    """Return each notifier group subentry's name and definition."""
+    return {
+        subentry_id: (subentry.title, dict(subentry.data))
+        for subentry_id, subentry in entry.subentries.items()
+        if subentry.subentry_type == SUBENTRY_NOTIFIER_GROUP
+    }
+
+
+def _group_configs(
+    groups: dict[str, tuple[str, dict[str, Any]]],
+) -> list[GroupConfig]:
+    return [
+        GroupConfig.from_dict(group_id, name, definition)
+        for group_id, (name, definition) in groups.items()
+    ]
 
 
 def _async_forget_deleted_alerts(

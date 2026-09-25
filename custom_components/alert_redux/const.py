@@ -24,6 +24,8 @@ DATA_SUBENTRIES = "subentries"
 DATA_OPTIONS = "options"
 DATA_STARTUP_UNTIL = "startup_until"
 DATA_LABEL = "label"
+DATA_NOTIFIER = "notifier"
+DATA_GROUPS = "groups"
 
 # The label applied to every alert (spec §11.5).
 ALERTS_LABEL_NAME = "Alert Redux"
@@ -91,6 +93,7 @@ class EndReason(StrEnum):
 
 # Config subentry types.
 SUBENTRY_ALERT = "alert"
+SUBENTRY_NOTIFIER_GROUP = "notifier_group"
 
 # Alert subentry data keys.
 CONF_KIND = "kind"
@@ -108,14 +111,44 @@ CONF_DELAY_OFF = "delay_off"
 CONF_NO_DATA_GRACE = "no_data_grace"
 CONF_MESSAGE = "message"
 CONF_DISPLAY_MESSAGE = "display_message"
+CONF_REMINDER_MESSAGE = "reminder_message"
+CONF_DONE_MESSAGE = "done_message"
+# Absent: use the default groups; a list (possibly empty): exactly those groups.
+CONF_NOTIFIER_GROUPS = "notifier_groups"
+# Absent: use the default schedule; a list (possibly empty): minutes between reminders.
+CONF_REMINDER_SCHEDULE = "reminder_schedule"
+# Form-only fields: the "use the default" checkboxes, and the notifications section.
+CONF_USE_DEFAULT_GROUPS = "use_default_groups"
+CONF_USE_DEFAULT_REMINDERS = "use_default_reminders"
+SECTION_NOTIFICATIONS = "notifications"
+
+# Notifier group subentry data keys (the notifier module's own keys).
+CONF_LOUD = "loud"
+CONF_ENTITIES = "entities"
+CONF_ACTIONS = "actions"
+CONF_PERSISTENT = "persistent"
+CONF_ACTION = "action"
+CONF_DATA = "data"
+CONF_TARGET = "target"
 
 # Messages (spec §9.5).
 DEFAULT_ON_MESSAGE = "{{ name }} is firing."
+DEFAULT_REMINDER_MESSAGE = "{{ name }} is still firing ({{ duration }})."
+DEFAULT_DONE_MESSAGE = "{{ name }} stopped firing after {{ duration }}."
+DEFAULT_DONE_NO_DATA_MESSAGE = (
+    "{{ name }} lost its data; stopped firing after {{ duration }}."
+)
 
 # Config entry options: the global defaults (spec §12.1).
 CONF_STARTUP_DELAY = "startup_delay"
 DEFAULT_NO_DATA_GRACE = timedelta(minutes=10)
 DEFAULT_STARTUP_DELAY = timedelta(0)
+CONF_DEFAULT_GROUPS = "default_groups"
+CONF_DEFAULT_REMINDER_SCHEDULE = "default_reminder_schedule"
+DEFAULT_REMINDER_SCHEDULE: tuple[float, ...] = (10, 20, 30, 60)
+
+# Repairs issues.
+ISSUE_DEFAULT_GROUPS_UNSET = "default_groups_unset"
 
 # Actions (spec §16).
 SERVICE_FIRE = "fire"
@@ -169,3 +202,6 @@ ATTR_DELAY_OFF_UNTIL = "delay_off_until"
 ATTR_NO_DATA_GRACE_UNTIL = "no_data_grace_until"
 ATTR_MESSAGE = "message"
 ATTR_DISPLAY_MESSAGE = "display_message"
+ATTR_NOTIFIER_GROUPS = "notifier_groups"
+ATTR_REMINDER_SCHEDULE = "reminder_schedule"
+ATTR_NEXT_REMINDER = "next_reminder"

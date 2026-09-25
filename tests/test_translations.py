@@ -28,3 +28,40 @@ def test_braces_are_placeholders(name: str) -> None:
     for path, text in _strings(data):
         remainder = PLACEHOLDER.sub("", text)
         assert "{" not in remainder and "}" not in remainder, f"{name}: {path}"
+
+
+# Home Assistant's common strings, as they're resolved in translations/en.json.
+COMMON = {
+    "common::config_flow::abort::single_instance_allowed": (
+        "Already configured. Only a single configuration possible."
+    ),
+    "common::config_flow::abort::reconfigure_successful": (
+        "Re-configuration was successful"
+    ),
+}
+REFERENCE = re.compile(r"\[%key:([a-z_:]+)%\]")
+
+
+def resolve(strings: dict) -> dict:
+    """Return strings.json with its references resolved, as en.json should be."""
+
+    def lookup(key: str) -> str:
+        if key in COMMON:
+            return COMMON[key]
+        value = strings
+        for part in key.removeprefix("component::alert_redux::").split("::"):
+            value = value[part]
+        return REFERENCE.sub(lambda match: lookup(match.group(1)), value)
+
+    def walk(value):
+        if isinstance(value, dict):
+            return {key: walk(item) for key, item in value.items()}
+        return REFERENCE.sub(lambda match: lookup(match.group(1)), value)
+
+    return walk(strings)
+
+
+def test_en_matches_strings() -> None:
+    strings = json.loads((COMPONENT / "strings.json").read_text())
+    en = json.loads((COMPONENT / "translations" / "en.json").read_text())
+    assert en == resolve(strings)

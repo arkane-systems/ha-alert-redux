@@ -35,9 +35,7 @@
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
             "user_dismissable": "Dismissable from the card",
-            "subject_entity": "Subject entity",
-            "message": "On message",
-            "display_message": "Card message"
+            "subject_entity": "Subject entity"
           },
           "data_description": {
             "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
@@ -45,9 +43,33 @@
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
-            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
-            "message": "Optional. The message shown on the card and, from a later release, sent when the alert starts firing. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
-            "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template."
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
           }
         },
         "state": {
@@ -64,8 +86,6 @@
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
             "subject_entity": "Subject entity",
-            "message": "On message",
-            "display_message": "Card message",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -79,9 +99,33 @@
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
-            "message": "Optional. The message shown on the card and, from a later release, sent when the alert starts firing. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
-            "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
           }
         },
         "template": {
@@ -97,8 +141,6 @@
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
             "subject_entity": "Subject entity",
-            "message": "On message",
-            "display_message": "Card message",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -111,9 +153,33 @@
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
-            "message": "Optional. The message shown on the card and, from a later release, sent when the alert starts firing. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
-            "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
           }
         },
         "reconfigure_manual": {
@@ -124,9 +190,7 @@
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
             "user_dismissable": "Dismissable from the card",
-            "subject_entity": "Subject entity",
-            "message": "On message",
-            "display_message": "Card message"
+            "subject_entity": "Subject entity"
           },
           "data_description": {
             "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
@@ -134,9 +198,33 @@
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
-            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
-            "message": "Optional. The message shown on the card and, from a later release, sent when the alert starts firing. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
-            "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template."
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
           }
         },
         "reconfigure_state": {
@@ -152,8 +240,6 @@
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
             "subject_entity": "Subject entity",
-            "message": "On message",
-            "display_message": "Card message",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -167,9 +253,33 @@
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
-            "message": "Optional. The message shown on the card and, from a later release, sent when the alert starts firing. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
-            "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
           }
         },
         "reconfigure_template": {
@@ -184,8 +294,6 @@
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
             "subject_entity": "Subject entity",
-            "message": "On message",
-            "display_message": "Card message",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -198,14 +306,91 @@
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
-            "message": "Optional. The message shown on the card and, from a later release, sent when the alert starts firing. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
-            "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            }
           }
         }
       },
       "error": {
-        "name_exists": "An alert with this name already exists."
+        "name_exists": "An alert with this name already exists.",
+        "invalid_schedule": "A reminder schedule must be a list of positive numbers of minutes, e.g. `10, 20, 30, 60`."
+      },
+      "abort": {
+        "reconfigure_successful": "Re-configuration was successful"
+      }
+    },
+    "notifier_group": {
+      "entry_type": "Notifier group",
+      "initiate_flow": {
+        "user": "Add notifier group"
+      },
+      "step": {
+        "user": {
+          "title": "Add a notifier group",
+          "description": "A notifier group is a set of notifiers that alerts send to. Add at least one member.",
+          "data": {
+            "name": "Name",
+            "loud": "Loud",
+            "entities": "Notify entities",
+            "actions": "Legacy notify actions",
+            "persistent": "Persistent notification"
+          },
+          "data_description": {
+            "name": "How alerts and the options refer to this group.",
+            "loud": "Turn on for notifiers that make a noise, such as speaker announcements. Quiet hours (a later release) will apply to loud groups only.",
+            "entities": "`notify` entities. They receive the message, and the title if they can show one.",
+            "actions": "Legacy `notify.*` actions, such as `notify.mobile_app_phone`. These can take extra `data` (e.g. a mobile notification channel; its values can be templates using the message variables) and a `target`. You can enter an action that isn't loaded yet.",
+            "persistent": "Also create a Home Assistant persistent notification."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit notifier group",
+          "data": {
+            "name": "Name",
+            "loud": "Loud",
+            "entities": "Notify entities",
+            "actions": "Legacy notify actions",
+            "persistent": "Persistent notification"
+          },
+          "data_description": {
+            "name": "How alerts and the options refer to this group.",
+            "loud": "Turn on for notifiers that make a noise, such as speaker announcements. Quiet hours (a later release) will apply to loud groups only.",
+            "entities": "`notify` entities. They receive the message, and the title if they can show one.",
+            "actions": "Legacy `notify.*` actions, such as `notify.mobile_app_phone`. These can take extra `data` (e.g. a mobile notification channel; its values can be templates using the message variables) and a `target`. You can enter an action that isn't loaded yet.",
+            "persistent": "Also create a Home Assistant persistent notification."
+          }
+        }
+      },
+      "error": {
+        "name_exists": "A notifier group with this name already exists.",
+        "no_members": "Add at least one member: a notify entity, a legacy action, or the persistent notification.",
+        "action_missing": "Each legacy notify action needs its action set.",
+        "invalid_data": "A legacy action's data must be a mapping of keys to values."
       },
       "abort": {
         "reconfigure_successful": "Re-configuration was successful"
@@ -284,13 +469,26 @@
         "title": "Alert Redux defaults",
         "data": {
           "no_data_grace": "No-data grace period",
-          "startup_delay": "Startup delay"
+          "startup_delay": "Startup delay",
+          "default_groups": "Default notifier groups",
+          "default_reminder_schedule": "Default reminder schedule"
         },
         "data_description": {
           "no_data_grace": "How long a firing alert keeps firing while its inputs have no data, unless the alert sets its own.",
-          "startup_delay": "When Home Assistant starts, wait this long before evaluating condition alerts. Zero to evaluate straight away."
+          "startup_delay": "When Home Assistant starts, wait this long before evaluating condition alerts. Zero to evaluate straight away.",
+          "default_groups": "The groups alerts send to unless they choose their own. With none set, those alerts send to a persistent notification instead.",
+          "default_reminder_schedule": "Minutes between reminders while an alert is firing and unacknowledged, unless it sets its own, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders."
         }
       }
+    },
+    "error": {
+      "invalid_schedule": "A reminder schedule must be a list of positive numbers of minutes, e.g. `10, 20, 30, 60`."
+    }
+  },
+  "issues": {
+    "default_groups_unset": {
+      "title": "No default notifier groups are set",
+      "description": "{count} alerts use the default notifier groups, but none are set, so their notifications go to a persistent notification instead: {alerts}.\n\nTo fix this, add a notifier group, then choose it as a default in the Alert Redux integration's options (Settings > Devices & services > Alert Redux > Configure). Alternatively, give each alert its own notifier groups."
     }
   }
 }

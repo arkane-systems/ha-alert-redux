@@ -9,7 +9,11 @@ import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.alert_redux.const import DOMAIN, SUBENTRY_ALERT
+from custom_components.alert_redux.const import (
+    DOMAIN,
+    SUBENTRY_ALERT,
+    SUBENTRY_NOTIFIER_GROUP,
+)
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
@@ -94,3 +98,29 @@ def setup_alerts(hass: HomeAssistant) -> SetupAlerts:
         return entry
 
     return _setup
+
+
+def group_subentry(
+    title: str,
+    subentry_id: str | None = None,
+    *,
+    entities: list[str] | None = None,
+    actions: list[dict[str, Any]] | None = None,
+    persistent: bool = False,
+    loud: bool = False,
+) -> dict[str, Any]:
+    """Return subentry data for a notifier group."""
+    subentry: dict[str, Any] = {
+        "title": title,
+        "subentry_type": SUBENTRY_NOTIFIER_GROUP,
+        "unique_id": None,
+        "data": {
+            "loud": loud,
+            "entities": entities or [],
+            "actions": actions or [],
+            "persistent": persistent,
+        },
+    }
+    if subentry_id is not None:
+        subentry["subentry_id"] = subentry_id
+    return subentry
