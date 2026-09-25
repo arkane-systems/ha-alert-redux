@@ -4,8 +4,18 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from custom_components.alert_redux.const import AlertState, EndReason
-from custom_components.alert_redux.model import AlertRuntime, Change, Timing
+from custom_components.alert_redux.model import (
+    AlertRuntime,
+    Change,
+    Timing,
+    format_schedule,
+    next_reminder_slot,
+    parse_schedule,
+    reminder_slots,
+)
 
 T0 = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
@@ -283,3 +293,55 @@ def test_awaiting_data_keeps_firing_and_grace_starts() -> None:
     assert _changes(changes) == [
         (Change.ENDED, AlertState.ACTIVE, AlertState.NO_DATA)
     ]
+
+
+def test_reminder_slots_repeat_the_last_gap() -> None:
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    slots = reminder_slots(start, [10, 20, 30, 60])
+    minutes = [int((next(slots) - start).total_seconds() // 60) for _ in range(6)]
+    assert minutes == [10, 30, 60, 120, 180, 240]
+    assert list(reminder_slots(start, [])) == []
+
+
+@pytest.mark.parametrize(
+    ("after", "expected"),
+    [(0, 10), (9, 10), (10, 30), (59, 60), (60, 120), (121, 180), (1000, 1020)],
+)
+def test_next_reminder_slot(after: int, expected: int) -> None:
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    slot = next_reminder_slot(
+        start, [10, 20, 30, 60], start + timedelta(minutes=after)
+    )
+    assert slot == start + timedelta(minutes=expected)
+    assert next_reminder_slot(start, [], start) is None
+
+
+def test_parse_schedule() -> None:
+    assert parse_schedule("10, 20, 30,60") == (10, 20, 30, 60)
+    assert parse_schedule(" 1.5 ; 2") == (1.5, 2)
+    assert parse_schedule("  ") == ()
+    assert format_schedule((10, 1.5)) == "10, 1.5"
+    for bad in ("0", "-5", "ten"):
+        with pytest.raises(ValueError):
+            parse_schedule(bad)
+
+
+def test_plan_reminder_only_while_active() -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    runtime = AlertRuntime()
+    runtime.plan_reminder([10], now)
+    assert runtime.next_reminder is None
+    runtime.fire(now)
+    runtime.plan_reminder([10], now)
+    assert runtime.next_reminder == now + timedelta(minutes=10)
+    runtime.ack(now, None)
+    assert runtime.next_reminder is None
+    runtime.unack(now + timedelta(minutes=25), None)
+    runtime.plan_reminder([10], now + timedelta(minutes=25))
+    assert runtime.next_reminder == now + timedelta(minutes=30)
+    # It survives serialization, and ending the firing clears it.
+    restored = AlertRuntime.from_dict(runtime.to_dict())
+    assert restored.next_reminder == runtime.next_reminder
+    transition = runtime.end(now + timedelta(minutes=26), EndReason.RESOLVED)
+    assert runtime.next_reminder is None
+    assert transition is not None

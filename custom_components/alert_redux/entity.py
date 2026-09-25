@@ -36,12 +36,15 @@ from .const import (
     ATTR_MISSING_INPUTS,
     ATTR_NAME,
     ATTR_NEW_STATE,
+    ATTR_NEXT_REMINDER,
     ATTR_NO_DATA_GRACE,
     ATTR_NO_DATA_GRACE_UNTIL,
     ATTR_NO_DATA_SINCE,
+    ATTR_NOTIFIER_GROUPS,
     ATTR_OLD_STATE,
     ATTR_PRIORITY,
     ATTR_REASON,
+    ATTR_REMINDER_SCHEDULE,
     ATTR_SOURCE_ENTITY,
     ATTR_SUBJECT_ENTITY,
     ATTR_TARGET_STATE,
@@ -54,12 +57,16 @@ from .const import (
     CONF_DELAY_OFF,
     CONF_DELAY_ON,
     CONF_DISPLAY_MESSAGE,
+    CONF_DONE_MESSAGE,
     CONF_ENTITY_ID,
     CONF_ICON,
     CONF_KIND,
     CONF_MESSAGE,
     CONF_NO_DATA_GRACE,
+    CONF_NOTIFIER_GROUPS,
     CONF_PRIORITY,
+    CONF_REMINDER_MESSAGE,
+    CONF_REMINDER_SCHEDULE,
     CONF_SUBJECT_ENTITY,
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
@@ -75,12 +82,21 @@ from .const import (
     EVENT_NO_DATA,
     EVENT_UNACKED,
     AlertKind,
+    AlertState,
     EndReason,
     Priority,
 )
 from .labels import async_apply_label
 from .messages import Messages, MessageTracker, message_context
 from .model import AlertRuntime, Change, Settings, Timing, Transition, to_timedelta
+from .notifications import (
+    REASON_DONE,
+    REASON_ON,
+    REASON_REMINDER,
+    async_send_notification,
+    effective_groups,
+    group_names,
+)
 from .sources import AndSource, Source, StateSource, TemplateSource
 from .store import AlertStore
 
@@ -118,6 +134,8 @@ class AlertEntity(Entity):
         self._message_key: tuple[Any, ...] | None = None
         # Whether this alert has been given the alerts label (spec §11.5).
         self._labelled = False
+        self._unsub_reminder: CALLBACK_TYPE | None = None
+        self._reminder_at: datetime | None = None
         self._attr_unique_id = subentry.subentry_id
         self._configure(subentry)
 
@@ -130,6 +148,11 @@ class AlertEntity(Entity):
         self._explicit_subject: str | None = data.get(CONF_SUBJECT_ENTITY) or None
         self._message: str | None = data.get(CONF_MESSAGE) or None
         self._display_message: str | None = data.get(CONF_DISPLAY_MESSAGE) or None
+        self._reminder_message: str | None = data.get(CONF_REMINDER_MESSAGE) or None
+        self._done_message: str | None = data.get(CONF_DONE_MESSAGE) or None
+        # None means the defaults; a list, even an empty one, is the alert's own.
+        self._notifier_groups: list[str] | None = data.get(CONF_NOTIFIER_GROUPS)
+        self._own_schedule: list[float] | None = data.get(CONF_REMINDER_SCHEDULE)
         self._attr_name = subentry.title
         self._attr_icon = data.get(CONF_ICON) or DEFAULT_PRIORITY_ICONS[self._priority]
 
@@ -137,6 +160,13 @@ class AlertEntity(Entity):
     def subject_entity(self) -> str | None:
         """Return the entity the alert is about, if any (spec §9.5)."""
         return self._explicit_subject
+
+    @property
+    def _reminder_schedule(self) -> tuple[float, ...]:
+        """Return the reminder schedule: the alert's own, or else the default."""
+        if self._own_schedule is not None:
+            return tuple(self._own_schedule)
+        return self._settings.reminder_schedule
 
     @property
     def state(self) -> str:
@@ -164,6 +194,11 @@ class AlertEntity(Entity):
             ATTR_DISPLAY_MESSAGE: (
                 self._messages.display_message if self._messages else None
             ),
+            ATTR_NOTIFIER_GROUPS: group_names(
+                self.hass, effective_groups(self._settings, self._notifier_groups)
+            ),
+            ATTR_REMINDER_SCHEDULE: list(self._reminder_schedule),
+            ATTR_NEXT_REMINDER: runtime.next_reminder,
         }
         if self._kind is AlertKind.MANUAL:
             attributes[ATTR_USER_DISMISSABLE] = self._user_dismissable
@@ -187,13 +222,19 @@ class AlertEntity(Entity):
             if (label_id := self.hass.data[DOMAIN].get(DATA_LABEL)) is not None:
                 async_apply_label(self.hass, self.entity_id, label_id)
         self._async_restored()
+        if self._runtime.state is AlertState.ACTIVE and not self._runtime.next_reminder:
+            # E.g. an alert that was firing before reminders existed.
+            self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
+        # A reminder that fell due while Home Assistant was down is sent now.
+        self._async_update_reminder_timer()
         self._persist()
         if record is None:
             self._fire_event(EVENT_CREATED, None)
 
     async def async_will_remove_from_hass(self) -> None:
-        """Stop rendering the messages."""
+        """Stop rendering the messages, and the reminders."""
         self._async_stop_messages()
+        self._async_cancel_reminder_timer()
 
     @callback
     def async_write_ha_state(self) -> None:
@@ -232,20 +273,115 @@ class AlertEntity(Entity):
             self.hass,
             self._message,
             self._display_message,
-            message_context(
-                self.hass,
-                name=str(self.name),
-                entity_id=self.entity_id,
-                priority=self._priority,
-                subject_entity=self.subject_entity,
-                fire_count=runtime.fire_count,
-                fire_data=runtime.fire_data,
-                reason="on",
-            ),
+            self._message_context(REASON_ON),
             f"{self.entity_id} message",
             self._async_messages_updated,
         )
         self._messages = self._message_tracker.async_start()
+
+    def _message_context(
+        self,
+        reason: str,
+        *,
+        transition: Transition | None = None,
+        duration_seconds: float = 0,
+    ) -> dict[str, Any]:
+        """Return the message template variables, for a notification or the card.
+
+        An ending transition supplies the details of the firing that ended.
+        """
+        runtime = self._runtime
+        return message_context(
+            self.hass,
+            name=str(self.name),
+            entity_id=self.entity_id,
+            priority=self._priority,
+            subject_entity=self.subject_entity,
+            fire_count=transition.fire_count if transition else runtime.fire_count,
+            fire_data=transition.fire_data if transition else runtime.fire_data,
+            reason=reason,
+            duration_seconds=(
+                transition.duration_seconds or 0 if transition else duration_seconds
+            ),
+            end_reason=transition.reason if transition else None,
+        )
+
+    @callback
+    def _async_notify(
+        self, reason: str, template: str | None, variables: dict[str, Any]
+    ) -> None:
+        async_send_notification(
+            self.hass,
+            entity_id=self.entity_id,
+            title=str(self.name),
+            groups=effective_groups(self._settings, self._notifier_groups),
+            template=template,
+            variables=variables,
+        )
+
+    @callback
+    def _async_notify_on(self) -> None:
+        """Send the on notification of a new firing, or of firing again."""
+        self._async_notify(REASON_ON, self._message, self._message_context(REASON_ON))
+
+    @callback
+    def _async_notify_done(self, transition: Transition) -> None:
+        """Send the done notification of an ended firing (spec §9.7)."""
+        self._async_notify(
+            REASON_DONE,
+            self._done_message,
+            self._message_context(REASON_DONE, transition=transition),
+        )
+
+    @callback
+    def _async_update_reminder_timer(self) -> None:
+        """Set the reminder timer to the runtime's next reminder, if it changed."""
+        due = self._runtime.next_reminder
+        if due == self._reminder_at and (due is None or self._unsub_reminder):
+            return
+        self._async_cancel_reminder_timer()
+        if due is not None:
+            self._reminder_at = due
+            self._unsub_reminder = async_track_point_in_utc_time(
+                self.hass, self._async_reminder_due, due
+            )
+
+    @callback
+    def _async_cancel_reminder_timer(self) -> None:
+        if self._unsub_reminder is not None:
+            self._unsub_reminder()
+            self._unsub_reminder = None
+        self._reminder_at = None
+
+    @callback
+    def _async_reminder_due(self, now: datetime) -> None:
+        """Send a reminder, with the real firing duration, and plan the next one."""
+        self._unsub_reminder = None
+        self._reminder_at = None
+        runtime = self._runtime
+        if runtime.state is not AlertState.ACTIVE or runtime.next_reminder is None:
+            return
+        # The reminder is the alert's own doing, not the last user action's.
+        self._context = None
+        now = dt_util.utcnow()
+        duration = (
+            (now - runtime.firing_since).total_seconds() if runtime.firing_since else 0
+        )
+        self._async_notify(
+            REASON_REMINDER,
+            self._reminder_message,
+            self._message_context(REASON_REMINDER, duration_seconds=duration),
+        )
+        runtime.plan_reminder(self._reminder_schedule, now)
+        self._async_update_reminder_timer()
+        self.async_write_ha_state()
+        self._persist()
+
+    @callback
+    def _async_replan_reminder(self) -> None:
+        """Plan the next reminder afresh, e.g. after the schedule changed."""
+        self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
+        self._async_update_reminder_timer()
 
     @callback
     def _async_stop_messages(self) -> None:
@@ -268,22 +404,33 @@ class AlertEntity(Entity):
     def async_update_config(self, subentry: ConfigSubentry) -> None:
         """Apply an edited subentry in place, keeping the alert's state."""
         self._configure(subentry)
+        self._async_replan_reminder()
         self.async_write_ha_state()
         self._persist()
 
     @callback
     def async_settings_changed(self) -> None:
-        """React to a change in the global defaults."""
+        """React to a change in the global defaults: groups and reminders."""
+        self._async_replan_reminder()
+        self.async_write_ha_state()
+        self._persist()
 
     async def async_fire(self, data: dict[str, Any] | None = None) -> None:
         """Fire a manual alert, or fire it again if it is already firing."""
         self._require_manual()
-        transition = self._runtime.fire(dt_util.utcnow(), data)
+        now = dt_util.utcnow()
+        transition = self._runtime.fire(now, data)
+        if transition.fire_count == 1:
+            self._runtime.plan_reminder(self._reminder_schedule, now)
         self._apply(
             EVENT_FIRED,
             transition,
             {ATTR_FIRE_COUNT: transition.fire_count, ATTR_FIRE_DATA: data},
         )
+        # Firing again sends the on message again, unless it's been acknowledged:
+        # the acknowledgement is kept so that repeats don't nag (spec §4.2).
+        if transition.new_state is AlertState.ACTIVE:
+            self._async_notify_on()
 
     async def async_dismiss(self) -> None:
         """Dismiss a firing manual alert."""
@@ -294,6 +441,7 @@ class AlertEntity(Entity):
             _LOGGER.debug("%s: dismiss ignored; not firing", self.entity_id)
             return
         self._apply(EVENT_ENDED, transition, _ended_data(transition))
+        self._async_notify_done(transition)
 
     async def async_ack(self) -> None:
         """Acknowledge the alert."""
@@ -315,6 +463,8 @@ class AlertEntity(Entity):
         ) is None:
             _LOGGER.debug("%s: unack ignored; not acknowledged", self.entity_id)
             return
+        # Reminders resume on the firing's original schedule (spec §6.1, §6.2).
+        self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
         self._apply(EVENT_UNACKED, transition)
 
     @property
@@ -337,6 +487,7 @@ class AlertEntity(Entity):
         extra: dict[str, Any] | None = None,
     ) -> None:
         """Publish an applied transition: state, storage, and event."""
+        self._async_update_reminder_timer()
         self.async_write_ha_state()
         self._persist()
         self._fire_event(event_type, transition.old_state, extra)
@@ -496,8 +647,8 @@ class ConditionAlertEntity(AlertEntity):
     @callback
     def async_settings_changed(self) -> None:
         """Re-evaluate: the default grace period may have changed."""
+        super().async_settings_changed()
         self._async_evaluate()
-        self.async_write_ha_state()
 
     @callback
     def _async_start_source(self) -> None:
@@ -553,7 +704,10 @@ class ConditionAlertEntity(AlertEntity):
         self._context = None
         timing = self._timing
         before = self._runtime.to_dict()
-        changes = self._runtime.evaluate(*self._result, dt_util.utcnow(), timing)
+        now = dt_util.utcnow()
+        changes = self._runtime.evaluate(*self._result, now, timing)
+        if any(change is Change.FIRED for change, _ in changes):
+            self._runtime.plan_reminder(self._reminder_schedule, now)
 
         if self._unsub_timer is not None:
             self._unsub_timer()
@@ -564,6 +718,7 @@ class ConditionAlertEntity(AlertEntity):
             )
 
         if changes or self._runtime.to_dict() != before:
+            self._async_update_reminder_timer()
             self.async_write_ha_state()
             self._persist()
         for change, transition in changes:
@@ -573,10 +728,12 @@ class ConditionAlertEntity(AlertEntity):
                     transition.old_state,
                     {ATTR_FIRE_COUNT: transition.fire_count},
                 )
+                self._async_notify_on()
             elif change is Change.ENDED:
                 self._fire_event(
                     EVENT_ENDED, transition.old_state, _ended_data(transition)
                 )
+                self._async_notify_done(transition)
             else:
                 self._fire_event(
                     EVENT_NO_DATA,

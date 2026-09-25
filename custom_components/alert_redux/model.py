@@ -8,16 +8,19 @@ entity wraps it, adding configuration checks, timers, events, and persistence.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
 from .const import (
+    CONF_DEFAULT_GROUPS,
+    CONF_DEFAULT_REMINDER_SCHEDULE,
     CONF_NO_DATA_GRACE,
     CONF_STARTUP_DELAY,
     DEFAULT_NO_DATA_GRACE,
+    DEFAULT_REMINDER_SCHEDULE,
     DEFAULT_STARTUP_DELAY,
     AlertState,
     EndReason,
@@ -41,21 +44,85 @@ class Settings:
 
     no_data_grace: timedelta = DEFAULT_NO_DATA_GRACE
     startup_delay: timedelta = DEFAULT_STARTUP_DELAY
+    # Notifier group IDs; empty means none configured, so the fallback is used.
+    default_groups: tuple[str, ...] = ()
+    # Minutes between reminders (spec §9.6).
+    reminder_schedule: tuple[float, ...] = DEFAULT_REMINDER_SCHEDULE
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> Settings:
         """Read the settings from the entry's options, defaulting what's unset."""
         grace = to_timedelta(options.get(CONF_NO_DATA_GRACE))
         startup = to_timedelta(options.get(CONF_STARTUP_DELAY))
+        schedule = options.get(CONF_DEFAULT_REMINDER_SCHEDULE)
         return cls(
             no_data_grace=DEFAULT_NO_DATA_GRACE if grace is None else grace,
             startup_delay=DEFAULT_STARTUP_DELAY if startup is None else startup,
+            default_groups=tuple(options.get(CONF_DEFAULT_GROUPS, ())),
+            reminder_schedule=(
+                DEFAULT_REMINDER_SCHEDULE if schedule is None else tuple(schedule)
+            ),
         )
 
     def update(self, other: Settings) -> None:
         """Take another set of settings, in place: entities hold this object."""
-        self.no_data_grace = other.no_data_grace
-        self.startup_delay = other.startup_delay
+        for name in self.__dataclass_fields__:
+            setattr(self, name, getattr(other, name))
+
+
+def parse_schedule(text: str) -> tuple[float, ...]:
+    """Parse a reminder schedule typed as minutes, e.g. "10, 20, 30, 60".
+
+    Blank means no reminders. Raises ValueError unless every interval is a positive
+    number.
+    """
+    schedule = tuple(
+        float(item) for item in text.replace(";", ",").split(",") if item.strip()
+    )
+    if any(minutes <= 0 for minutes in schedule):
+        raise ValueError("reminder intervals must be positive")
+    return tuple(
+        int(minutes) if minutes.is_integer() else minutes for minutes in schedule
+    )
+
+
+def format_schedule(schedule: Sequence[float]) -> str:
+    """Return a reminder schedule as the text parse_schedule reads."""
+    return ", ".join(f"{minutes:g}" for minutes in schedule)
+
+
+def reminder_slots(
+    firing_since: datetime, schedule: Sequence[float]
+) -> Iterator[datetime]:
+    """Yield the reminder times of a firing (spec §9.6).
+
+    The gaps follow the schedule, and the last one repeats.
+    """
+    if not schedule:
+        return
+    slot = firing_since
+    for minutes in schedule:
+        slot += timedelta(minutes=minutes)
+        yield slot
+    while True:
+        slot += timedelta(minutes=schedule[-1])
+        yield slot
+
+
+def next_reminder_slot(
+    firing_since: datetime, schedule: Sequence[float], after: datetime
+) -> datetime | None:
+    """Return the first reminder slot of a firing that is later than after."""
+    if not schedule:
+        return None
+    total = timedelta(minutes=sum(schedule))
+    last = timedelta(minutes=schedule[-1])
+    start = firing_since
+    if after >= firing_since + total:
+        # Skip whole repeats of the last interval rather than stepping through them.
+        repeats = (after - firing_since - total) // last
+        start = firing_since + repeats * last
+    return next(slot for slot in reminder_slots(start, schedule) if slot > after)
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +135,8 @@ class Transition:
     # How long the firing lasted, and why it ended, for a transition that ends one.
     duration_seconds: float | None = None
     reason: EndReason | None = None
+    # The fire data of the firing that ended, for the done message.
+    fire_data: dict[str, Any] | None = None
 
 
 class Change(StrEnum):
@@ -107,6 +176,8 @@ class AlertRuntime:
     missing_inputs: list[str] = field(default_factory=list)
     delay_on_until: datetime | None = None
     delay_off_until: datetime | None = None
+    # When the next reminder is due, while firing and unacknowledged (spec §9.6).
+    next_reminder: datetime | None = None
     # Not persisted: set while a restored alert waits for its first data, so that
     # the inputs still loading don't cancel the delays it was restored with.
     awaiting_data: bool = False
@@ -146,6 +217,7 @@ class AlertRuntime:
             return None
         old = self.state
         fire_count = self.fire_count
+        fire_data = self.fire_data
         duration = (
             (now - self.firing_since).total_seconds() if self.firing_since else None
         )
@@ -154,14 +226,16 @@ class AlertRuntime:
         self.firing_since = None
         self.fire_count = 0
         self.fire_data = None
+        self.next_reminder = None
         self.last_ended = now
-        return Transition(old, self.state, fire_count, duration, reason)
+        return Transition(old, self.state, fire_count, duration, reason, fire_data)
 
     def ack(self, now: datetime, user_id: str | None) -> Transition | None:
         """Acknowledge an active alert."""
         if self.state is not AlertState.ACTIVE:
             return None
         self.acked = True
+        self.next_reminder = None
         self.last_acked = now
         self.last_acked_by = user_id
         return Transition(AlertState.ACTIVE, self.state, self.fire_count)
@@ -174,6 +248,17 @@ class AlertRuntime:
         self.last_unacked = now
         self.last_unacked_by = user_id
         return Transition(AlertState.ACK, self.state, self.fire_count)
+
+    def plan_reminder(self, schedule: Sequence[float], now: datetime) -> None:
+        """Set the next reminder: the next slot after now (spec §6.2).
+
+        Slots are counted from when the firing started. There's none unless the
+        alert is firing and unacknowledged.
+        """
+        if self.state is not AlertState.ACTIVE or self.firing_since is None:
+            self.next_reminder = None
+        else:
+            self.next_reminder = next_reminder_slot(self.firing_since, schedule, now)
 
     def await_data(self, now: datetime) -> None:
         """Wait for the first data after a restart or re-subscription (spec §15.3).
@@ -300,6 +385,7 @@ _DATETIME_FIELDS = frozenset(
         "no_data_since",
         "delay_on_until",
         "delay_off_until",
+        "next_reminder",
     }
 )
 _TRANSIENT_FIELDS = frozenset({"awaiting_data"})

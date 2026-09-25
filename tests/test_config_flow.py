@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+import voluptuous as vol
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType, InvalidData
@@ -18,9 +19,19 @@ from custom_components.alert_redux.const import (
     EVENT_CREATED,
     EVENT_DELETED,
     SUBENTRY_ALERT,
+    SUBENTRY_NOTIFIER_GROUP,
 )
 
-from .conftest import SetupAlerts, alert_subentry, state_alert
+from .conftest import SetupAlerts, alert_subentry, group_subentry, state_alert
+
+def _suggested(schema: dict) -> dict[str, Any]:
+    """Return the suggested values of a form's fields."""
+    return {
+        str(key): key.description["suggested_value"]
+        for key in schema
+        if key.description and "suggested_value" in key.description
+    }
+
 
 async def _choose(
     hass: HomeAssistant, result: dict[str, Any], kind: str
@@ -303,11 +314,15 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
     )
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.FORM
-    defaults = {str(key): key.default() for key in result["data_schema"].schema}
+    schema = result["data_schema"].schema
+    defaults = {
+        str(key): key.default() for key in schema if key.default is not vol.UNDEFINED
+    }
     assert defaults == {
         "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
         "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
     }
+    assert _suggested(schema) == {"default_reminder_schedule": "10, 20, 30, 60"}
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -331,7 +346,13 @@ async def test_messages_saved_and_prefilled(
     result = await _start(hass, entry, "manual")
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
-        {**FORM, "message": "{{ name }} opened", "display_message": "Close it"},
+        {
+            **FORM,
+            "notifications": {
+                "message": "{{ name }} opened",
+                "display_message": "Close it",
+            },
+        },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
@@ -344,10 +365,210 @@ async def test_messages_saved_and_prefilled(
         (entry.entry_id, SUBENTRY_ALERT),
         context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
     )
-    suggested = {
-        str(key): key.description["suggested_value"]
-        for key in result["data_schema"].schema
-        if key.description and "suggested_value" in key.description
-    }
+    suggested = _suggested(result["data_schema"].schema["notifications"].schema.schema)
     assert suggested["message"] == "{{ name }} opened"
     assert suggested["display_message"] == "Close it"
+
+
+async def _start_group(
+    hass: HomeAssistant, entry: MockConfigEntry, subentry_id: str | None = None
+) -> dict[str, Any]:
+    context: dict[str, Any] = {"source": SOURCE_USER}
+    if subentry_id is not None:
+        context = {"source": SOURCE_RECONFIGURE, "subentry_id": subentry_id}
+    return await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_NOTIFIER_GROUP), context=context
+    )
+
+
+GROUP_FORM = {"name": "Phones", "loud": False, "persistent": False}
+
+
+async def test_create_and_edit_group(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """The notifier group flow saves members, and pre-fills them when editing."""
+    hass.services.async_register("notify", "mobile_app_phone", lambda call: None)
+    entry = await setup_alerts()
+    result = await _start_group(hass, entry)
+    assert result["type"] is FlowResultType.FORM
+    actions = result["data_schema"].schema
+    (action_key,) = [key for key in actions if str(key) == "actions"]
+    options = actions[action_key].config["fields"]["action"]["selector"]
+    assert options.config["options"] == ["notify.mobile_app_phone"]
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **GROUP_FORM,
+            "name": " Phones ",
+            "entities": ["notify.kitchen"],
+            "actions": [
+                {"action": "mobile_app_phone", "data": {"channel": "alarm"}},
+                {"action": "notify.telegram", "target": " 123 "},
+            ],
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (subentry,) = entry.subentries.values()
+    assert subentry.title == "Phones"
+    assert dict(subentry.data) == {
+        "loud": False,
+        "entities": ["notify.kitchen"],
+        "actions": [
+            {"action": "notify.mobile_app_phone", "data": {"channel": "alarm"}},
+            {"action": "notify.telegram", "target": "123"},
+        ],
+        "persistent": False,
+    }
+
+    result = await _start_group(hass, entry, subentry.subentry_id)
+    assert result["step_id"] == "reconfigure"
+    suggested = _suggested(result["data_schema"].schema)
+    assert suggested["entities"] == ["notify.kitchen"]
+    assert len(suggested["actions"]) == 2
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**GROUP_FORM, "loud": True, "persistent": True}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert dict(entry.subentries[subentry.subentry_id].data) == {
+        "loud": True,
+        "entities": [],
+        "actions": [],
+        "persistent": True,
+    }
+
+
+@pytest.mark.parametrize(
+    ("form", "error"),
+    [
+        ({}, "no_members"),
+        ({"actions": [{"action": " "}]}, "action_missing"),
+        ({"actions": [{"action": "phone", "data": ["x"]}]}, "invalid_data"),
+    ],
+)
+async def test_group_errors(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, form: dict, error: str
+) -> None:
+    entry = await setup_alerts()
+    result = await _start_group(hass, entry)
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**GROUP_FORM, **form}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": error}
+
+
+async def test_group_name_unique_among_groups(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Group names are unique among groups; an alert may share one."""
+    entry = await setup_alerts(
+        alert_subentry("Phones"), group_subentry("Phones", persistent=True)
+    )
+    result = await _start_group(hass, entry)
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**GROUP_FORM, "name": "phones", "persistent": True}
+    )
+    assert result["errors"] == {"name": "name_exists"}
+
+
+async def test_alert_notification_settings_round_trip(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Turning the defaults off stores the alert's own (possibly empty) settings;
+    leaving them on stores nothing."""
+    entry = await setup_alerts(group_subentry("Phones", "phones", persistent=True))
+    result = await _start(hass, entry, "manual")
+    section_schema = result["data_schema"].schema["notifications"].schema.schema
+    (groups_key,) = [key for key in section_schema if str(key) == "notifier_groups"]
+    assert section_schema[groups_key].config["options"] == [
+        {"value": "phones", "label": "Phones"}
+    ]
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "notifications": {
+                "use_default_groups": False,
+                "use_default_reminders": False,
+                "reminder_schedule": "5, 15",
+                "reminder_message": "Still {{ duration }}",
+                "done_message": "Done",
+            },
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    subentry = next(
+        s for s in entry.subentries.values() if s.subentry_type == SUBENTRY_ALERT
+    )
+    assert subentry.data["notifier_groups"] == []
+    assert subentry.data["reminder_schedule"] == [5, 15]
+    assert subentry.data["reminder_message"] == "Still {{ duration }}"
+    assert subentry.data["done_message"] == "Done"
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
+    )
+    section_schema = result["data_schema"].schema["notifications"].schema.schema
+    defaults = {
+        str(key): key.default()
+        for key in section_schema
+        if key.default is not vol.UNDEFINED
+    }
+    assert defaults == {"use_default_groups": False, "use_default_reminders": False}
+    assert _suggested(section_schema)["reminder_schedule"] == "5, 15"
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "notifications": {
+                "use_default_groups": True,
+                "use_default_reminders": True,
+            },
+        },
+    )
+    assert result["type"] is FlowResultType.ABORT
+    subentry = entry.subentries[subentry.subentry_id]
+    assert "notifier_groups" not in subentry.data
+    assert "reminder_schedule" not in subentry.data
+
+
+async def test_alert_invalid_schedule(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "notifications": {"use_default_reminders": False, "reminder_schedule": "0"},
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_schedule"}
+
+
+async def test_options_notification_defaults(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    entry = await setup_alerts(group_subentry("Phones", "phones", persistent=True))
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    form = {
+        "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
+        "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
+        "default_groups": ["phones"],
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**form, "default_reminder_schedule": "x"}
+    )
+    assert result["errors"] == {"base": "invalid_schedule"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**form, "default_reminder_schedule": ""}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["default_groups"] == ["phones"]
+    assert entry.options["default_reminder_schedule"] == []

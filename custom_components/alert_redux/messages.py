@@ -46,8 +46,13 @@ def message_context(
     fire_data: Mapping[str, Any] | None,
     reason: str,
     duration_seconds: float = 0,
+    end_reason: str | None = None,
 ) -> dict[str, Any]:
-    """Return the variables available to an alert's message templates."""
+    """Return the variables available to an alert's message templates.
+
+    reason is why the notification is sent (on, reminder, or done); end_reason is
+    why the firing ended, for the done message.
+    """
     subject_name = name
     if subject_entity is not None and (state := hass.states.get(subject_entity)):
         subject_name = state.name
@@ -60,12 +65,13 @@ def message_context(
         "fire_count": fire_count,
         "fire_data": dict(fire_data or {}),
         "reason": reason,
-        "duration": _readable_duration(duration_seconds),
+        "end_reason": end_reason,
+        "duration": readable_duration(duration_seconds),
         "duration_seconds": duration_seconds,
     }
 
 
-def _readable_duration(seconds: float) -> str:
+def readable_duration(seconds: float) -> str:
     """Return a duration as text, e.g. "1 hour 5 minutes"."""
     seconds = int(seconds)
     if seconds < 60:
