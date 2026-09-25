@@ -345,3 +345,21 @@ def test_plan_reminder_only_while_active() -> None:
     transition = runtime.end(now + timedelta(minutes=26), EndReason.RESOLVED)
     assert runtime.next_reminder is None
     assert transition is not None
+
+
+def test_fire_event_restarts_the_duration() -> None:
+    runtime = AlertRuntime()
+    runtime.fire_event(T0, {"to": "on"}, timedelta(minutes=10))
+    assert runtime.event_expires == T0 + timedelta(minutes=10)
+    runtime.ack(T0, None)
+    later = T0 + timedelta(minutes=4)
+    transition = runtime.fire_event(later, {"to": "on"}, timedelta(minutes=10))
+    assert transition.new_state is AlertState.ACK
+    assert runtime.event_expires == later + timedelta(minutes=10)
+    assert runtime.firing_since == T0
+
+    restored = AlertRuntime.from_dict(runtime.to_dict())
+    assert restored.event_expires == runtime.event_expires
+
+    runtime.end(later + timedelta(minutes=10), EndReason.RESOLVED)
+    assert runtime.event_expires is None

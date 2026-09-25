@@ -7,10 +7,11 @@ import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigSubentry
-from homeassistant.core import CALLBACK_TYPE, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import CALLBACK_TYPE, Context, callback
+from homeassistant.exceptions import ServiceValidationError, TemplateError
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_point_in_utc_time
+from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -21,7 +22,11 @@ from .const import (
     ATTR_DELAY_ON,
     ATTR_DELAY_ON_UNTIL,
     ATTR_DISPLAY_MESSAGE,
+    ATTR_DURATION,
     ATTR_DURATION_SECONDS,
+    ATTR_EVENT_DATA,
+    ATTR_EVENT_EXPIRES,
+    ATTR_EVENT_TYPE,
     ATTR_FIRE_COUNT,
     ATTR_FIRE_DATA,
     ATTR_FIRING_SINCE,
@@ -49,6 +54,8 @@ from .const import (
     ATTR_SUBJECT_ENTITY,
     ATTR_TARGET_STATE,
     ATTR_TEMPLATE,
+    ATTR_TRIGGER_DATA,
+    ATTR_TRIGGERS,
     ATTR_USER_DISMISSABLE,
     ATTR_USER_ID,
     CONDITION_KINDS,
@@ -58,7 +65,10 @@ from .const import (
     CONF_DELAY_ON,
     CONF_DISPLAY_MESSAGE,
     CONF_DONE_MESSAGE,
+    CONF_DURATION,
     CONF_ENTITY_ID,
+    CONF_EVENT_DATA,
+    CONF_EVENT_TYPE,
     CONF_ICON,
     CONF_KIND,
     CONF_MESSAGE,
@@ -70,6 +80,7 @@ from .const import (
     CONF_SUBJECT_ENTITY,
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
+    CONF_TRIGGERS,
     CONF_USER_DISMISSABLE,
     DATA_LABEL,
     DATA_STARTUP_UNTIL,
@@ -79,6 +90,7 @@ from .const import (
     EVENT_CREATED,
     EVENT_ENDED,
     EVENT_FIRED,
+    EVENT_KINDS,
     EVENT_NO_DATA,
     EVENT_UNACKED,
     AlertKind,
@@ -97,8 +109,15 @@ from .notifications import (
     effective_groups,
     group_names,
 )
-from .sources import AndSource, Source, StateSource, TemplateSource
+from .sources import (
+    AndSource,
+    Source,
+    StateSource,
+    TemplateSource,
+    template_truth,
+)
 from .store import AlertStore
+from .triggers import TriggerWatcher, bus_event_trigger
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -107,8 +126,11 @@ def create_alert_entity(
     subentry: ConfigSubentry, store: AlertStore, settings: Settings
 ) -> AlertEntity:
     """Return the entity for an alert subentry, according to its kind."""
-    if AlertKind(subentry.data[CONF_KIND]) in CONDITION_KINDS:
+    kind = AlertKind(subentry.data[CONF_KIND])
+    if kind in CONDITION_KINDS:
         return ConditionAlertEntity(subentry, store, settings)
+    if kind in EVENT_KINDS:
+        return EventAlertEntity(subentry, store, settings)
     return AlertEntity(subentry, store, settings)
 
 
@@ -291,6 +313,9 @@ class AlertEntity(Entity):
         An ending transition supplies the details of the firing that ended.
         """
         runtime = self._runtime
+        data = transition.fire_data if transition else runtime.fire_data
+        # An event alert's fire data is its trigger's variables (spec §9.5).
+        is_event = self._kind in EVENT_KINDS
         return message_context(
             self.hass,
             name=str(self.name),
@@ -298,7 +323,8 @@ class AlertEntity(Entity):
             priority=self._priority,
             subject_entity=self.subject_entity,
             fire_count=transition.fire_count if transition else runtime.fire_count,
-            fire_data=transition.fire_data if transition else runtime.fire_data,
+            fire_data=None if is_event else data,
+            trigger=(data or {}) if is_event else None,
             reason=reason,
             duration_seconds=(
                 transition.duration_seconds or 0 if transition else duration_seconds
@@ -740,6 +766,209 @@ class ConditionAlertEntity(AlertEntity):
                     transition.old_state,
                     {ATTR_MISSING_INPUTS: self._runtime.missing_inputs},
                 )
+
+
+class EventAlertEntity(AlertEntity):
+    """An alert fired by a trigger or a bus event, for a duration (spec §4.2).
+
+    Both kinds share this engine: a bus event alert is a trigger alert with an event
+    trigger (F23). The trigger's variables are the firing's fire data, available
+    to message templates as trigger.
+    """
+
+    _unrecorded_attributes = AlertEntity._unrecorded_attributes | frozenset(
+        {ATTR_TRIGGER_DATA, ATTR_TRIGGERS, ATTR_EVENT_DATA, ATTR_CONDITION}
+    )
+
+    def __init__(
+        self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
+    ) -> None:
+        """Initialize the alert from its subentry."""
+        self._watcher: TriggerWatcher | None = None
+        self._unsub_expiry: CALLBACK_TYPE | None = None
+        super().__init__(subentry, store, settings)
+
+    def _configure(self, subentry: ConfigSubentry) -> None:
+        super()._configure(subentry)
+        data = subentry.data
+        self._event_type: str | None = data.get(CONF_EVENT_TYPE)
+        self._event_data: dict[str, Any] | None = data.get(CONF_EVENT_DATA) or None
+        if self._kind is AlertKind.EVENT:
+            assert self._event_type is not None
+            self._triggers = bus_event_trigger(self._event_type, self._event_data)
+        else:
+            self._triggers = list(data[CONF_TRIGGERS])
+        self._condition: str | None = data.get(CONF_CONDITION) or None
+        self._own_duration = to_timedelta(data.get(CONF_DURATION))
+
+    @property
+    def _duration(self) -> timedelta:
+        """Return the alert's duration: its own, or its priority's default."""
+        if self._own_duration:
+            return self._own_duration
+        return self._settings.event_durations[self._priority]
+
+    @property
+    def _reminder_schedule(self) -> tuple[float, ...]:
+        """Return no reminders unless the duration outlasts the first interval.
+
+        Short event alerts just fire and expire (spec §9.6).
+        """
+        schedule = super()._reminder_schedule
+        if schedule and self._duration <= timedelta(minutes=schedule[0]):
+            return ()
+        return schedule
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Add the trigger configuration, the duration, and the latest trigger."""
+        attributes = super().extra_state_attributes
+        if self._kind is AlertKind.EVENT:
+            attributes[ATTR_EVENT_TYPE] = self._event_type
+            attributes[ATTR_EVENT_DATA] = self._event_data
+        else:
+            attributes[ATTR_TRIGGERS] = self._triggers
+        attributes |= {
+            ATTR_CONDITION: self._condition,
+            ATTR_DURATION: self._duration.total_seconds(),
+            ATTR_EVENT_EXPIRES: self._runtime.event_expires,
+            ATTR_TRIGGER_DATA: self._runtime.fire_data,
+        }
+        return attributes
+
+    async def async_added_to_hass(self) -> None:
+        """Resume or end a restored firing, and start watching the triggers."""
+        await super().async_added_to_hass()
+        runtime = self._runtime
+        if runtime.firing and runtime.event_expires is None:
+            # Shouldn't happen, but a firing must always run out.
+            runtime.event_expires = (
+                runtime.last_fired or dt_util.utcnow()
+            ) + self._duration
+        # A duration that ran out while Home Assistant was down ends now, with the
+        # done notification (spec §15.1).
+        now = dt_util.utcnow()
+        if runtime.event_expires is not None and runtime.event_expires <= now:
+            self._async_expired(now)
+        else:
+            self._async_update_expiry_timer()
+        self._async_start_watcher()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Stop watching the triggers, and the duration."""
+        await super().async_will_remove_from_hass()
+        self._async_stop_watcher()
+        self._async_cancel_expiry_timer()
+
+    @callback
+    def async_update_config(self, subentry: ConfigSubentry) -> None:
+        """Apply an edited subentry, re-attaching the triggers.
+
+        A running firing keeps its expiry: a new duration applies from the next
+        fire.
+        """
+        self._async_stop_watcher()
+        super().async_update_config(subentry)
+        self._async_start_watcher()
+
+    @callback
+    def _async_start_watcher(self) -> None:
+        self._attr_available = True
+        self._watcher = TriggerWatcher(
+            self.hass,
+            self._triggers,
+            f"{self.entity_id} trigger",
+            self._async_triggered,
+            self._async_trigger_failed,
+        )
+        self._watcher.async_start(self.hass.data[DOMAIN].get(DATA_STARTUP_UNTIL))
+
+    @callback
+    def _async_stop_watcher(self) -> None:
+        if self._watcher is not None:
+            self._watcher.async_stop()
+            self._watcher = None
+
+    @callback
+    def _async_trigger_failed(self) -> None:
+        """Show the alert as broken: its triggers couldn't be attached (§7.1)."""
+        self._attr_available = False
+        self.async_write_ha_state()
+
+    @callback
+    def _async_triggered(
+        self, trigger: dict[str, Any], context: Context | None
+    ) -> None:
+        """Fire, or fire again, if the condition allows."""
+        if self._condition and not self._condition_allows(trigger):
+            _LOGGER.debug("%s: triggered, but the condition is false", self.entity_id)
+            return
+        # The firing is the alert's own doing, not the last user action's.
+        self._context = None
+        now = dt_util.utcnow()
+        transition = self._runtime.fire_event(now, trigger, self._duration)
+        if transition.fire_count == 1:
+            self._runtime.plan_reminder(self._reminder_schedule, now)
+        self._async_update_expiry_timer()
+        self._apply(
+            EVENT_FIRED,
+            transition,
+            {ATTR_FIRE_COUNT: transition.fire_count, ATTR_TRIGGER_DATA: trigger},
+        )
+        # As for manual alerts, firing again only speaks up while unacknowledged.
+        if transition.new_state is AlertState.ACTIVE:
+            self._async_notify_on()
+
+    def _condition_allows(self, trigger: dict[str, Any]) -> bool:
+        """Judge the condition at the moment of the trigger.
+
+        A condition with no data doesn't stop the alert: a broken condition must
+        never silence it (spec §4.2).
+        """
+        assert self._condition is not None
+        try:
+            result: Any = Template(self._condition, self.hass).async_render(
+                {"trigger": trigger}
+            )
+        except TemplateError as err:
+            result = err
+        value = template_truth(result)
+        if value is None:
+            _LOGGER.warning(
+                "%s: condition has no data (result: %r); firing anyway",
+                self.entity_id,
+                result,
+            )
+            return True
+        return value
+
+    @callback
+    def _async_update_expiry_timer(self) -> None:
+        self._async_cancel_expiry_timer()
+        if (expires := self._runtime.event_expires) is not None:
+            self._unsub_expiry = async_track_point_in_utc_time(
+                self.hass, self._async_expired, expires
+            )
+
+    @callback
+    def _async_cancel_expiry_timer(self) -> None:
+        if self._unsub_expiry is not None:
+            self._unsub_expiry()
+            self._unsub_expiry = None
+
+    @callback
+    def _async_expired(self, _now: datetime) -> None:
+        """End the firing: its duration has run out.
+
+        It ended at its expiry, even if that passed while Home Assistant was down.
+        """
+        self._unsub_expiry = None
+        self._context = None
+        ended = self._runtime.event_expires or dt_util.utcnow()
+        if (transition := self._runtime.end(ended, EndReason.RESOLVED)) is None:
+            return
+        self._apply(EVENT_ENDED, transition, _ended_data(transition))
+        self._async_notify_done(transition)
 
 
 def _ended_data(transition: Transition) -> dict[str, Any]:

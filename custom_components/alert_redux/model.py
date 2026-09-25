@@ -17,16 +17,19 @@ from typing import Any
 from .const import (
     CONF_DEFAULT_GROUPS,
     CONF_DEFAULT_REMINDER_SCHEDULE,
+    CONF_EVENT_DURATIONS,
     CONF_FALLBACK_GROUP,
     CONF_NO_DATA_GRACE,
     CONF_RETRY_TIMEOUT,
     CONF_STARTUP_DELAY,
+    DEFAULT_EVENT_DURATIONS,
     DEFAULT_NO_DATA_GRACE,
     DEFAULT_REMINDER_SCHEDULE,
     DEFAULT_RETRY_TIMEOUT,
     DEFAULT_STARTUP_DELAY,
     AlertState,
     EndReason,
+    Priority,
 )
 
 
@@ -55,6 +58,10 @@ class Settings:
     fallback_group: str | None = None
     # How long a failing notifier member is retried (spec §15.2).
     retry_timeout: timedelta = DEFAULT_RETRY_TIMEOUT
+    # Event alerts' durations when they have none of their own (spec §4.2).
+    event_durations: dict[Priority, timedelta] = field(
+        default_factory=lambda: dict(DEFAULT_EVENT_DURATIONS)
+    )
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> Settings:
@@ -63,6 +70,7 @@ class Settings:
         startup = to_timedelta(options.get(CONF_STARTUP_DELAY))
         schedule = options.get(CONF_DEFAULT_REMINDER_SCHEDULE)
         retry = to_timedelta(options.get(CONF_RETRY_TIMEOUT))
+        durations = options.get(CONF_EVENT_DURATIONS) or {}
         return cls(
             no_data_grace=DEFAULT_NO_DATA_GRACE if grace is None else grace,
             startup_delay=DEFAULT_STARTUP_DELAY if startup is None else startup,
@@ -72,6 +80,10 @@ class Settings:
             ),
             fallback_group=options.get(CONF_FALLBACK_GROUP) or None,
             retry_timeout=DEFAULT_RETRY_TIMEOUT if not retry else retry,
+            event_durations={
+                priority: to_timedelta(durations.get(priority)) or default
+                for priority, default in DEFAULT_EVENT_DURATIONS.items()
+            },
         )
 
     def update(self, other: Settings) -> None:
@@ -188,6 +200,8 @@ class AlertRuntime:
     delay_off_until: datetime | None = None
     # When the next reminder is due, while firing and unacknowledged (spec §9.6).
     next_reminder: datetime | None = None
+    # Event alerts: when the current firing's duration runs out (spec §4.2).
+    event_expires: datetime | None = None
     # Not persisted: set while a restored alert waits for its first data, so that
     # the inputs still loading don't cancel the delays it was restored with.
     awaiting_data: bool = False
@@ -221,6 +235,17 @@ class AlertRuntime:
         self.fire_data = data
         return Transition(old, self.state, self.fire_count)
 
+    def fire_event(
+        self, now: datetime, data: dict[str, Any] | None, duration: timedelta
+    ) -> Transition:
+        """Fire an event alert, or fire it again, running its duration from now.
+
+        Firing again restarts the duration and keeps the acknowledgement (§4.2).
+        """
+        transition = self.fire(now, data)
+        self.event_expires = now + duration
+        return transition
+
     def end(self, now: datetime, reason: EndReason) -> Transition | None:
         """Stop firing; the acknowledgement clears with it (spec §6.1)."""
         if not self.firing:
@@ -237,6 +262,7 @@ class AlertRuntime:
         self.fire_count = 0
         self.fire_data = None
         self.next_reminder = None
+        self.event_expires = None
         self.last_ended = now
         return Transition(old, self.state, fire_count, duration, reason, fire_data)
 
@@ -396,6 +422,7 @@ _DATETIME_FIELDS = frozenset(
         "delay_on_until",
         "delay_off_until",
         "next_reminder",
+        "event_expires",
     }
 )
 _TRANSIENT_FIELDS = frozenset({"awaiting_data"})

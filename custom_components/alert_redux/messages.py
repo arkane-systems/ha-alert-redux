@@ -47,16 +47,18 @@ def message_context(
     reason: str,
     duration_seconds: float = 0,
     end_reason: str | None = None,
+    trigger: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the variables available to an alert's message templates.
 
     reason is why the notification is sent (on, reminder, or done); end_reason is
-    why the firing ended, for the done message.
+    why the firing ended, for the done message. trigger is an event alert's trigger
+    variables, as in automations; other kinds have none.
     """
     subject_name = name
     if subject_entity is not None and (state := hass.states.get(subject_entity)):
         subject_name = state.name
-    return {
+    variables = {
         "name": name,
         "entity_id": entity_id,
         "priority": priority,
@@ -69,6 +71,9 @@ def message_context(
         "duration": readable_duration(duration_seconds),
         "duration_seconds": duration_seconds,
     }
+    if trigger is not None:
+        variables["trigger"] = dict(trigger)
+    return variables
 
 
 def readable_duration(seconds: float) -> str:

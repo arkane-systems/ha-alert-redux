@@ -60,6 +60,8 @@ export function toAlert(entity: HassEntity): Alert {
     message: toText(attributes.message),
     displayMessage: toText(attributes.display_message),
     firingSince: toDate(attributes.firing_since),
+    lastFired: toDate(attributes.last_fired),
+    eventExpires: toDate(attributes.event_expires),
     noDataSince: toDate(attributes.no_data_since),
     missingInputs: Array.isArray(attributes.missing_inputs)
       ? attributes.missing_inputs.map(String)
@@ -99,3 +101,14 @@ export function compareNoData(a: Alert, b: Alert): number {
 /** The text the card shows: the display message, or else the on message (F22). */
 export const cardMessage = (alert: Alert): string | null =>
   alert.displayMessage ?? alert.message;
+
+/**
+ * How much of an event alert's duration is left, from 1 when it last fired to 0
+ * when it runs out; null for an alert without a duration running.
+ */
+export function remainingFraction(alert: Alert, now: number = Date.now()): number | null {
+  if (!alert.eventExpires || !alert.lastFired) return null;
+  const total = alert.eventExpires.getTime() - alert.lastFired.getTime();
+  if (total <= 0) return null;
+  return Math.min(1, Math.max(0, (alert.eventExpires.getTime() - now) / total));
+}

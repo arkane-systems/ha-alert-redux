@@ -80,9 +80,13 @@ class AlertKind(StrEnum):
     MANUAL = "manual"
     STATE = "state"
     TEMPLATE = "template"
+    TRIGGER = "trigger"
+    # A bus event alert: a trigger alert with an event trigger (spec §4.2, F23).
+    EVENT = "event"
 
 
 CONDITION_KINDS = frozenset({AlertKind.STATE, AlertKind.TEMPLATE})
+EVENT_KINDS = frozenset({AlertKind.TRIGGER, AlertKind.EVENT})
 
 
 class EndReason(StrEnum):
@@ -111,6 +115,10 @@ CONF_CONDITION = "condition"
 CONF_DELAY_ON = "delay_on"
 CONF_DELAY_OFF = "delay_off"
 CONF_NO_DATA_GRACE = "no_data_grace"
+CONF_TRIGGERS = "triggers"
+CONF_EVENT_TYPE = "event_type"
+CONF_EVENT_DATA = "event_data"
+CONF_DURATION = "duration"
 CONF_MESSAGE = "message"
 CONF_DISPLAY_MESSAGE = "display_message"
 CONF_REMINDER_MESSAGE = "reminder_message"
@@ -151,6 +159,16 @@ DEFAULT_REMINDER_SCHEDULE: tuple[float, ...] = (10, 20, 30, 60)
 CONF_FALLBACK_GROUP = "fallback_group"
 CONF_RETRY_TIMEOUT = "retry_timeout"
 DEFAULT_RETRY_TIMEOUT = timedelta(minutes=5)
+# Event alerts' default durations, by priority (spec §4.2, §5): a mapping of
+# priority to a duration selector's dict. The options form shows it as a section.
+CONF_EVENT_DURATIONS = "event_durations"
+DEFAULT_EVENT_DURATIONS: dict[Priority, timedelta] = {
+    Priority.EMERGENCY: timedelta(minutes=60),
+    Priority.CRITICAL: timedelta(minutes=30),
+    Priority.WARNING: timedelta(minutes=15),
+    Priority.NOTICE: timedelta(minutes=10),
+    Priority.INFORMATIONAL: timedelta(minutes=5),
+}
 
 # Repairs issues.
 ISSUE_DEFAULT_GROUPS_UNSET = "default_groups_unset"
@@ -210,3 +228,9 @@ ATTR_DISPLAY_MESSAGE = "display_message"
 ATTR_NOTIFIER_GROUPS = "notifier_groups"
 ATTR_REMINDER_SCHEDULE = "reminder_schedule"
 ATTR_NEXT_REMINDER = "next_reminder"
+ATTR_DURATION = "duration"
+ATTR_EVENT_EXPIRES = "event_expires"
+ATTR_TRIGGER_DATA = "trigger_data"
+ATTR_TRIGGERS = "triggers"
+ATTR_EVENT_TYPE = "event_type"
+ATTR_EVENT_DATA = "event_data"

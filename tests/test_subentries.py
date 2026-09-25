@@ -22,7 +22,7 @@ from custom_components.alert_redux.const import (
     SUBENTRY_ALERT,
 )
 
-from .conftest import SetupAlerts, alert_subentry, state_alert
+from .conftest import SetupAlerts, alert_subentry, event_alert, state_alert
 
 SENSOR = "binary_sensor.back_door"
 DOOR = "alert_redux.back_door_open"
@@ -172,3 +172,22 @@ async def test_options_reach_alerts(
     )
     await hass.async_block_till_done()
     assert hass.states.get(DOOR).attributes["no_data_grace"] == 60
+
+
+async def test_edit_event_alert_reattaches_triggers(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Editing an event alert's event type takes effect in place."""
+    entry = await setup_alerts(event_alert("Parcel", "parcel_delivered", "parcel"))
+    subentry = entry.subentries["parcel"]
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, "event_type": "parcel_left"}
+    )
+    await hass.async_block_till_done()
+
+    hass.bus.async_fire("parcel_delivered", {})
+    await hass.async_block_till_done()
+    assert hass.states.get("alert_redux.parcel").state == "idle"
+    hass.bus.async_fire("parcel_left", {})
+    await hass.async_block_till_done()
+    assert hass.states.get("alert_redux.parcel").state == "active"

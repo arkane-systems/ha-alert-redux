@@ -10,6 +10,7 @@ from homeassistant.core import CoreState, HomeAssistant
 from pytest_homeassistant_custom_component.common import (
     async_capture_events,
     async_fire_time_changed,
+    async_mock_service,
 )
 
 from custom_components.alert_redux.const import (
@@ -23,7 +24,13 @@ from custom_components.alert_redux.const import (
     STORAGE_KEY,
 )
 
-from .conftest import SetupAlerts, alert_subentry, state_alert
+from .conftest import (
+    SetupAlerts,
+    alert_subentry,
+    group_subentry,
+    state_alert,
+    trigger_alert,
+)
 
 DOOR = "alert_redux.back_door_open"
 
@@ -221,3 +228,61 @@ async def test_no_startup_delay_once_running(
         options={"startup_delay": {"seconds": 30}},
     )
     assert hass.states.get(DOOR).state == "active"
+
+
+# Event alerts across restarts (spec §15.1).
+
+BELL = "binary_sensor.doorbell"
+DOORBELL = "alert_redux.doorbell"
+BELL_TRIGGERS = [{"trigger": "state", "entity_id": BELL, "to": "on"}]
+
+
+async def test_event_alert_resumes(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A firing that hasn't run out resumes, and ends when it does."""
+    hass.states.async_set(BELL, "off")
+    entry = await setup_alerts(
+        trigger_alert("Doorbell", BELL_TRIGGERS, duration={"minutes": 10})
+    )
+    hass.states.async_set(BELL, "on")
+    await hass.async_block_till_done()
+    expires = hass.states.get(DOORBELL).attributes["event_expires"]
+
+    fired = async_capture_events(hass, EVENT_FIRED)
+    await _restart(hass, entry)
+    state = hass.states.get(DOORBELL)
+    assert state.state == "active"
+    assert state.attributes["event_expires"] == expires
+    assert not fired
+
+    freezer.tick(timedelta(minutes=10))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert hass.states.get(DOORBELL).state == "idle"
+
+
+async def test_event_alert_expired_during_restart(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A duration that ran out while HA was down ends at once, with a done event."""
+    calls = async_mock_service(hass, "notify", "phone")
+    hass.states.async_set(BELL, "off")
+    entry = await setup_alerts(
+        trigger_alert("Doorbell", BELL_TRIGGERS, duration={"minutes": 10}),
+        group_subentry("Phones", "phones", actions=[{"action": "notify.phone"}]),
+        options={"default_groups": ["phones"]},
+    )
+    hass.states.async_set(BELL, "on")
+    await hass.async_block_till_done()
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=15))
+    ended = async_capture_events(hass, EVENT_ENDED)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get(DOORBELL).state == "idle"
+    assert [event.data["reason"] for event in ended] == ["resolved"]
+    assert calls[-1].data["message"] == "Doorbell stopped firing after 10 minutes."

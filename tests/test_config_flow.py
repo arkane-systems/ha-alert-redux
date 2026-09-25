@@ -71,7 +71,7 @@ async def test_create_alert(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
     )
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "user"
-    assert result["menu_options"] == ["manual", "state", "template"]
+    assert result["menu_options"] == ["manual", "state", "template", "trigger", "event"]
 
     result = await _choose(hass, result, "manual")
     assert result["type"] is FlowResultType.FORM
@@ -609,3 +609,127 @@ async def test_notifications_section_is_required_without_default(
     (key,) = [k for k in result["data_schema"].schema if str(k) == "notifications"]
     assert isinstance(key, vol.Required)
     assert key.default is vol.UNDEFINED
+
+
+EVENT_FORM = {
+    "name": "Doorbell",
+    "priority": "notice",
+    "acknowledgeable": True,
+    "notifications": {},
+}
+
+
+async def test_create_trigger_alert(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A trigger alert is created from its form, and edited with it."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "trigger")
+    assert result["step_id"] == "trigger"
+
+    triggers = [{"trigger": "state", "entity_id": "binary_sensor.bell", "to": "on"}]
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **EVENT_FORM,
+            "triggers": triggers,
+            "condition": "{{ true }}",
+            "duration": {"hours": 0, "minutes": 3, "seconds": 0},
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    (subentry,) = entry.subentries.values()
+    data = dict(subentry.data)
+    assert data["kind"] == "trigger"
+    assert data["condition"] == "{{ true }}"
+    assert data["duration"] == {"hours": 0, "minutes": 3, "seconds": 0}
+    assert len(data["triggers"]) == 1
+    assert data["triggers"][0]["entity_id"] == "binary_sensor.bell"
+    assert hass.states.get("alert_redux.doorbell").attributes["duration"] == 180
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
+    )
+    assert result["step_id"] == "reconfigure_trigger"
+    assert _suggested(result["data_schema"].schema)["duration"] == data["duration"]
+
+
+async def test_invalid_trigger(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "trigger")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**EVENT_FORM, "triggers": [{"trigger": "state", "entity_id": "x.y", "to": 5}]},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_trigger"}
+
+
+async def test_create_bus_event_alert(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "event")
+    assert result["step_id"] == "event"
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**EVENT_FORM, "event_type": "  ", "event_data": {}},
+    )
+    assert result["errors"] == {"base": "event_type_missing"}
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**EVENT_FORM, "event_type": "doorbell_pressed", "event_data": ["x"]},
+    )
+    assert result["errors"] == {"base": "invalid_event_data"}
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**EVENT_FORM, "event_type": " doorbell_pressed ", "event_data": {}},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (subentry,) = entry.subentries.values()
+    assert dict(subentry.data) == {
+        "kind": "event",
+        "priority": "notice",
+        "acknowledgeable": True,
+        "event_type": "doorbell_pressed",
+    }
+
+
+async def test_options_event_durations(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """The per-priority durations are a section, pre-filled and saved."""
+    entry = await setup_alerts()
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    schema = result["data_schema"].schema
+    (key,) = [key for key in schema if str(key) == "event_durations"]
+    fields = {str(k): k.default() for k in schema[key].schema.schema}
+    assert fields["emergency"] == {"hours": 1, "minutes": 0, "seconds": 0}
+    assert fields["informational"] == {"hours": 0, "minutes": 5, "seconds": 0}
+
+    durations = {**fields, "warning": {"hours": 0, "minutes": 20, "seconds": 0}}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
+            "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
+            "event_durations": durations,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["event_durations"]["warning"] == {
+        "hours": 0,
+        "minutes": 20,
+        "seconds": 0,
+    }
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    schema = result["data_schema"].schema
+    (key,) = [key for key in schema if str(key) == "event_durations"]
+    fields = {str(k): k.default() for k in schema[key].schema.schema}
+    assert fields["warning"] == {"hours": 0, "minutes": 20, "seconds": 0}
