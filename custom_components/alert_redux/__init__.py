@@ -22,6 +22,8 @@ from .const import (
     ATTR_OLD_STATE,
     ATTR_PRIORITY,
     ATTR_USER_ID,
+    CONF_DEFAULT_GROUPS,
+    CONF_FALLBACK_GROUP,
     DATA_ADD_ENTITIES,
     DATA_COMPONENT,
     DATA_ENTITIES,
@@ -151,6 +153,8 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     groups = _group_subentries(entry)
     groups_changed = groups != data[DATA_GROUPS]
     if groups_changed:
+        if deleted := data[DATA_GROUPS].keys() - groups.keys():
+            _async_forget_deleted_groups(hass, entry, deleted)
         data[DATA_GROUPS] = groups
         data[DATA_NOTIFIER].async_set_groups(_group_configs(groups))
 
@@ -176,6 +180,27 @@ def _alert_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]
         for subentry_id, subentry in entry.subentries.items()
         if subentry.subentry_type == SUBENTRY_ALERT
     }
+
+
+def _async_forget_deleted_groups(
+    hass: HomeAssistant, entry: ConfigEntry, deleted: set[str]
+) -> None:
+    """Drop deleted notifier groups from the default and fallback groups.
+
+    Alerts' own group lists are left alone: a missing group is skipped, and an
+    alert with none left notifies the fallback, whereas pruning its list to empty
+    would silently make it notify nobody.
+    """
+    options = dict(entry.options)
+    defaults = options.get(CONF_DEFAULT_GROUPS) or []
+    if not deleted.isdisjoint(defaults):
+        # Emptied, the defaults count as unset: alerts using them notify the
+        # fallback, and a Repairs issue says so.
+        options[CONF_DEFAULT_GROUPS] = [g for g in defaults if g not in deleted]
+    if options.get(CONF_FALLBACK_GROUP) in deleted:
+        options[CONF_FALLBACK_GROUP] = None
+    if options != dict(entry.options):
+        hass.config_entries.async_update_entry(entry, options=options)
 
 
 def _async_configure_notifier(notifier: Notifier, settings: Settings) -> None:

@@ -336,7 +336,10 @@ def _alert_schema(
                 CONF_NO_DATA_GRACE, description=_suggested(defaults, CONF_NO_DATA_GRACE)
             )
         ] = DurationSelector()
-    schema[vol.Optional(SECTION_NOTIFICATIONS, default={})] = _notifications_section(
+    # Required, and without a default: the frontend then builds the section's
+    # value from its fields' defaults and suggested values. With a default of {},
+    # it used that instead, so the section showed empty and saving wiped it.
+    schema[vol.Required(SECTION_NOTIFICATIONS)] = _notifications_section(
         entry, defaults
     )
     return vol.Schema(schema)

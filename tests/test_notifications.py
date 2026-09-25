@@ -415,3 +415,28 @@ async def test_pending_retry_survives_restart(
     await hass.async_block_till_done()
     await _tick(hass, freezer, 1)
     assert _sent(calls) == [("Back Door Open", "Back Door Open is firing.")]
+
+
+async def test_deleted_group_leaves_the_options(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Deleting a group removes it from the default and fallback groups; deleting
+    the last default raises the unset-defaults issue."""
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open"),
+        PHONE,
+        group_subentry("Pagers", "pagers", actions=[{"action": "notify.pager"}]),
+        options={"default_groups": ["phones", "pagers"], "fallback_group": "pagers"},
+    )
+    hass.config_entries.async_remove_subentry(entry, "pagers")
+    await hass.async_block_till_done()
+    assert entry.options["default_groups"] == ["phones"]
+    assert entry.options["fallback_group"] is None
+
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, ISSUE_DEFAULT_GROUPS_UNSET) is None
+    hass.config_entries.async_remove_subentry(entry, "phones")
+    await hass.async_block_till_done()
+    assert entry.options["default_groups"] == []
+    assert registry.async_get_issue(DOMAIN, ISSUE_DEFAULT_GROUPS_UNSET) is not None
+    assert hass.states.get(DOOR).attributes["notifier_groups"] == ["Fallback"]

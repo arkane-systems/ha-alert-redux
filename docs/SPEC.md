@@ -486,6 +486,11 @@ A group has:
   (`default_groups_unset`) says why, listing the alerts. It's raised while any alert
   relies on the unset default, and clears itself once default groups are set or no
   alert relies on them. Nothing fails silently, but the admin is told why.
+- [Decided, phase 4] **Deleting a group** removes it from the default groups and the
+  fallback-group setting (emptied defaults then count as unset, as above). Alerts'
+  own group lists keep it: a group that doesn't exist is skipped, and an alert with
+  none of its groups left notifies the fallback. Pruning an alert's list to empty
+  would instead make it silently notify nobody.
 
 ### 9.5 Messages
 
