@@ -410,3 +410,22 @@ async def test_missing_actions_checked_after_startup(
         [GroupConfig("g", "Phones", (ActionMember("old_phone"),))]
     )
     assert registry.async_get_issue(ISSUE_DOMAIN, ident) is not None
+
+
+async def test_no_issue_for_member_removed_while_retrying(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, persistent: MagicMock
+) -> None:
+    """A notification still retrying a member that its group has since lost gives
+    up without raising an issue for it."""
+    registry = ir.async_get(hass)
+    notifier = await _new_notifier(
+        hass, GroupConfig("g", "Phones", (ActionMember("old_phone"),))
+    )
+    await _send(notifier, ["g"])
+    notifier.async_set_groups([])
+    await _tick(hass, freezer, 360)
+    persistent.assert_called_once()
+    assert (
+        registry.async_get_issue(ISSUE_DOMAIN, "notify_action_missing_g_old_phone")
+        is None
+    )

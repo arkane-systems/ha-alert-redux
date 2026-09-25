@@ -292,8 +292,16 @@ class Notifier:
             attempt.tries,
             error,
         )
-        if isinstance(member, ActionMember) and not member_available(self.hass, member):
-            self._async_raise(attempt.group_id, attempt.group_name, member)
+        # Only for a member its group still has: the group may have been edited or
+        # deleted while the notification was waiting.
+        group = self._groups.get(attempt.group_id)
+        if (
+            isinstance(member, ActionMember)
+            and group is not None
+            and member in group.members
+            and not member_available(self.hass, member)
+        ):
+            self._async_raise(group, member)
         self._async_done(delivery, attempt)
 
     @callback
@@ -370,16 +378,13 @@ class Notifier:
         if raise_missing:
             for group, member in current.values():
                 if not member_available(self.hass, member):
-                    self._async_raise(group.id, group.name, member)
+                    self._async_raise(group, member)
 
     @callback
-    def _async_raise(
-        self, group_id: str, group_name: str, member: ActionMember
-    ) -> None:
-        group = self._groups.get(group_id) or GroupConfig(group_id, group_name, ())
+    def _async_raise(self, group: GroupConfig, member: ActionMember) -> None:
         ident = async_raise_action_missing(self.hass, self._issue_domain, group, member)
         if ident not in self._issues:
-            self._issues[ident] = (group_id, member.action)
+            self._issues[ident] = (group.id, member.action)
             self._async_save()
 
     @callback
