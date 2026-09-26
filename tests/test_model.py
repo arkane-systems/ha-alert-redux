@@ -212,7 +212,10 @@ def test_no_data_while_idle() -> None:
     # Repeated no-data results only update the missing inputs.
     assert runtime.evaluate(None, ["x"], T0, DELAYS) == []
     assert runtime.missing_inputs == ["x"]
-    # Data returning leaves no_data without a change to announce.
+    # Data returning is announced, once.
+    assert _changes(runtime.evaluate(False, [], T0, DELAYS)) == [
+        (Change.DATA_RESTORED, AlertState.NO_DATA, AlertState.IDLE)
+    ]
     assert runtime.evaluate(False, [], T0, DELAYS) == []
     assert runtime.state is AlertState.IDLE
     assert runtime.no_data_since is None
@@ -228,7 +231,11 @@ def test_no_data_while_firing_within_grace() -> None:
     assert _changes(changes) == [(Change.NO_DATA, AlertState.ACK, AlertState.ACK)]
     assert runtime.no_data_since == lost
     assert runtime.next_deadline(DELAYS) == lost + timedelta(minutes=10)
-    assert runtime.evaluate(True, [], lost + timedelta(minutes=9), DELAYS) == []
+    # Data returning within the grace period changes no state, but is announced.
+    changes = runtime.evaluate(True, [], lost + timedelta(minutes=9), DELAYS)
+    assert _changes(changes) == [
+        (Change.DATA_RESTORED, AlertState.ACK, AlertState.ACK)
+    ]
     assert runtime.state is AlertState.ACK
     assert runtime.firing_since == T0
 

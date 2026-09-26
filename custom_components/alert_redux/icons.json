@@ -1,4 +1,35 @@
 {
+  "entity": {
+    "sensor": {
+      "highest_priority": {
+        "default": "mdi:alert",
+        "state": {
+          "none": "mdi:check-circle-outline"
+        }
+      },
+      "highest_unacked_priority": {
+        "default": "mdi:alert",
+        "state": {
+          "none": "mdi:check-circle-outline"
+        }
+      },
+      "firing": {
+        "default": "mdi:alert-circle"
+      },
+      "active": {
+        "default": "mdi:bell-alert"
+      },
+      "acknowledged": {
+        "default": "mdi:check-circle"
+      },
+      "no_data": {
+        "default": "mdi:help-circle-outline"
+      },
+      "disabled": {
+        "default": "mdi:bell-off-outline"
+      }
+    }
+  },
   "services": {
     "fire": {
       "service": "mdi:alert-plus"

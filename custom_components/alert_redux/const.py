@@ -27,6 +27,7 @@ DATA_LABEL = "label"
 DATA_NOTIFIER = "notifier"
 DATA_GROUPS = "groups"
 DATA_SUPERSESSION = "supersession"
+DATA_SUMMARY = "summary"
 
 # The label applied to every alert (spec §11.5).
 ALERTS_LABEL_NAME = "Alert Redux"
@@ -258,9 +259,26 @@ EVENT_SNOOZE_EXPIRED = f"{DOMAIN}_snooze_expired"
 EVENT_DISABLED = f"{DOMAIN}_disabled"
 EVENT_ENABLED = f"{DOMAIN}_enabled"
 EVENT_NO_DATA = f"{DOMAIN}_no_data"
+EVENT_DATA_RESTORED = f"{DOMAIN}_data_restored"
 EVENT_SUPERSEDED = f"{DOMAIN}_superseded"
 EVENT_CREATED = f"{DOMAIN}_created"
 EVENT_DELETED = f"{DOMAIN}_deleted"
+# Every event type, in the spec's order (§11.3).
+EVENT_TYPES = (
+    EVENT_FIRED,
+    EVENT_ENDED,
+    EVENT_ACKED,
+    EVENT_UNACKED,
+    EVENT_SNOOZED,
+    EVENT_SNOOZE_EXPIRED,
+    EVENT_DISABLED,
+    EVENT_ENABLED,
+    EVENT_NO_DATA,
+    EVENT_DATA_RESTORED,
+    EVENT_SUPERSEDED,
+    EVENT_CREATED,
+    EVENT_DELETED,
+)
 
 # Entity attributes and event data (spec §11.1, §11.3).
 ATTR_KIND = "kind"

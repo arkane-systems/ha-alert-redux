@@ -1178,6 +1178,45 @@
           }
         }
       }
+    },
+    "sensor": {
+      "highest_priority": {
+        "name": "Alert Redux highest priority",
+        "state": {
+          "emergency": "[%key:component::alert_redux::selector::priority::options::emergency%]",
+          "critical": "[%key:component::alert_redux::selector::priority::options::critical%]",
+          "warning": "[%key:component::alert_redux::selector::priority::options::warning%]",
+          "notice": "[%key:component::alert_redux::selector::priority::options::notice%]",
+          "informational": "[%key:component::alert_redux::selector::priority::options::informational%]",
+          "none": "None"
+        }
+      },
+      "highest_unacked_priority": {
+        "name": "Alert Redux highest unacknowledged priority",
+        "state": {
+          "emergency": "[%key:component::alert_redux::selector::priority::options::emergency%]",
+          "critical": "[%key:component::alert_redux::selector::priority::options::critical%]",
+          "warning": "[%key:component::alert_redux::selector::priority::options::warning%]",
+          "notice": "[%key:component::alert_redux::selector::priority::options::notice%]",
+          "informational": "[%key:component::alert_redux::selector::priority::options::informational%]",
+          "none": "None"
+        }
+      },
+      "firing": {
+        "name": "Alert Redux firing"
+      },
+      "active": {
+        "name": "Alert Redux active"
+      },
+      "acknowledged": {
+        "name": "Alert Redux acknowledged"
+      },
+      "no_data": {
+        "name": "Alert Redux no data"
+      },
+      "disabled": {
+        "name": "Alert Redux disabled"
+      }
     }
   },
   "selector": {

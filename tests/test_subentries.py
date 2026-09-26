@@ -144,7 +144,11 @@ async def test_edit_firing_condition_alert(
     assert state.state == "ack"
     assert state.attributes["firing_since"] == firing_since
     assert not fired
-    assert all(event.data["new_state"].state == "ack" for event in changes)
+    assert all(
+        event.data["new_state"].state == "ack"
+        for event in changes
+        if event.data["entity_id"] == DOOR
+    )
 
     hass.config_entries.async_update_subentry(
         entry,
