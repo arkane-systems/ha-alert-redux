@@ -9,8 +9,9 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import CoreState, Event, HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     config_validation as cv,
     entity_registry as er,
@@ -23,13 +24,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     ATTR_DATA,
     ATTR_DURATION,
-    ATTR_KIND,
-    ATTR_NAME,
-    ATTR_NEW_STATE,
-    ATTR_OLD_STATE,
-    ATTR_PRIORITY,
     ATTR_UNTIL,
-    ATTR_USER_ID,
     CONF_ALERT,
     CONF_DEFAULT_GROUPS,
     CONF_FALLBACK_GROUP,
@@ -37,6 +32,8 @@ from .const import (
     DATA_ADD_ENTITIES,
     DATA_COMPONENT,
     DATA_ENTITIES,
+    DATA_GENERATORS,
+    DATA_GENERATOR_SUBENTRIES,
     DATA_GROUPS,
     DATA_LABEL,
     DATA_NOTIFIER,
@@ -48,27 +45,29 @@ from .const import (
     DATA_SUMMARY,
     DATA_SUPERSESSION,
     DOMAIN,
-    EVENT_DELETED,
     NOTIFIER_STORAGE_KEY,
     SERVICE_ACK,
     SERVICE_DISABLE,
     SERVICE_DISMISS,
     SERVICE_ENABLE,
     SERVICE_FIRE,
+    SERVICE_REFRESH_GENERATOR,
     SERVICE_SNOOZE,
     SERVICE_SUSPEND,
     SERVICE_UNACK,
     SUBENTRY_ALERT,
+    SUBENTRY_GENERATOR,
     SUBENTRY_NOTIFIER_GROUP,
     Priority,
 )
 from .buttons import async_setup_buttons
+from .definitions import AlertDefinition, generator_unique_id
 from .entity import AlertEntity, create_alert_entity
+from .generators import GeneratorManager, async_forget_alert
 from .frontend import async_register_frontend, async_setup_websocket
 from .labels import async_setup_label
-from .model import AlertRuntime, Settings
+from .model import Settings
 from .notifications import (
-    async_clear_notifications,
     async_notifications_renamed,
     async_quiet_hours_ended,
 )
@@ -124,8 +123,45 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ),
         "async_suspend",
     )
+    # Generators are sensors, so their action is the domain's own (spec §12.3).
+    async def _async_refresh_generator(call: ServiceCall) -> None:
+        _async_refresh_generators(hass, call)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REFRESH_GENERATOR,
+        _async_refresh_generator,
+        vol.Schema({vol.Required(ATTR_ENTITY_ID): cv.entity_ids}),
+    )
     async_setup_websocket(hass)
     return True
+
+
+@callback
+def _async_refresh_generators(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Re-evaluate the targeted generators' targets now."""
+    registry = er.async_get(hass)
+    prefix = generator_unique_id("")
+    generators: GeneratorManager | None = hass.data[DOMAIN].get(DATA_GENERATORS)
+    subentry_ids: list[str] = []
+    for entity_id in call.data[ATTR_ENTITY_ID]:
+        entry = registry.async_get(entity_id)
+        subentry_id = (
+            entry.unique_id.removeprefix(prefix)
+            if entry is not None
+            and entry.platform == DOMAIN
+            and entry.unique_id.startswith(prefix)
+            else None
+        )
+        if generators is None or subentry_id not in generators.generators:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_generator",
+                translation_placeholders={"entity_id": entity_id},
+            )
+        subentry_ids.append(subentry_id)
+    for subentry_id in subentry_ids:
+        generators.async_refresh(subentry_id)
 
 
 def _entity_services_take_admin_only(component: EntityComponent[AlertEntity]) -> bool:
@@ -203,15 +239,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     notifier.async_set_groups(_group_configs(groups))
     notifier.async_start()
     async_check_default_groups(hass, entry, settings)
-    # Alerts deleted while Home Assistant was down: their notifications are
-    # cleared too, so the notifier comes first.
-    _async_forget_deleted_alerts(hass, entry, store)
 
     # The platform fills in the entities; supersession looks them up there.
     entities: dict[str, AlertEntity] = {}
     data[DATA_ENTITIES] = entities
     data[DATA_SUPERSESSION] = Supersession(hass, entities, settings)
     data[DATA_SUMMARY] = SummaryCoordinator(hass)
+
+    @callback
+    def _generated_alerts_changed() -> None:
+        # Generated alerts came or went (spec §12.3).
+        data[DATA_SUPERSESSION].async_refresh()
+        async_check_broken_references(hass, entry)
+
+    # Generators work out their alerts before any is added, so that their
+    # stored records aren't taken for deleted alerts' (spec §12.3).
+    generators = data[DATA_GENERATORS] = GeneratorManager(
+        hass, entry, store, settings, entities, _generated_alerts_changed
+    )
+    generators.async_load()
+    data[DATA_GENERATOR_SUBENTRIES] = _generator_subentries(entry)
+    # Alerts deleted while Home Assistant was down: their notifications are
+    # cleared too, so the notifier comes first.
+    _async_forget_deleted_alerts(hass, entry, store)
 
     component: EntityComponent[AlertEntity] = data[DATA_COMPONENT]
     if not await component.async_setup_entry(entry):
@@ -247,6 +297,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload an Alert Redux config entry."""
     data = hass.data[DOMAIN]
+    data[DATA_GENERATORS].async_stop()
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     unloaded = await data[DATA_COMPONENT].async_unload_entry(entry) and unloaded
     await data[DATA_NOTIFIER].async_stop()
@@ -261,23 +312,41 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     old: dict[str, tuple[str, dict[str, Any]]] = data[DATA_SUBENTRIES]
     new = data[DATA_SUBENTRIES] = _alert_subentries(entry)
 
-    # Home Assistant removes a deleted subentry's entity itself, through the
-    # entity registry; what's left is its stored record and the deleted event.
-    if removed := old.keys() - new.keys():
+    # Home Assistant removes a deleted subentry's entities itself, through the
+    # entity registry; what's left is their stored records and deleted events.
+    generators: GeneratorManager = data[DATA_GENERATORS]
+    old_generators: dict[str, tuple[str, dict[str, Any]]] = data[
+        DATA_GENERATOR_SUBENTRIES
+    ]
+    new_generators = data[DATA_GENERATOR_SUBENTRIES] = _generator_subentries(entry)
+    removed_generators = old_generators.keys() - new_generators.keys()
+    for subentry_id in removed_generators:
+        generators.async_remove_generator(subentry_id)
+    if (removed := old.keys() - new.keys()) or removed_generators:
         for subentry_id in removed:
             entities.pop(subentry_id, None)
         _async_forget_deleted_alerts(hass, entry, data[DATA_STORE])
 
     for subentry_id in new.keys() - old.keys():
         entity = create_alert_entity(
-            entry.subentries[subentry_id], data[DATA_STORE], data[DATA_SETTINGS]
+            AlertDefinition.from_subentry(entry.subentries[subentry_id]),
+            data[DATA_STORE],
+            data[DATA_SETTINGS],
         )
         entities[subentry_id] = entity
         data[DATA_ADD_ENTITIES]([entity], config_subentry_id=subentry_id)
 
     for subentry_id in new.keys() & old.keys():
         if new[subentry_id] != old[subentry_id] and subentry_id in entities:
-            entities[subentry_id].async_update_config(entry.subentries[subentry_id])
+            entities[subentry_id].async_update_config(
+                AlertDefinition.from_subentry(entry.subentries[subentry_id])
+            )
+
+    for subentry_id in new_generators.keys() - old_generators.keys():
+        generators.async_add_generator(entry.subentries[subentry_id])
+    for subentry_id in new_generators.keys() & old_generators.keys():
+        if new_generators[subentry_id] != old_generators[subentry_id]:
+            generators.async_update_generator(entry.subentries[subentry_id])
 
     groups = _group_subentries(entry)
     groups_changed = groups != data[DATA_GROUPS]
@@ -395,6 +464,17 @@ def _async_configure_notifier(notifier: Notifier, settings: Settings) -> None:
     )
 
 
+def _generator_subentries(
+    entry: ConfigEntry,
+) -> dict[str, tuple[str, dict[str, Any]]]:
+    """Return what identifies a change to each generator subentry."""
+    return {
+        subentry_id: (subentry.title, dict(subentry.data))
+        for subentry_id, subentry in entry.subentries.items()
+        if subentry.subentry_type == SUBENTRY_GENERATOR
+    }
+
+
 def _group_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]]]:
     """Return each notifier group subentry's name and definition."""
     return {
@@ -421,33 +501,12 @@ def _threshold_urgency(priority: str) -> int:
 def _async_forget_deleted_alerts(
     hass: HomeAssistant, entry: ConfigEntry, store: AlertStore
 ) -> None:
-    """Drop stored alerts whose subentry is gone, announcing each deletion and
-    clearing its notifications."""
+    """Drop stored alerts whose subentry or generator target is gone, announcing
+    each deletion and clearing its notifications."""
     current = {
         subentry_id
         for subentry_id, subentry in entry.subentries.items()
         if subentry.subentry_type == SUBENTRY_ALERT
-    }
+    } | hass.data[DOMAIN][DATA_GENERATORS].generated_ids()
     for unique_id in store.alert_ids() - current:
-        record = store.get_alert(unique_id) or {}
-        store.remove_alert(unique_id)
-        if entity_id := record.get("entity_id"):
-            async_clear_notifications(hass, entity_id)
-        hass.bus.async_fire(
-            EVENT_DELETED,
-            {
-                "entity_id": record.get("entity_id"),
-                ATTR_NAME: record.get(ATTR_NAME),
-                ATTR_PRIORITY: record.get(ATTR_PRIORITY),
-                ATTR_KIND: record.get(ATTR_KIND),
-                ATTR_OLD_STATE: _stored_state(record),
-                ATTR_NEW_STATE: None,
-                ATTR_USER_ID: None,
-            },
-        )
-
-
-def _stored_state(record: dict) -> str | None:
-    if "runtime" not in record:
-        return None
-    return AlertRuntime.from_dict(record["runtime"]).state
+        async_forget_alert(hass, store, unique_id)

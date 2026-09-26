@@ -1254,6 +1254,911 @@
         "reconfigure_successful": "Re-configuration was successful"
       }
     },
+    "generator": {
+      "entry_type": "Generator",
+      "initiate_flow": {
+        "user": "Add generator"
+      },
+      "step": {
+        "user": {
+          "title": "Add a generator",
+          "description": "A generator makes one alert for each entity that matches its targets, adding and removing alerts as entities start and stop matching. Choose the kind of alert it makes.",
+          "menu_options": {
+            "state": "State: an entity is in a given state",
+            "on_off": "On/off: separate criteria turn it on and off",
+            "threshold": "Threshold: a value is above or below a limit",
+            "template": "Template: a template is true",
+            "alert_state": "Alert state: another alert has been in a given state for a while"
+          }
+        },
+        "state": {
+          "title": "Add a generator of state alerts",
+          "description": "Makes a state alert for each target entity, firing while the target is in the given state, e.g. every lock that's `unlocked`. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "target_state": "State",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "target_state": "The alert fires while the target is in this state, e.g. `unlocked` or `on`. Targeting `unavailable` or `unknown` alerts on that state; otherwise those states mean the alert has no data.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        },
+        "on_off": {
+          "title": "Add a generator of on/off alerts",
+          "description": "Makes an on/off alert for each target entity. Each side needs a template, triggers, or both; triggers are the same for every target. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "on_template": "On template",
+            "on_triggers": "On triggers",
+            "off_template": "Off template",
+            "off_triggers": "Off triggers",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "on_template": "The alert turns on when this becomes true. It must become true: if it's already true when the alert stops, it has to go false first.",
+            "on_triggers": "The alert turns on when one of these fires (and the on template, if set, is true).",
+            "off_template": "The alert turns off when this becomes true.",
+            "off_triggers": "The alert turns off when one of these fires (and the off template, if set, is true).",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "How long the on template must stay true before the alert fires. Needs an on template.",
+            "delay_off": "How long the off template must stay true before the alert stops. Needs an off template.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        },
+        "threshold": {
+          "title": "Add a generator of threshold alerts",
+          "description": "Makes a threshold alert for each target entity. The value is the target's state (or attribute), unless a value template gives it. Set at least one limit. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "attribute": "Attribute",
+            "value_template": "Value template",
+            "minimum": "Minimum",
+            "maximum": "Maximum",
+            "hysteresis": "Hysteresis",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "attribute": "Optional. Use this attribute of the target instead of its state.",
+            "value_template": "Optional. A template for the value, e.g. using `target`, instead of the target's state. A result that isn't a number means the alert has no data.",
+            "minimum": "The alert fires while the value is below this. A plain number, or a template that reads an entity. Leave empty for no minimum.",
+            "maximum": "The alert fires while the value is above this. A number, or a template. Leave empty for no maximum.",
+            "hysteresis": "Once firing, the value must come back inside the limits by this much before the alert stops.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        },
+        "template": {
+          "title": "Add a generator of template alerts",
+          "description": "Makes a template alert for each target entity, e.g. one that's true while `is_state(target, 'unlocked')`. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "template": "Template",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "template": "The alert fires while this renders true. A result that isn't clearly true or false (an error, `unknown`, `unavailable`, `none`, or anything else) means the alert has no data.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        },
+        "alert_state": {
+          "title": "Add a generator of alert state alerts",
+          "description": "Makes an alert state alert for each target alert, e.g. to escalate every alert with a given label when nobody acknowledges it. Generated alerts are never targets. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "alert_states": "States",
+            "condition": "Extra condition",
+            "delay_on": "For how long",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "alert_states": "This alert fires while the watched alert is in one of these states. `Active` means firing and unacknowledged; `Acknowledged` includes snoozed.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "How long the watched alert must stay in those states before this alert fires. Acknowledging it, or its firing ending, starts the time again.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        },
+        "reconfigure_state": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "target_state": "State",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "target_state": "The alert fires while the target is in this state, e.g. `unlocked` or `on`. Targeting `unavailable` or `unknown` alerts on that state; otherwise those states mean the alert has no data.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        },
+        "reconfigure_on_off": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "on_template": "On template",
+            "on_triggers": "On triggers",
+            "off_template": "Off template",
+            "off_triggers": "Off triggers",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "on_template": "The alert turns on when this becomes true. It must become true: if it's already true when the alert stops, it has to go false first.",
+            "on_triggers": "The alert turns on when one of these fires (and the on template, if set, is true).",
+            "off_template": "The alert turns off when this becomes true.",
+            "off_triggers": "The alert turns off when one of these fires (and the off template, if set, is true).",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "How long the on template must stay true before the alert fires. Needs an on template.",
+            "delay_off": "How long the off template must stay true before the alert stops. Needs an off template.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        },
+        "reconfigure_threshold": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "attribute": "Attribute",
+            "value_template": "Value template",
+            "minimum": "Minimum",
+            "maximum": "Maximum",
+            "hysteresis": "Hysteresis",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "attribute": "Optional. Use this attribute of the target instead of its state.",
+            "value_template": "Optional. A template for the value, e.g. using `target`, instead of the target's state. A result that isn't a number means the alert has no data.",
+            "minimum": "The alert fires while the value is below this. A plain number, or a template that reads an entity. Leave empty for no minimum.",
+            "maximum": "The alert fires while the value is above this. A number, or a template. Leave empty for no maximum.",
+            "hysteresis": "Once firing, the value must come back inside the limits by this much before the alert stops.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        },
+        "reconfigure_template": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "template": "Template",
+            "condition": "Extra condition",
+            "delay_on": "Delay before firing",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "template": "The alert fires while this renders true. A result that isn't clearly true or false (an error, `unknown`, `unavailable`, `none`, or anything else) means the alert has no data.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "Optional. How long the condition must hold before the alert fires.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        },
+        "reconfigure_alert_state": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "Name",
+            "name_template": "Alert name template",
+            "priority": "Priority",
+            "icon": "Icon",
+            "alert_states": "States",
+            "condition": "Extra condition",
+            "delay_on": "For how long",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "alert_states": "This alert fires while the watched alert is in one of these states. `Active` means firing and unacknowledged; `Acknowledged` includes snoozed.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "How long the watched alert must stay in those states before this alert fires. Acknowledging it, or its firing ending, starts the time again.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "use_default_throttle": "Use the default throttle",
+                "throttle_count": "Throttle: notifications",
+                "throttle_minutes": "Throttle: in minutes",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "use_default_throttle": "Use the default throttle set in the integration's options. Turn off to set this alert's own.",
+                "throttle_count": "Used when the default throttle is turned off. At most this many on notifications in any window of the minutes below; the one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",
+                "throttle_minutes": "The throttle's window, in minutes.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "name_exists": "A generator with this name already exists.",
+        "invalid_schedule": "A reminder schedule must be a list of positive numbers of minutes, e.g. `10, 20, 30, 60`.",
+        "invalid_throttle": "A throttle needs both a whole number of notifications (at least 1) and a positive number of minutes, or neither for no throttling.",
+        "invalid_trigger": "The triggers aren't valid. Triggers that set variables, or are enabled by a template, can't be used.",
+        "value_source": "Set either an attribute or a value template, not both.",
+        "limit_required": "Set a minimum, a maximum, or both.",
+        "invalid_limits": "The minimum must be less than the maximum.",
+        "criterion_required": "Each side needs a template, triggers, or both.",
+        "delay_needs_template": "A delay needs a template on its side: triggers alone can't stay true for the delay.",
+        "alert_states_missing": "Choose at least one state.",
+        "button_incomplete": "Each notification button needs a label and an action.",
+        "invalid_button_action": "A notification button's action isn't valid.",
+        "targets_required": "Set at least one target criterion: labels, areas, domains, device classes, or a pattern."
+      },
+      "abort": {
+        "reconfigure_successful": "Re-configuration was successful"
+      }
+    },
     "notifier_group": {
       "entry_type": "Notifier group",
       "initiate_flow": {
@@ -1504,6 +2409,16 @@
           "description": "When to enable the alert again."
         }
       }
+    },
+    "refresh_generator": {
+      "name": "Refresh generator",
+      "description": "Re-evaluates generators' targets now, adding and removing their alerts. Generators refresh themselves as entities change, so this is for debugging.",
+      "fields": {
+        "entity_id": {
+          "name": "Generators",
+          "description": "The generator sensors to refresh."
+        }
+      }
     }
   },
   "exceptions": {
@@ -1515,6 +2430,9 @@
     },
     "suspend_in_past": {
       "message": "{entity_id} can't be suspended until a time that has already passed."
+    },
+    "not_generator": {
+      "message": "{entity_id} isn't an Alert Redux generator."
     }
   },
   "options": {
@@ -1524,6 +2442,7 @@
         "data": {
           "no_data_grace": "No-data grace period",
           "startup_delay": "Startup delay",
+          "generator_grace": "Generator startup grace",
           "default_groups": "Default notifier groups",
           "default_reminder_schedule": "Default reminder schedule",
           "throttle_count": "Default throttle: notifications",
@@ -1536,6 +2455,7 @@
         "data_description": {
           "no_data_grace": "How long a firing alert keeps firing while its inputs have no data, unless the alert sets its own.",
           "startup_delay": "When Home Assistant starts, wait this long before evaluating condition alerts. Zero to evaluate straight away.",
+          "generator_grace": "When Home Assistant starts, generators don't remove any alerts until this long after it has started, so that entities from slow integrations don't make alerts come and go.",
           "default_groups": "The groups alerts send to unless they choose their own. With none set, those alerts send to the fallback instead.",
           "default_reminder_schedule": "Minutes between reminders while an alert is firing and unacknowledged, unless it sets its own, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
           "throttle_count": "At most this many on notifications in any window of the minutes below, for alerts that don't set their own throttle. The one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",

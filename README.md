@@ -133,6 +133,38 @@ alert only sends reminders if its duration is longer than the first reminder
 interval. Triggers start once Home Assistant has started (and after the startup
 delay), so entities loading at startup don't fire them.
 
+### Generators
+
+A **generator** makes one alert for each entity that matches its **targets**: the
+same alert on every door lock, say, or every battery. Add one with **Settings →
+Devices & Services → Alert Redux → Add generator**, choose the kind of alert it
+makes (state, on/off, threshold, template, or alert state), and fill in the alert's
+form as usual, with the **target** in place of the entity it watches.
+
+Targets are chosen by labels, areas, domains, device classes, and an entity ID
+pattern (`lock.*_door`): an entity must match every one you set, and any value
+within each. Labels and areas count through the entity's device too. You can also
+exclude entities. Diagnostic entities, such as battery levels, can be targets;
+disabled and configuration entities can't, and nor can generated alerts.
+
+As entities start and stop matching, their alerts are added and removed, e.g. a new
+lock gets its alert as soon as it's added. When Home Assistant starts, generators
+don't remove anything until the **generator startup grace** (5 minutes by default)
+has passed, so entities from slow integrations don't make alerts come and go.
+
+Each generated alert is about its target: it's the alert's `subject_entity`, and
+every template (the messages included) gets `target` (its entity ID) and
+`target_name`. The alert's name comes from an optional **name template**, by
+default the target's name followed by the generator's ("Front Door Unlocked"), and
+its entity ID from the target and the generator (`alert_redux.front_door_unlocked`).
+If the target is renamed, its alert keeps its state and follows it. Generated
+alerts are edited through their generator, and show it in `generated_by`.
+
+Each generator also has a sensor, `sensor.alert_redux_generator_<name>`: the number
+of alerts it has made, with its `targets`, those `alerts`, and any `problems`.
+`alert_redux.refresh_generator` re-evaluates a generator's targets at once, for
+debugging; they normally follow changes by themselves.
+
 ### Snoozing, disabling, and suspending
 
 **Snoozing** acknowledges a firing alert for a while. If it's still firing when the
@@ -166,6 +198,7 @@ down ends as soon as it's back.
 | `alert_redux.disable` | Disables an alert until it's enabled. Admin only. |
 | `alert_redux.enable` | Enables a disabled or suspended alert. Admin only. |
 | `alert_redux.suspend` | Disables an alert for a `duration`, or `until` a time (local time if it has no time zone). Admin only. |
+| `alert_redux.refresh_generator` | Re-evaluates the targets of the generators whose sensors are given as `entity_id`. |
 
 An action that doesn't apply to an alert's current state (such as acknowledging an
 idle alert) does nothing.
@@ -384,6 +417,9 @@ The integration's **Configure** button sets:
 - the default no-data grace period;
 - an optional **startup delay**: how long to wait after Home Assistant starts before
   evaluating condition alerts and starting triggers;
+- the **generator startup grace** (5 minutes by default): how long after Home
+  Assistant has started generators wait before removing alerts whose targets are
+  missing;
 - the default notifier groups and reminder schedule;
 - the fallback group, and the retry timeout;
 - the **snooze-end window** (5 minutes by default): when a snooze runs out, a

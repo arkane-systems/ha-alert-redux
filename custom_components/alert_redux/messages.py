@@ -51,18 +51,21 @@ def message_context(
     trigger: Mapping[str, Any] | None = None,
     started: datetime | None = None,
     ended: datetime | None = None,
+    extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the variables available to an alert's message templates.
 
     reason is why the notification is sent (on, reminder, or done); end_reason is
     why the firing ended, for the done message, and started and ended when the
     firing started and ended (as ISO 8601 text). trigger is an event alert's
-    trigger variables, as in automations; other kinds have none.
+    trigger variables, as in automations; other kinds have none. extra adds
+    variables of the alert's own, such as a generated alert's target.
     """
     subject_name = name
     if subject_entity is not None and (state := hass.states.get(subject_entity)):
         subject_name = state.name
     variables = {
+        **(extra or {}),
         "name": name,
         "entity_id": entity_id,
         "priority": priority,

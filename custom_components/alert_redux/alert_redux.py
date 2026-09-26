@@ -1,4 +1,5 @@
-"""The alert_redux entity platform: one alert entity per alert subentry.
+"""The alert_redux entity platform: one alert entity per alert subentry, plus the
+generated alerts.
 
 Alert entities live in the integration's own domain (``alert_redux.*``), so they're
 added through the integration's EntityComponent, which loads this module as the
@@ -18,11 +19,13 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .const import (
     DATA_ADD_ENTITIES,
     DATA_ENTITIES,
+    DATA_GENERATORS,
     DATA_SETTINGS,
     DATA_STORE,
     DOMAIN,
     SUBENTRY_ALERT,
 )
+from .definitions import AlertDefinition
 from .entity import create_alert_entity
 
 
@@ -42,6 +45,12 @@ async def async_setup_entry(
     for subentry in entry.subentries.values():
         if subentry.subentry_type != SUBENTRY_ALERT:
             continue
-        entity = create_alert_entity(subentry, data[DATA_STORE], data[DATA_SETTINGS])
+        entity = create_alert_entity(
+            AlertDefinition.from_subentry(subentry),
+            data[DATA_STORE],
+            data[DATA_SETTINGS],
+        )
         entities[subentry.subentry_id] = entity
         async_add_entities([entity], config_subentry_id=subentry.subentry_id)
+    # Then the generated alerts (spec §12.3).
+    data[DATA_GENERATORS].async_start()

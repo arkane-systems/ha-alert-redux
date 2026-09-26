@@ -20,7 +20,8 @@ admin card), phase 7 (supersession, propagation and pre-acknowledgement, the
 alert state kind, dangling references, and the card's superseded alerts), and
 phase 8 (the summary sensors, the logbook platform, and the `_data_restored`
 event), and phase 9 (replacing and clearing notifications, and notification
-buttons), and phase 10 (throttling and quiet hours).
+buttons), and phase 10 (throttling and quiet hours), and generators (phase 11a;
+generated supersession is 11b).
 
 ## Specification
 
@@ -43,11 +44,28 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     and registers the actions; config entry setup/unload; applies subentry and
     option changes **in place** (adding, updating, and forgetting alert entities)
     rather than reloading the entry, including notifier group subentries (given to
-    the `Notifier` in place); announces alerts deleted since the last run.
+    the `Notifier` in place) and generator subentries (given to the
+    `GeneratorManager`); announces alerts deleted since the last run (any stored
+    record that's neither an alert subentry's nor a generated alert's); the
+    `refresh_generator` action.
   - `alert_redux.py` — the entity platform for our own domain, loaded by
     `EntityComponent.async_setup_entry`; adds one entity per alert subentry, linked
-    with `config_subentry_id` so HA removes it with the subentry, and keeps the
-    add-entities callback for alerts added later.
+    with `config_subentry_id` so HA removes it with the subentry, then starts the
+    generators, and keeps the add-entities callback for alerts added later.
+  - `definitions.py` — `AlertDefinition`, what an alert entity is built from:
+    unique ID, name, data, and for a generated alert its generator, target, and
+    extra template variables. Fixed alerts' come from their subentries
+    (`from_subentry`).
+  - `generators.py` — generators (spec §12.3): `TargetCriteria` (HA-free
+    matching, AND across and OR within), `async_candidates` (the entities that
+    can be targets), `Generator` (one subentry: its alert template and the
+    definitions it has made, by target key), and `GeneratorManager` in
+    `hass.data`, which adds, updates, and removes generated alerts as the
+    registries and states change (debounced), holding back removals until the
+    startup grace has passed. Generated alerts are added with the generator's
+    `config_subentry_id`, and kept in `DATA_ENTITIES` by unique ID like the
+    fixed ones. Also `async_forget_alert`, which drops a deleted alert's record
+    and announces it.
   - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
     persistence, and the rendered messages while firing; snoozing, disabling, and
     suspending, for every kind; supersession's on debounce, skipped reminders, and
@@ -83,8 +101,9 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `async_write_ha_state` and withdraws from when removed; it recomputes once
     per burst of reports and tells the sensors.
   - `sensor.py` — the summary sensors (spec §11.2), the one platform forwarded
-    from the config entry. No device and no label; their entity IDs are set
-    explicitly, whatever the translated names.
+    from the config entry, and a `GeneratorSensor` per generator (§12.3). No
+    device and no label; their entity IDs are set explicitly, whatever the
+    names.
   - `logbook.py` — describes only the events that add to the logbook's state rows
     (spec §11.4). A describer can't drop a row, so events like `_acked`, which
     would duplicate their state rows, are simply not registered.
@@ -132,7 +151,10 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `config_flow.py` — single-instance config flow (`single_config_entry` in the
     manifest makes HA enforce the one-instance rule), the options flow (global
     defaults), the alert subentry flow (a menu of kinds, then a form per kind, with a
-    collapsed notifications `section` flattened into the stored data), and the
+    collapsed notifications `section` flattened into the stored data), the
+    generator subentry flow (a menu of the condition kinds, then the kind's alert
+    form with `generator=True`: a name template and a `targets` section, stored
+    nested, instead of the kind's entity and the subject entity), and the
     notifier group subentry flow.
   - `services.yaml`, `icons.json` — action definitions and icons.
   - `frontend.py` — serves `frontend/` via a static path and registers the card as a
