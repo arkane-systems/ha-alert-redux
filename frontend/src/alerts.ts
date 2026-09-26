@@ -67,6 +67,7 @@ export function toAlert(entity: HassEntity): Alert {
       ? attributes.missing_inputs.map(String)
       : [],
     snoozedUntil: toDate(attributes.snoozed_until),
+    disabledUntil: toDate(attributes.disabled_until),
   };
 }
 
@@ -98,6 +99,29 @@ export function compareNoData(a: Alert, b: Alert): number {
     a.name.localeCompare(b.name)
   );
 }
+
+/** State names, for a frontend too old to translate them. */
+export const STATE_NAMES: Record<string, string> = {
+  idle: "Idle",
+  active: "Active",
+  ack: "Acknowledged",
+  no_data: "No data",
+  disabled: "Disabled",
+};
+
+/** Kind names, for a frontend too old to translate them. */
+export const KIND_NAMES: Record<string, string> = {
+  manual: "Manual",
+  state: "State",
+  on_off: "On/off",
+  threshold: "Threshold",
+  template: "Template",
+  trigger: "Trigger",
+  event: "Bus event",
+};
+
+/** Alerts by name. */
+export const compareName = (a: Alert, b: Alert): number => a.name.localeCompare(b.name);
 
 /** The snooze menu's durations, in minutes, unless the card sets its own. */
 export const DEFAULT_SNOOZE_DURATIONS: readonly number[] = [15, 30, 60, 120, 240];

@@ -1,9 +1,9 @@
 import { css } from "lit";
 
-// Styled after weather_alerts_card (N31): bordered alert boxes with a priority-
-// coloured bar and a tinted icon chip. The priority colours are spec §13.1's; each
-// can be overridden from a theme through its --alert-redux-* variable.
-export const cardStyles = css`
+// Shared by both cards: the priority colours, buttons, and section titles. The
+// priority colours are spec §13.1's; each can be overridden from a theme through its
+// --alert-redux-* variable.
+export const sharedStyles = css`
   :host {
     --ar-emergency: var(--alert-redux-emergency-color, #e53935);
     --ar-critical: var(--alert-redux-critical-color, #fb8c00);
@@ -14,6 +14,99 @@ export const cardStyles = css`
     display: block;
   }
 
+  .p-emergency { --c: var(--ar-emergency); }
+  .p-critical { --c: var(--ar-critical); }
+  .p-warning { --c: var(--ar-warning); }
+  .p-notice { --c: var(--ar-notice); }
+  .p-informational { --c: var(--ar-informational); }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 18px;
+    border: 1px solid var(--divider-color);
+    background: transparent;
+    color: var(--primary-text-color);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    --mdc-icon-size: 18px;
+  }
+  button:hover {
+    background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+  }
+  button:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  button.primary {
+    border-color: transparent;
+    background: var(--primary-color);
+    color: var(--text-primary-color, #fff);
+  }
+  button.primary:hover {
+    background: color-mix(in srgb, var(--primary-color) 85%, #000);
+  }
+
+  button .caret {
+    margin: 0 -6px 0 -4px;
+  }
+  button.snoozed {
+    border-color: color-mix(in srgb, var(--primary-color) 60%, var(--divider-color));
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  }
+
+  /* A row of choices opened below a control, e.g. snooze durations. */
+  .choices {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--divider-color);
+  }
+  .choices .label {
+    flex-basis: 100%;
+    text-align: right;
+    font-size: 0.85rem;
+    color: var(--secondary-text-color);
+  }
+  .choices .break {
+    flex-basis: 100%;
+    height: 0;
+  }
+  button.chip-button {
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 0.8rem;
+    --mdc-icon-size: 16px;
+  }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--secondary-text-color);
+    --mdc-icon-size: 16px;
+  }
+`;
+
+// The main card, styled after weather_alerts_card (N31): bordered alert boxes with a
+// priority-coloured bar and a tinted icon chip.
+export const cardStyles = css`
   .content {
     display: flex;
     flex-direction: column;
@@ -23,12 +116,6 @@ export const cardStyles = css`
   .content.has-header {
     padding-top: 0;
   }
-
-  .p-emergency { --c: var(--ar-emergency); }
-  .p-critical { --c: var(--ar-critical); }
-  .p-warning { --c: var(--ar-warning); }
-  .p-notice { --c: var(--ar-notice); }
-  .p-informational { --c: var(--ar-informational); }
 
   /* --- One firing alert --- */
   .alert {
@@ -207,93 +294,10 @@ export const cardStyles = css`
     gap: 8px;
   }
 
-  button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border-radius: 18px;
-    border: 1px solid var(--divider-color);
-    background: transparent;
-    color: var(--primary-text-color);
-    font: inherit;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    --mdc-icon-size: 18px;
-  }
-  button:hover {
-    background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
-  }
-  button:focus-visible {
-    outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-  button.primary {
-    border-color: transparent;
-    background: var(--primary-color);
-    color: var(--text-primary-color, #fff);
-  }
-  button.primary:hover {
-    background: color-mix(in srgb, var(--primary-color) 85%, #000);
-  }
-
-  button .caret {
-    margin: 0 -6px 0 -4px;
-  }
-  button.snoozed {
-    border-color: color-mix(in srgb, var(--primary-color) 60%, var(--divider-color));
-    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  }
-
-  /* The snooze durations, opened below the controls. */
-  .snooze-menu {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 6px;
-    padding-top: 8px;
-    border-top: 1px dashed var(--divider-color);
-  }
-  .snooze-menu .label {
-    flex-basis: 100%;
-    text-align: right;
-    font-size: 0.85rem;
-    color: var(--secondary-text-color);
-  }
-  .snooze-menu .break {
-    flex-basis: 100%;
-    height: 0;
-  }
-  button.chip-button {
-    padding: 4px 12px;
-    border-radius: 14px;
-    font-size: 0.8rem;
-    --mdc-icon-size: 16px;
-  }
-
   /* --- Empty state, no-data section, version banner --- */
   .empty {
     color: var(--secondary-text-color);
     font-size: 0.9rem;
-  }
-
-  .section-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 4px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--secondary-text-color);
-    --mdc-icon-size: 16px;
   }
 
   .no-data {
@@ -328,6 +332,16 @@ export const cardStyles = css`
   }
   .no-data-row .meta {
     font-size: 0.8rem;
+  }
+
+  /* Disabled alerts aren't shown on this card, only counted (spec §13.1). */
+  .disabled-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--secondary-text-color);
+    --mdc-icon-size: 16px;
   }
 
   .banner {

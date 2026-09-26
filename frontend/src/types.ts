@@ -17,6 +17,16 @@ export interface HomeAssistant {
   callWS<T>(message: { type: string; [key: string]: unknown }): Promise<T>;
   themes?: { darkMode?: boolean };
   locale?: { language?: string };
+  user?: { is_admin: boolean };
+  /** The state as the frontend shows it, translated (HA 2023.9 on). */
+  formatEntityState?(entity: HassEntity): string;
+  /** An attribute's value as the frontend shows it, translated. */
+  formatEntityAttributeValue?(entity: HassEntity, attribute: string): string;
+}
+
+export interface AlertReduxAdminCardConfig {
+  type: string;
+  title?: string;
 }
 
 export interface AlertReduxCardConfig {
@@ -48,4 +58,6 @@ export interface Alert {
   missingInputs: string[];
   /** While snoozed: when the snooze runs out (spec §6.2). */
   snoozedUntil: Date | null;
+  /** While suspended: when the alert is enabled again (spec §6.4). */
+  disabledUntil: Date | null;
 }

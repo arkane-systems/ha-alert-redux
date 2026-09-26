@@ -9,7 +9,7 @@ const manifest = JSON.parse(
 );
 
 const options = {
-  entryPoints: ["src/alert-redux-card.ts"],
+  entryPoints: ["src/main.ts"],
   outfile: "../custom_components/alert_redux/frontend/alert-redux-card.js",
   bundle: true,
   format: "esm",
