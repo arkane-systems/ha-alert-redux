@@ -1,9 +1,13 @@
-"""The summary sensors (spec §11.2).
+"""The summary sensors (spec §11.2), and the generator sensors (§12.3).
 
-Glue such as a signal light can follow one of these instead of every alert. They
-read the SummaryCoordinator, which the alerts report to. They have no device
+Glue such as a signal light can follow a summary sensor instead of every alert.
+They read the SummaryCoordinator, which the alerts report to. They have no device
 (spec §11.5) and don't get the alerts label: they change constantly, and would
 flood an Activity card.
+
+Each generator has a sensor too: the number of alerts it has made, with its
+targets, those alerts, and any problems. Like the summary sensors, they have no
+device and no label.
 """
 
 from __future__ import annotations
@@ -20,10 +24,22 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import slugify
 
-from .const import DATA_SUMMARY, DOMAIN, Priority
+from .const import (
+    ATTR_ALERTS,
+    ATTR_PROBLEMS,
+    ATTR_TARGETS,
+    DATA_ADD_SENSORS,
+    DATA_GENERATORS,
+    DATA_SUMMARY,
+    DOMAIN,
+    Priority,
+)
+from .definitions import generator_unique_id
+from .generators import GeneratorManager
 from .summary import Summary, SummaryCoordinator
 
 ATTR_ENTITY_IDS = "entity_ids"
@@ -89,11 +105,17 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Add the summary sensors."""
-    coordinator: SummaryCoordinator = hass.data[DOMAIN][DATA_SUMMARY]
+    """Add the summary sensors, and a sensor for each generator.
+
+    The callback is kept so that generators added later get theirs in place.
+    """
+    data = hass.data[DOMAIN]
+    coordinator: SummaryCoordinator = data[DATA_SUMMARY]
     async_add_entities(
         SummarySensor(coordinator, description) for description in SENSORS
     )
+    data[DATA_ADD_SENSORS] = async_add_entities
+    data[DATA_GENERATORS].async_add_sensors()
 
 
 class SummarySensor(SensorEntity):
@@ -140,3 +162,68 @@ class SummarySensor(SensorEntity):
             )
         attributes[ATTR_ENTITY_IDS] = list(description.entity_ids(summary))
         return attributes
+
+
+class GeneratorSensor(SensorEntity):
+    """A generator: how many alerts it has made, and for which targets."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_icon = "mdi:creation"
+    # The lists can grow long.
+    _unrecorded_attributes = frozenset({ATTR_TARGETS, ATTR_ALERTS})
+
+    def __init__(self, manager: GeneratorManager, subentry_id: str) -> None:
+        """Initialize the sensor."""
+        self._manager = manager
+        self._subentry_id = subentry_id
+        generator = manager.generators[subentry_id]
+        self._attr_unique_id = generator_unique_id(subentry_id)
+        # The spec's entity ID (§12.3), whatever the translated name; the
+        # registry keeps it if the generator is renamed.
+        self.entity_id = f"sensor.{DOMAIN}_generator_{slugify(generator.name)}"
+        # Named directly, not translated: it follows the generator's name.
+        self._attr_name = _generator_sensor_name(generator.name)
+
+    async def async_added_to_hass(self) -> None:
+        """Follow the generator, and let its alerts show this sensor as their
+        generator (they were added first)."""
+        self.async_on_remove(
+            self._manager.async_add_listener(self._subentry_id, self._async_changed)
+        )
+        if (generator := self._manager.generators.get(self._subentry_id)) is not None:
+            for entity in generator.entities.values():
+                if entity.hass is not None:
+                    entity.async_write_ha_state()
+
+    @callback
+    def _async_changed(self) -> None:
+        if (generator := self._manager.generators.get(self._subentry_id)) is not None:
+            self._attr_name = _generator_sensor_name(generator.name)
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the number of alerts the generator has made."""
+        if (generator := self._manager.generators.get(self._subentry_id)) is None:
+            return None
+        return len(generator.definitions)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the targets, the alerts, and any problems."""
+        if (generator := self._manager.generators.get(self._subentry_id)) is None:
+            return None
+        return {
+            ATTR_TARGETS: generator.targets,
+            ATTR_ALERTS: sorted(
+                entity.entity_id
+                for entity in generator.entities.values()
+                if entity.entity_id is not None
+            ),
+            ATTR_PROBLEMS: list(generator.problems),
+        }
+
+
+def _generator_sensor_name(name: str) -> str:
+    return f"Alert Redux generator {name}"

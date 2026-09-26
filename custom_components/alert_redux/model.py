@@ -28,6 +28,7 @@ from .const import (
     CONF_RETRY_TIMEOUT,
     CONF_SNOOZE_REMINDER_WINDOW,
     CONF_STARTUP_DELAY,
+    CONF_GENERATOR_GRACE,
     CONF_SUPERSESSION_DEBOUNCE,
     DEFAULT_BUTTON_SNOOZE_DURATION,
     DEFAULT_DONE_WINDOW,
@@ -38,6 +39,7 @@ from .const import (
     DEFAULT_RETRY_TIMEOUT,
     DEFAULT_SNOOZE_REMINDER_WINDOW,
     DEFAULT_STARTUP_DELAY,
+    DEFAULT_GENERATOR_GRACE,
     DEFAULT_SUPERSESSION_DEBOUNCE,
     AlertState,
     EndReason,
@@ -103,6 +105,9 @@ class Settings:
 
     no_data_grace: timedelta = DEFAULT_NO_DATA_GRACE
     startup_delay: timedelta = DEFAULT_STARTUP_DELAY
+    # Generators remove no alerts until this long after Home Assistant has
+    # started (spec §12.3).
+    generator_grace: timedelta = DEFAULT_GENERATOR_GRACE
     # Notifier group IDs; empty means none configured, so the fallback is used.
     default_groups: tuple[str, ...] = ()
     # Minutes between reminders (spec §9.6).
@@ -137,6 +142,7 @@ class Settings:
         """Read the settings from the entry's options, defaulting what's unset."""
         grace = to_timedelta(options.get(CONF_NO_DATA_GRACE))
         startup = to_timedelta(options.get(CONF_STARTUP_DELAY))
+        generator_grace = to_timedelta(options.get(CONF_GENERATOR_GRACE))
         schedule = options.get(CONF_DEFAULT_REMINDER_SCHEDULE)
         retry = to_timedelta(options.get(CONF_RETRY_TIMEOUT))
         durations = options.get(CONF_EVENT_DURATIONS) or {}
@@ -147,6 +153,9 @@ class Settings:
         return cls(
             no_data_grace=DEFAULT_NO_DATA_GRACE if grace is None else grace,
             startup_delay=DEFAULT_STARTUP_DELAY if startup is None else startup,
+            generator_grace=(
+                DEFAULT_GENERATOR_GRACE if generator_grace is None else generator_grace
+            ),
             default_groups=tuple(options.get(CONF_DEFAULT_GROUPS, ())),
             reminder_schedule=(
                 DEFAULT_REMINDER_SCHEDULE if schedule is None else tuple(schedule)

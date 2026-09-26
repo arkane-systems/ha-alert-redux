@@ -12,6 +12,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.alert_redux.const import (
     DOMAIN,
     SUBENTRY_ALERT,
+    SUBENTRY_GENERATOR,
     SUBENTRY_NOTIFIER_GROUP,
 )
 
@@ -130,6 +131,20 @@ def _subentry(
     }
     if subentry_id is not None:
         subentry["subentry_id"] = subentry_id
+    return subentry
+
+
+def generator_subentry(
+    title: str,
+    kind: str = "state",
+    subentry_id: str | None = None,
+    *,
+    targets: dict[str, Any],
+    **data: Any,
+) -> dict[str, Any]:
+    """Return subentry data for a generator (spec §12.3)."""
+    subentry = _subentry(title, subentry_id, {"kind": kind, "targets": targets, **data})
+    subentry["subentry_type"] = SUBENTRY_GENERATOR
     return subentry
 
 

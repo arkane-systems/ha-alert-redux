@@ -9,14 +9,14 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigSubentry
+from homeassistant.const import Platform
 from homeassistant.core import CALLBACK_TYPE, Context, HomeAssistant, callback
 from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
     TemplateError,
 )
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.helpers.script import Script, async_validate_actions_config
@@ -42,6 +42,7 @@ from .const import (
     ATTR_EVENT_TYPE,
     ATTR_FIRE_COUNT,
     ATTR_FIRE_DATA,
+    ATTR_GENERATED_BY,
     ATTR_FIRING_SINCE,
     ATTR_HYSTERESIS,
     ATTR_KIND,
@@ -160,6 +161,7 @@ from .const import (
     EndReason,
     Priority,
 )
+from .definitions import AlertDefinition, generator_unique_id
 from .labels import async_apply_label
 from .messages import Messages, MessageTracker, message_context
 from .buttons import BUTTON_ACK, BUTTON_SNOOZE, alert_buttons, custom_button_key
@@ -261,15 +263,15 @@ class PointTimer:
 
 
 def create_alert_entity(
-    subentry: ConfigSubentry, store: AlertStore, settings: Settings
+    definition: AlertDefinition, store: AlertStore, settings: Settings
 ) -> AlertEntity:
-    """Return the entity for an alert subentry, according to its kind."""
-    kind = AlertKind(subentry.data[CONF_KIND])
+    """Return the entity for an alert definition, according to its kind."""
+    kind = AlertKind(definition.data[CONF_KIND])
     if kind in CONDITION_KINDS:
-        return ConditionAlertEntity(subentry, store, settings)
+        return ConditionAlertEntity(definition, store, settings)
     if kind in EVENT_KINDS:
-        return EventAlertEntity(subentry, store, settings)
-    return AlertEntity(subentry, store, settings)
+        return EventAlertEntity(definition, store, settings)
+    return AlertEntity(definition, store, settings)
 
 
 class AlertEntity(Entity):
@@ -284,12 +286,12 @@ class AlertEntity(Entity):
     )
 
     def __init__(
-        self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
+        self, definition: AlertDefinition, store: AlertStore, settings: Settings
     ) -> None:
-        """Initialize the alert from its subentry."""
+        """Initialize the alert from its definition."""
         self._store = store
         self._settings = settings
-        self._kind = AlertKind(subentry.data[CONF_KIND])
+        self._kind = AlertKind(definition.data[CONF_KIND])
         self._runtime = AlertRuntime()
         self._messages: Messages | None = None
         self._message_tracker: MessageTracker | None = None
@@ -313,12 +315,13 @@ class AlertEntity(Entity):
         # before the first.
         self._was_firing: bool | None = None
         self._was_acked: bool | None = None
-        self._attr_unique_id = subentry.subentry_id
-        self._configure(subentry)
+        self._attr_unique_id = definition.unique_id
+        self._configure(definition)
 
-    def _configure(self, subentry: ConfigSubentry) -> None:
-        """Take the alert's configuration from its subentry."""
-        data = subentry.data
+    def _configure(self, definition: AlertDefinition) -> None:
+        """Take the alert's configuration from its definition."""
+        self._definition = definition
+        data = definition.data
         self._priority = Priority(data[CONF_PRIORITY])
         self._acknowledgeable: bool = data[CONF_ACKNOWLEDGEABLE]
         self._user_dismissable: bool = data.get(CONF_USER_DISMISSABLE, False)
@@ -343,13 +346,32 @@ class AlertEntity(Entity):
         ]
         # The alert state kind's watched alert.
         self._watched_alert: str | None = data.get(CONF_ALERT) or None
-        self._attr_name = subentry.title
+        self._attr_name = definition.name
         self._attr_icon = data.get(CONF_ICON) or DEFAULT_PRIORITY_ICONS[self._priority]
 
     @property
     def subject_entity(self) -> str | None:
         """Return the entity the alert is about, if any (spec §9.5)."""
         return self._explicit_subject
+
+    @property
+    def definition(self) -> AlertDefinition:
+        """Return what the alert was built from."""
+        return self._definition
+
+    def _generated_by(self) -> str | None:
+        """Return the generator sensor's entity ID, for a generated alert."""
+        if (generator := self._definition.generator) is None:
+            return None
+        return er.async_get(self.hass).async_get_entity_id(
+            Platform.SENSOR, DOMAIN, generator_unique_id(generator)
+        )
+
+    @property
+    def _variables(self) -> dict[str, Any]:
+        """Return the extra variables for the alert's templates (a generated
+        alert's target, spec §12.3)."""
+        return dict(self._definition.variables)
 
     @property
     def priority(self) -> Priority:
@@ -462,6 +484,7 @@ class AlertEntity(Entity):
             ATTR_PRE_SNOOZED_UNTIL: runtime.pre_ack_deadline(now),
             ATTR_BROKEN_REFERENCES: self._broken_references,
             ATTR_BUTTONS: [button[CONF_LABEL] for button in self._custom_buttons],
+            ATTR_GENERATED_BY: self._generated_by(),
         }
         if self._kind is AlertKind.MANUAL:
             attributes[ATTR_USER_DISMISSABLE] = self._user_dismissable
@@ -664,6 +687,7 @@ class AlertEntity(Entity):
                 self._display_message,
                 runtime.fire_count,
                 runtime.fire_data,
+                tuple(self._variables.items()),
             )
             if runtime.firing
             else None
@@ -715,6 +739,7 @@ class AlertEntity(Entity):
             end_reason=transition.reason if transition else None,
             started=transition.started if transition else None,
             ended=transition.ended if transition else None,
+            extra=self._variables,
         )
 
     @callback
@@ -1038,9 +1063,9 @@ class AlertEntity(Entity):
         self.async_write_ha_state()
 
     @callback
-    def async_update_config(self, subentry: ConfigSubentry) -> None:
-        """Apply an edited subentry in place, keeping the alert's state."""
-        self._configure(subentry)
+    def async_update_config(self, definition: AlertDefinition) -> None:
+        """Apply an edited definition in place, keeping the alert's state."""
+        self._configure(definition)
         self._async_replan_reminder()
         self.async_write_ha_state()
         self._persist()
@@ -1279,6 +1304,15 @@ class AlertEntity(Entity):
                 ATTR_PRIORITY: self._priority,
                 "runtime": self._runtime.to_dict(),
                 "labelled": self._labelled,
+                # A generated alert's generator and target (spec §12.3).
+                **(
+                    {
+                        "generator": definition.generator,
+                        "target": definition.target,
+                    }
+                    if (definition := self._definition).generator
+                    else {}
+                ),
             },
         )
 
@@ -1332,19 +1366,19 @@ class ConditionAlertEntity(AlertEntity):
     _awaits_data = True
 
     def __init__(
-        self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
+        self, definition: AlertDefinition, store: AlertStore, settings: Settings
     ) -> None:
-        """Initialize the alert from its subentry."""
+        """Initialize the alert from its definition."""
         self._sources: SourceSet | None = None
         self._results: dict[str, tuple[Any, list[str]]] | None = None
         self._watchers: list[TriggerWatcher] = []
         self._deadline_timer = PointTimer(self._async_timer)
         self._startup_timer = PointTimer(self._async_startup_done)
-        super().__init__(subentry, store, settings)
+        super().__init__(definition, store, settings)
 
-    def _configure(self, subentry: ConfigSubentry) -> None:
-        super()._configure(subentry)
-        data = subentry.data
+    def _configure(self, definition: AlertDefinition) -> None:
+        super()._configure(definition)
+        data = definition.data
         # The state kind's entity, the threshold kind's value entity, or the
         # alert state kind's alert.
         self._source_entity: str | None = (
@@ -1476,17 +1510,17 @@ class ConditionAlertEntity(AlertEntity):
         self._async_stop_source()
 
     @callback
-    def async_update_config(self, subentry: ConfigSubentry) -> None:
-        """Apply an edited subentry: re-subscribe, and restart pending delays.
+    def async_update_config(self, definition: AlertDefinition) -> None:
+        """Apply an edited definition: re-subscribe, and restart pending delays.
 
         The firing (if any) carries on if the new condition holds; otherwise
         delay_off runs from now.
         """
         self._async_stop_source()
-        self._configure(subentry)
+        self._configure(definition)
         self._runtime.delay_on_until = None
         self._runtime.delay_off_until = None
-        super().async_update_config(subentry)
+        super().async_update_config(definition)
         self._async_inputs_started()
 
     @callback
@@ -1519,6 +1553,7 @@ class ConditionAlertEntity(AlertEntity):
                 self._minimum,
                 self._maximum,
                 f"{self.entity_id} threshold",
+                self._variables,
             )
         elif self._kind is AlertKind.ON_OFF:
             for side, template in (
@@ -1527,16 +1562,22 @@ class ConditionAlertEntity(AlertEntity):
             ):
                 if template is not None:
                     sources[side] = TemplateSource(
-                        self.hass, template, f"{self.entity_id} {side} template"
+                        self.hass,
+                        template,
+                        f"{self.entity_id} {side} template",
+                        self._variables,
                     )
         else:
             assert self._template is not None
             sources["main"] = TemplateSource(
-                self.hass, self._template, f"{self.entity_id} template"
+                self.hass, self._template, f"{self.entity_id} template", self._variables
             )
         if self._condition:
             sources["condition"] = TemplateSource(
-                self.hass, self._condition, f"{self.entity_id} condition"
+                self.hass,
+                self._condition,
+                f"{self.entity_id} condition",
+                self._variables,
             )
         return sources
 
@@ -1714,16 +1755,16 @@ class EventAlertEntity(AlertEntity):
     )
 
     def __init__(
-        self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
+        self, definition: AlertDefinition, store: AlertStore, settings: Settings
     ) -> None:
-        """Initialize the alert from its subentry."""
+        """Initialize the alert from its definition."""
         self._watcher: TriggerWatcher | None = None
         self._expiry_timer = PointTimer(self._async_expired)
-        super().__init__(subentry, store, settings)
+        super().__init__(definition, store, settings)
 
-    def _configure(self, subentry: ConfigSubentry) -> None:
-        super()._configure(subentry)
-        data = subentry.data
+    def _configure(self, definition: AlertDefinition) -> None:
+        super()._configure(definition)
+        data = definition.data
         self._event_type: str | None = data.get(CONF_EVENT_TYPE)
         self._event_data: dict[str, Any] | None = data.get(CONF_EVENT_DATA) or None
         if self._kind is AlertKind.EVENT:
@@ -1793,14 +1834,14 @@ class EventAlertEntity(AlertEntity):
         self._async_stop_watcher()
 
     @callback
-    def async_update_config(self, subentry: ConfigSubentry) -> None:
-        """Apply an edited subentry, re-attaching the triggers.
+    def async_update_config(self, definition: AlertDefinition) -> None:
+        """Apply an edited definition, re-attaching the triggers.
 
         A running firing keeps its expiry: a new duration applies from the next
         fire.
         """
         self._async_stop_watcher()
-        super().async_update_config(subentry)
+        super().async_update_config(definition)
         self._async_inputs_started()
 
     @callback

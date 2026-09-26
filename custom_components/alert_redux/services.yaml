@@ -68,3 +68,13 @@ suspend:
       example: "2026-10-01 08:00:00"
       selector:
         datetime:
+
+refresh_generator:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: alert_redux
+          domain: sensor
+          multiple: true

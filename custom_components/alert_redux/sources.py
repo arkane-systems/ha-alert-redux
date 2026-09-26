@@ -166,18 +166,26 @@ class TemplateSource(Source):
     broken alert.
     """
 
-    def __init__(self, hass: HomeAssistant, template: str, description: str) -> None:
-        """Initialize the source; description names it in log messages."""
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        template: str,
+        description: str,
+        variables: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Initialize the source; description names it in log messages, and
+        variables are passed to the template."""
         super().__init__(hass)
         self._template = Template(template, hass)
         self._description = description
+        self._variables = dict(variables) if variables else None
         self._info: TrackTemplateResultInfo | None = None
         self._warned = False
 
     def _async_start(self) -> None:
         self._info = async_track_template_result(
             self.hass,
-            [TrackTemplate(self._template, None)],
+            [TrackTemplate(self._template, self._variables)],
             self._async_result,
             strict=True,
             log_fn=self._log,
@@ -262,9 +270,12 @@ class ThresholdSource(Source):
         minimum: str | None,
         maximum: str | None,
         description: str,
+        variables: Mapping[str, Any] | None = None,
     ) -> None:
-        """Initialize the source; description names it in log messages."""
+        """Initialize the source; description names it in log messages, and
+        variables are passed to the templates."""
         super().__init__(hass)
+        self._variables = dict(variables) if variables else None
         self._templates = {
             name: Template(template, hass)
             for name, template in (
@@ -282,7 +293,10 @@ class ThresholdSource(Source):
         self._results = {}
         self._info = async_track_template_result(
             self.hass,
-            [TrackTemplate(template, None) for template in self._templates.values()],
+            [
+                TrackTemplate(template, self._variables)
+                for template in self._templates.values()
+            ],
             self._async_result,
             log_fn=self._log,
         )

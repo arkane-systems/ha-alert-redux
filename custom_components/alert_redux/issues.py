@@ -14,6 +14,7 @@ from .const import (
     ISSUE_BROKEN_REFERENCE,
     ISSUE_DEFAULT_GROUPS_UNSET,
     SUBENTRY_ALERT,
+    SUBENTRY_GENERATOR,
 )
 from .model import Settings
 from .supersession import relationship_targets
@@ -23,7 +24,8 @@ from .supersession import relationship_targets
 def async_check_default_groups(
     hass: HomeAssistant, entry: ConfigEntry, settings: Settings
 ) -> None:
-    """Raise an issue while alerts rely on default groups that aren't configured.
+    """Raise an issue while alerts (or generators) rely on default groups that
+    aren't configured.
 
     Those alerts notify the fallback instead (spec §9.4); the issue says why, and
     goes away once default groups are set or no alert relies on them.
@@ -31,7 +33,8 @@ def async_check_default_groups(
     relying = [
         subentry.title
         for subentry in entry.subentries.values()
-        if subentry.subentry_type == SUBENTRY_ALERT
+        # A generator's alerts share its groups (spec §12.3).
+        if subentry.subentry_type in (SUBENTRY_ALERT, SUBENTRY_GENERATOR)
         and CONF_NOTIFIER_GROUPS not in subentry.data
     ]
     if settings.default_groups or not relying:

@@ -24,11 +24,15 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.script import async_validate_actions_config
 from homeassistant.helpers.selector import (
     ActionSelector,
+    AreaSelector,
+    AreaSelectorConfig,
     BooleanSelector,
     DurationSelector,
     EntitySelector,
     EntitySelectorConfig,
     IconSelector,
+    LabelSelector,
+    LabelSelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -40,6 +44,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
     TemplateSelector,
     TextSelector,
+    TextSelectorConfig,
     TriggerSelector,
 )
 from homeassistant.util import slugify
@@ -47,6 +52,15 @@ from homeassistant.util import slugify
 from .const import (
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_AREAS,
+    CONF_DEVICE_CLASSES,
+    CONF_DOMAINS,
+    CONF_EXCLUDE,
+    CONF_LABELS,
+    CONF_NAME_TEMPLATE,
+    CONF_PATTERN,
+    CONF_TARGETS,
+    DATA_GENERATORS,
     CONF_ACTION,
     CONF_ACTIONS,
     CONF_ALERT,
@@ -104,6 +118,7 @@ from .const import (
     CONF_SNOOZE_DURATION,
     CONF_SNOOZE_REMINDER_WINDOW,
     CONF_STARTUP_DELAY,
+    CONF_GENERATOR_GRACE,
     CONF_SUBJECT_ENTITY,
     CONF_SUPERSEDES,
     CONF_SUPERSESSION_DEBOUNCE,
@@ -126,12 +141,15 @@ from .const import (
     SECTION_QUIET_HOURS,
     SECTION_SUPERSESSION,
     SUBENTRY_ALERT,
+    SUBENTRY_GENERATOR,
     SUBENTRY_NOTIFIER_GROUP,
+    GENERATOR_KINDS,
     AlertKind,
     AlertState,
     Priority,
     Propagation,
 )
+from .generators import GeneratorManager, TargetCriteria
 from .model import (
     Settings,
     Throttle,
@@ -174,9 +192,11 @@ class AlertReduxConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_supported_subentry_types(
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
-        """Return the subentry types: alerts and notifier groups (spec §12.1)."""
+        """Return the subentry types: alerts, generators, and notifier groups
+        (spec §12.1)."""
         return {
             SUBENTRY_ALERT: AlertSubentryFlowHandler,
+            SUBENTRY_GENERATOR: GeneratorSubentryFlowHandler,
             SUBENTRY_NOTIFIER_GROUP: NotifierGroupSubentryFlowHandler,
         }
 
@@ -209,6 +229,7 @@ class AlertReduxOptionsFlow(OptionsFlow):
                     data={
                         CONF_NO_DATA_GRACE: user_input[CONF_NO_DATA_GRACE],
                         CONF_STARTUP_DELAY: user_input[CONF_STARTUP_DELAY],
+                        CONF_GENERATOR_GRACE: user_input[CONF_GENERATOR_GRACE],
                         CONF_DEFAULT_GROUPS: user_input.get(CONF_DEFAULT_GROUPS, []),
                         CONF_DEFAULT_REMINDER_SCHEDULE: list(schedule),
                         CONF_DEFAULT_THROTTLE: throttle.to_stored() if throttle else [],
@@ -235,6 +256,7 @@ class AlertReduxOptionsFlow(OptionsFlow):
         defaults = user_input or {
             CONF_NO_DATA_GRACE: _duration_dict(settings.no_data_grace),
             CONF_STARTUP_DELAY: _duration_dict(settings.startup_delay),
+            CONF_GENERATOR_GRACE: _duration_dict(settings.generator_grace),
             CONF_DEFAULT_GROUPS: list(settings.default_groups),
             CONF_DEFAULT_REMINDER_SCHEDULE: format_schedule(settings.reminder_schedule),
             **_throttle_fields(settings.throttle),
@@ -259,6 +281,9 @@ class AlertReduxOptionsFlow(OptionsFlow):
                     ): DurationSelector(),
                     vol.Required(
                         CONF_STARTUP_DELAY, default=defaults[CONF_STARTUP_DELAY]
+                    ): DurationSelector(),
+                    vol.Required(
+                        CONF_GENERATOR_GRACE, default=defaults[CONF_GENERATOR_GRACE]
                     ): DurationSelector(),
                     vol.Optional(
                         CONF_DEFAULT_GROUPS,
@@ -614,15 +639,30 @@ def _alert_schema(
     defaults: dict[str, Any],
     entry: ConfigEntry,
     own: str | None = None,
+    *,
+    generator: bool = False,
 ) -> vol.Schema:
     """Return the form for an alert of the given kind, pre-filled from defaults.
 
     own is the alert's own entity ID, when editing, so that it can't pick itself.
+    A generator's form (spec §12.3) has a name template and the target criteria
+    instead of the kind's entity and the subject entity, which are the target.
     """
     schema: dict[Any, Any] = {
         vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, vol.UNDEFINED)): (
             TextSelector()
         ),
+    }
+    if generator:
+        schema[
+            vol.Optional(
+                CONF_NAME_TEMPLATE, description=_suggested(defaults, CONF_NAME_TEMPLATE)
+            )
+        ] = TemplateSelector()
+        schema[vol.Required(CONF_TARGETS)] = _targets_section(
+            defaults.get(CONF_TARGETS) or {}
+        )
+    schema |= {
         vol.Required(
             CONF_PRIORITY, default=defaults.get(CONF_PRIORITY, Priority.WARNING)
         ): SelectSelector(
@@ -637,11 +677,12 @@ def _alert_schema(
         ),
     }
     if kind is AlertKind.STATE:
-        schema[
-            vol.Required(
-                CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID, vol.UNDEFINED)
-            )
-        ] = EntitySelector()
+        if not generator:
+            schema[
+                vol.Required(
+                    CONF_ENTITY_ID, default=defaults.get(CONF_ENTITY_ID, vol.UNDEFINED)
+                )
+            ] = EntitySelector()
         schema[
             vol.Required(
                 CONF_TARGET_STATE,
@@ -655,9 +696,12 @@ def _alert_schema(
             )
         ] = TemplateSelector()
     elif kind is AlertKind.ALERT_STATE:
-        schema[
-            vol.Required(CONF_ALERT, default=defaults.get(CONF_ALERT, vol.UNDEFINED))
-        ] = _alerts_selector(own)
+        if not generator:
+            schema[
+                vol.Required(
+                    CONF_ALERT, default=defaults.get(CONF_ALERT, vol.UNDEFINED)
+                )
+            ] = _alerts_selector(own)
         schema[
             vol.Required(
                 CONF_ALERT_STATES,
@@ -673,7 +717,7 @@ def _alert_schema(
         )
     elif kind is AlertKind.THRESHOLD:
         for key, selector in (
-            (CONF_ENTITY_ID, EntitySelector()),
+            *(() if generator else ((CONF_ENTITY_ID, EntitySelector()),)),
             (CONF_ATTRIBUTE, TextSelector()),
             (CONF_VALUE_TEMPLATE, TemplateSelector()),
             (CONF_MINIMUM, TemplateSelector()),
@@ -735,11 +779,13 @@ def _alert_schema(
                 default=defaults.get(CONF_USER_DISMISSABLE, False),
             )
         ] = BooleanSelector()
-    schema[
-        vol.Optional(
-            CONF_SUBJECT_ENTITY, description=_suggested(defaults, CONF_SUBJECT_ENTITY)
-        )
-    ] = EntitySelector()
+    if not generator:
+        schema[
+            vol.Optional(
+                CONF_SUBJECT_ENTITY,
+                description=_suggested(defaults, CONF_SUBJECT_ENTITY),
+            )
+        ] = EntitySelector()
     if kind in CONDITION_KINDS:
         schema[
             vol.Optional(
@@ -752,8 +798,28 @@ def _alert_schema(
     schema[vol.Required(SECTION_NOTIFICATIONS)] = _notifications_section(
         entry, defaults
     )
-    schema[vol.Required(SECTION_SUPERSESSION)] = _supersession_section(defaults, own)
+    if not generator:
+        schema[vol.Required(SECTION_SUPERSESSION)] = _supersession_section(
+            defaults, own
+        )
     return vol.Schema(schema)
+
+
+def _targets_section(defaults: dict[str, Any]) -> section:
+    """Return a generator's target criteria (spec §12.3): AND across the
+    criteria, OR within each."""
+    text_list = TextSelector(TextSelectorConfig(multiple=True))
+    schema: dict[Any, Any] = {}
+    for key, selector in (
+        (CONF_LABELS, LabelSelector(LabelSelectorConfig(multiple=True))),
+        (CONF_AREAS, AreaSelector(AreaSelectorConfig(multiple=True))),
+        (CONF_DOMAINS, text_list),
+        (CONF_DEVICE_CLASSES, text_list),
+        (CONF_PATTERN, TextSelector()),
+        (CONF_EXCLUDE, EntitySelector(EntitySelectorConfig(multiple=True))),
+    ):
+        schema[vol.Optional(key, description=_suggested(defaults, key))] = selector
+    return section(vol.Schema(schema), {"collapsed": False})
 
 
 class AlertSubentryFlowHandler(ConfigSubentryFlow):
@@ -1395,6 +1461,211 @@ def _group_data(user_input: dict[str, Any]) -> tuple[dict[str, Any], str | None]
     if not (data[CONF_ENTITIES] or actions or data[CONF_PERSISTENT]):
         return data, "no_members"
     return data, None
+
+
+class GeneratorSubentryFlowHandler(ConfigSubentryFlow):
+    """Create and edit generators (spec §12.3): a menu of the condition kinds,
+    then each kind's alert form, with the name template and target criteria."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Choose the kind of alert the generator makes."""
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=[kind.value for kind in AlertKind if kind in GENERATOR_KINDS],
+        )
+
+    async def async_step_state(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create a generator of state alerts."""
+        return await self._async_step_generator(AlertKind.STATE, user_input)
+
+    async def async_step_template(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create a generator of template alerts."""
+        return await self._async_step_generator(AlertKind.TEMPLATE, user_input)
+
+    async def async_step_on_off(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create a generator of on/off alerts."""
+        return await self._async_step_generator(AlertKind.ON_OFF, user_input)
+
+    async def async_step_threshold(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create a generator of threshold alerts."""
+        return await self._async_step_generator(AlertKind.THRESHOLD, user_input)
+
+    async def async_step_alert_state(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create a generator of alert state alerts."""
+        return await self._async_step_generator(AlertKind.ALERT_STATE, user_input)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit a generator with its kind's form; the kind can't be changed."""
+        kind = AlertKind(self._get_reconfigure_subentry().data[CONF_KIND])
+        return await self._async_step_generator(kind, user_input, reconfigure=True)
+
+    async def async_step_reconfigure_state(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit a generator of state alerts."""
+        return await self._async_step_generator(AlertKind.STATE, user_input, True)
+
+    async def async_step_reconfigure_template(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit a generator of template alerts."""
+        return await self._async_step_generator(AlertKind.TEMPLATE, user_input, True)
+
+    async def async_step_reconfigure_on_off(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit a generator of on/off alerts."""
+        return await self._async_step_generator(AlertKind.ON_OFF, user_input, True)
+
+    async def async_step_reconfigure_threshold(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit a generator of threshold alerts."""
+        return await self._async_step_generator(AlertKind.THRESHOLD, user_input, True)
+
+    async def async_step_reconfigure_alert_state(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit a generator of alert state alerts."""
+        return await self._async_step_generator(
+            AlertKind.ALERT_STATE, user_input, True
+        )
+
+    async def _async_step_generator(
+        self,
+        kind: AlertKind,
+        user_input: dict[str, Any] | None,
+        reconfigure: bool = False,
+    ) -> SubentryFlowResult:
+        """Show a kind's generator form, and create or update the generator."""
+        subentry = self._get_reconfigure_subentry() if reconfigure else None
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            user_input = _flatten(user_input)
+            name = user_input[CONF_NAME].strip()
+            if _name_in_use(
+                self._get_entry(),
+                SUBENTRY_GENERATOR,
+                name,
+                subentry.subentry_id if subentry else None,
+            ):
+                errors[CONF_NAME] = "name_exists"
+            try:
+                data = _generator_data(kind, user_input)
+            except _InvalidThrottle:
+                errors["base"] = "invalid_throttle"
+            except ValueError:
+                errors["base"] = "invalid_schedule"
+            else:
+                if error := await _async_check_generator(self.hass, kind, data):
+                    errors["base"] = error
+            if not errors:
+                if subentry is None:
+                    return self.async_create_entry(title=name, data=data)
+                return self.async_update_and_abort(
+                    self._get_entry(), subentry, title=name, data=data
+                )
+
+        if user_input is not None:
+            defaults = user_input
+        elif subentry is not None:
+            defaults = {
+                CONF_NAME: subentry.title,
+                **_alert_form_defaults(subentry.data),
+            }
+        else:
+            defaults = {}
+        return self.async_show_form(
+            step_id=f"reconfigure_{kind}" if reconfigure else kind.value,
+            data_schema=_alert_schema(
+                kind, defaults, self._get_entry(), generator=True
+            ),
+            errors=errors,
+            description_placeholders=(
+                {"targets": _generator_targets(self.hass, subentry.subentry_id)}
+                if subentry
+                else None
+            ),
+        )
+
+
+# Stands in for the target when a generator's alert configuration is checked
+# like an alert's.
+_PLACEHOLDER_TARGET = "sensor.alert_redux_generator_target"
+
+
+def _generator_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
+    """Return a generator's subentry data from its submitted form (the name is
+    the title): the alert configuration, the name template, and the targets."""
+    alert_input = dict(user_input)
+    if kind is AlertKind.STATE:
+        alert_input[CONF_ENTITY_ID] = _PLACEHOLDER_TARGET
+    elif kind is AlertKind.ALERT_STATE:
+        alert_input[CONF_ALERT] = _PLACEHOLDER_TARGET
+    data: dict[str, Any] = {CONF_KIND: kind, **_alert_data(kind, alert_input)}
+    for key in (CONF_ENTITY_ID, CONF_ALERT, CONF_SUBJECT_ENTITY, CONF_SUPERSEDES):
+        data.pop(key, None)
+    if name_template := (user_input.get(CONF_NAME_TEMPLATE) or "").strip():
+        data[CONF_NAME_TEMPLATE] = name_template
+    targets: dict[str, Any] = {}
+    for key, value in (user_input.get(CONF_TARGETS) or {}).items():
+        if isinstance(value, str):
+            value = value.strip()
+        elif isinstance(value, list):
+            value = [
+                item
+                for item in (
+                    item.strip() if isinstance(item, str) else item
+                    for item in value
+                )
+                if item not in (None, "")
+            ]
+        if value not in (None, "", []):
+            targets[key] = value
+    data[CONF_TARGETS] = targets
+    return data
+
+
+async def _async_check_generator(
+    hass: HomeAssistant, kind: AlertKind, data: dict[str, Any]
+) -> str | None:
+    """Return an error key for a generator that doesn't make sense."""
+    if not TargetCriteria.from_config(data[CONF_TARGETS]).any:
+        return "targets_required"
+    if kind is AlertKind.ALERT_STATE and not data[CONF_ALERT_STATES]:
+        return "alert_states_missing"
+    alert = dict(data)
+    if kind is AlertKind.THRESHOLD and CONF_VALUE_TEMPLATE not in alert:
+        # The value is the target's, as the generated alerts have it.
+        alert[CONF_ENTITY_ID] = _PLACEHOLDER_TARGET
+    return await _async_check_alert(hass, kind, alert)
+
+
+def _generator_targets(hass: HomeAssistant, subentry_id: str) -> str:
+    """Return a generator's current targets, for its edit form."""
+    manager: GeneratorManager | None = hass.data.get(DOMAIN, {}).get(DATA_GENERATORS)
+    generator = manager.generators.get(subentry_id) if manager else None
+    targets = generator.targets if generator else []
+    if not targets:
+        return "none"
+    shown = ", ".join(targets[:10])
+    if len(targets) > 10:
+        shown += f", and {len(targets) - 10} more"
+    return shown
 
 
 class NotifierGroupSubentryFlowHandler(ConfigSubentryFlow):

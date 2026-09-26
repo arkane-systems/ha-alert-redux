@@ -1254,6 +1254,911 @@
         "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
       }
     },
+    "generator": {
+      "entry_type": "Generator",
+      "initiate_flow": {
+        "user": "Add generator"
+      },
+      "step": {
+        "user": {
+          "title": "Add a generator",
+          "description": "A generator makes one alert for each entity that matches its targets, adding and removing alerts as entities start and stop matching. Choose the kind of alert it makes.",
+          "menu_options": {
+            "state": "[%key:component::alert_redux::config_subentries::alert::step::user::menu_options::state%]",
+            "on_off": "[%key:component::alert_redux::config_subentries::alert::step::user::menu_options::on_off%]",
+            "threshold": "[%key:component::alert_redux::config_subentries::alert::step::user::menu_options::threshold%]",
+            "template": "[%key:component::alert_redux::config_subentries::alert::step::user::menu_options::template%]",
+            "alert_state": "[%key:component::alert_redux::config_subentries::alert::step::user::menu_options::alert_state%]"
+          }
+        },
+        "state": {
+          "title": "Add a generator of state alerts",
+          "description": "Makes a state alert for each target entity, firing while the target is in the given state, e.g. every lock that's `unlocked`. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "name_template": "Alert name template",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "target_state": "[%key:component::alert_redux::config_subentries::alert::step::state::data::target_state%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "target_state": "The alert fires while the target is in this state, e.g. `unlocked` or `on`. Targeting `unavailable` or `unknown` alerts on that state; otherwise those states mean the alert has no data.",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "Targets",
+              "description": "Which entities get an alert. An entity must match every criterion that's set, and any one value within each. Labels and areas count through the entity's device too. Disabled entities and configuration entities never match.",
+              "data": {
+                "labels": "Labels",
+                "areas": "Areas",
+                "domains": "Domains",
+                "device_classes": "Device classes",
+                "pattern": "Entity ID pattern",
+                "exclude": "Excluded entities"
+              },
+              "data_description": {
+                "labels": "Entities with any of these labels.",
+                "areas": "Entities in any of these areas.",
+                "domains": "Entities in any of these domains, e.g. `lock` or `binary_sensor`.",
+                "device_classes": "Entities with any of these device classes, e.g. `door` or `battery`.",
+                "pattern": "Entity IDs matching this pattern, where `*` matches any text, e.g. `lock.*_door`.",
+                "exclude": "Entities never to target, even when they match."
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        },
+        "on_off": {
+          "title": "Add a generator of on/off alerts",
+          "description": "Makes an on/off alert for each target entity. Each side needs a template, triggers, or both; triggers are the same for every target. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "name_template": "Alert name template",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "on_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::on_template%]",
+            "on_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::on_triggers%]",
+            "off_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::off_template%]",
+            "off_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::off_triggers%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "on_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::on_template%]",
+            "on_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::on_triggers%]",
+            "off_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::off_template%]",
+            "off_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::off_triggers%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::description%]",
+              "data": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::exclude%]"
+              },
+              "data_description": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::exclude%]"
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        },
+        "threshold": {
+          "title": "Add a generator of threshold alerts",
+          "description": "Makes a threshold alert for each target entity. The value is the target's state (or attribute), unless a value template gives it. Set at least one limit. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "name_template": "Alert name template",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "attribute": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::attribute%]",
+            "value_template": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::value_template%]",
+            "minimum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::minimum%]",
+            "maximum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::maximum%]",
+            "hysteresis": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::hysteresis%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "attribute": "Optional. Use this attribute of the target instead of its state.",
+            "value_template": "Optional. A template for the value, e.g. using `target`, instead of the target's state. A result that isn't a number means the alert has no data.",
+            "minimum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::minimum%]",
+            "maximum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::maximum%]",
+            "hysteresis": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::hysteresis%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::description%]",
+              "data": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::exclude%]"
+              },
+              "data_description": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::exclude%]"
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        },
+        "template": {
+          "title": "Add a generator of template alerts",
+          "description": "Makes a template alert for each target entity, e.g. one that's true while `is_state(target, 'unlocked')`. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "name_template": "Alert name template",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "template": "[%key:component::alert_redux::config_subentries::alert::step::template::data::template%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "template": "[%key:component::alert_redux::config_subentries::alert::step::template::data_description::template%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::description%]",
+              "data": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::exclude%]"
+              },
+              "data_description": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::exclude%]"
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        },
+        "alert_state": {
+          "title": "Add a generator of alert state alerts",
+          "description": "Makes an alert state alert for each target alert, e.g. to escalate every alert with a given label when nobody acknowledges it. Generated alerts are never targets. Every template, including the messages and the name template, can use `target` (the target's entity ID) and `target_name`.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::state::data::name%]",
+            "name_template": "Alert name template",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::state::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::state::data::icon%]",
+            "alert_states": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::alert_states%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::state::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "The generator's name. Each alert's entity ID is the target's object ID followed by this name, e.g. `alert_redux.front_door_unlocked`.",
+            "name_template": "Optional. A template for each alert's name, using `target_name` and `target`. Leave empty for the target's name followed by the generator's.",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::icon%]",
+            "alert_states": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::alert_states%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::description%]",
+              "data": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::exclude%]"
+              },
+              "data_description": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::exclude%]"
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        },
+        "reconfigure_state": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::state::data::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "target_state": "[%key:component::alert_redux::config_subentries::alert::step::state::data::target_state%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::generator::step::state::data_description::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::state::data_description::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "target_state": "[%key:component::alert_redux::config_subentries::generator::step::state::data_description::target_state%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::description%]",
+              "data": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::exclude%]"
+              },
+              "data_description": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::exclude%]"
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        },
+        "reconfigure_on_off": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::on_off::data::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "on_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::on_template%]",
+            "on_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::on_triggers%]",
+            "off_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::off_template%]",
+            "off_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data::off_triggers%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::generator::step::on_off::data_description::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::on_off::data_description::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "on_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::on_template%]",
+            "on_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::on_triggers%]",
+            "off_template": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::off_template%]",
+            "off_triggers": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::off_triggers%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::on_off::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::description%]",
+              "data": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::exclude%]"
+              },
+              "data_description": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::exclude%]"
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        },
+        "reconfigure_threshold": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::threshold::data::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "attribute": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::attribute%]",
+            "value_template": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::value_template%]",
+            "minimum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::minimum%]",
+            "maximum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::maximum%]",
+            "hysteresis": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data::hysteresis%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::generator::step::threshold::data_description::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::threshold::data_description::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "attribute": "[%key:component::alert_redux::config_subentries::generator::step::threshold::data_description::attribute%]",
+            "value_template": "[%key:component::alert_redux::config_subentries::generator::step::threshold::data_description::value_template%]",
+            "minimum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::minimum%]",
+            "maximum": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::maximum%]",
+            "hysteresis": "[%key:component::alert_redux::config_subentries::alert::step::threshold::data_description::hysteresis%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::description%]",
+              "data": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::exclude%]"
+              },
+              "data_description": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::exclude%]"
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        },
+        "reconfigure_template": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::template::data::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::icon%]",
+            "template": "[%key:component::alert_redux::config_subentries::alert::step::template::data::template%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::generator::step::template::data_description::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::template::data_description::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::icon%]",
+            "template": "[%key:component::alert_redux::config_subentries::alert::step::template::data_description::template%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::manual::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::description%]",
+              "data": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::exclude%]"
+              },
+              "data_description": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::exclude%]"
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        },
+        "reconfigure_alert_state": {
+          "title": "Edit generator",
+          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::state::data::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::alert_state::data::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::state::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::state::data::icon%]",
+            "alert_states": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::alert_states%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::state::data::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::generator::step::alert_state::data_description::name%]",
+            "name_template": "[%key:component::alert_redux::config_subentries::generator::step::alert_state::data_description::name_template%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::icon%]",
+            "alert_states": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::alert_states%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::acknowledgeable%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "targets": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::description%]",
+              "data": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data::exclude%]"
+              },
+              "data_description": {
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::labels%]",
+                "areas": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::areas%]",
+                "domains": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::domains%]",
+                "device_classes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::device_classes%]",
+                "pattern": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::pattern%]",
+                "exclude": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::targets::data_description::exclude%]"
+              }
+            },
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::button_snooze_duration%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "use_default_throttle": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_throttle%]",
+                "throttle_count": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_count%]",
+                "throttle_minutes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::throttle_minutes%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
+                "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
+                "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "name_exists": "A generator with this name already exists.",
+        "invalid_schedule": "[%key:component::alert_redux::config_subentries::alert::error::invalid_schedule%]",
+        "invalid_throttle": "[%key:component::alert_redux::config_subentries::alert::error::invalid_throttle%]",
+        "invalid_trigger": "[%key:component::alert_redux::config_subentries::alert::error::invalid_trigger%]",
+        "value_source": "Set either an attribute or a value template, not both.",
+        "limit_required": "[%key:component::alert_redux::config_subentries::alert::error::limit_required%]",
+        "invalid_limits": "[%key:component::alert_redux::config_subentries::alert::error::invalid_limits%]",
+        "criterion_required": "[%key:component::alert_redux::config_subentries::alert::error::criterion_required%]",
+        "delay_needs_template": "[%key:component::alert_redux::config_subentries::alert::error::delay_needs_template%]",
+        "alert_states_missing": "[%key:component::alert_redux::config_subentries::alert::error::alert_states_missing%]",
+        "button_incomplete": "[%key:component::alert_redux::config_subentries::alert::error::button_incomplete%]",
+        "invalid_button_action": "[%key:component::alert_redux::config_subentries::alert::error::invalid_button_action%]",
+        "targets_required": "Set at least one target criterion: labels, areas, domains, device classes, or a pattern."
+      },
+      "abort": {
+        "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
+      }
+    },
     "notifier_group": {
       "entry_type": "Notifier group",
       "initiate_flow": {
@@ -1504,6 +2409,16 @@
           "description": "When to enable the alert again."
         }
       }
+    },
+    "refresh_generator": {
+      "name": "Refresh generator",
+      "description": "Re-evaluates generators' targets now, adding and removing their alerts. Generators refresh themselves as entities change, so this is for debugging.",
+      "fields": {
+        "entity_id": {
+          "name": "Generators",
+          "description": "The generator sensors to refresh."
+        }
+      }
     }
   },
   "exceptions": {
@@ -1515,6 +2430,9 @@
     },
     "suspend_in_past": {
       "message": "{entity_id} can't be suspended until a time that has already passed."
+    },
+    "not_generator": {
+      "message": "{entity_id} isn't an Alert Redux generator."
     }
   },
   "options": {
@@ -1524,6 +2442,7 @@
         "data": {
           "no_data_grace": "No-data grace period",
           "startup_delay": "Startup delay",
+          "generator_grace": "Generator startup grace",
           "default_groups": "Default notifier groups",
           "default_reminder_schedule": "Default reminder schedule",
           "throttle_count": "Default throttle: notifications",
@@ -1536,6 +2455,7 @@
         "data_description": {
           "no_data_grace": "How long a firing alert keeps firing while its inputs have no data, unless the alert sets its own.",
           "startup_delay": "When Home Assistant starts, wait this long before evaluating condition alerts. Zero to evaluate straight away.",
+          "generator_grace": "When Home Assistant starts, generators don't remove any alerts until this long after it has started, so that entities from slow integrations don't make alerts come and go.",
           "default_groups": "The groups alerts send to unless they choose their own. With none set, those alerts send to the fallback instead.",
           "default_reminder_schedule": "Minutes between reminders while an alert is firing and unacknowledged, unless it sets its own, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
           "throttle_count": "At most this many on notifications in any window of the minutes below, for alerts that don't set their own throttle. The one that reaches the limit is marked \"[Throttling starts]\", later ones and done notifications are held, and a summary is sent when the rate drops. Leave both empty for no throttling.",

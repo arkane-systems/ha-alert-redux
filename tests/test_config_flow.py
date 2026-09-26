@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -19,6 +20,7 @@ from custom_components.alert_redux.const import (
     EVENT_CREATED,
     EVENT_DELETED,
     SUBENTRY_ALERT,
+    SUBENTRY_GENERATOR,
     SUBENTRY_NOTIFIER_GROUP,
 )
 
@@ -26,6 +28,7 @@ from .conftest import (
     SetupAlerts,
     alert_state_alert,
     alert_subentry,
+    generator_subentry,
     group_subentry,
     state_alert,
 )
@@ -346,6 +349,7 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
     assert defaults == {
         "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
         "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
+        "generator_grace": {"hours": 0, "minutes": 5, "seconds": 0},
         "retry_timeout": {"hours": 0, "minutes": 5, "seconds": 0},
         "snooze_reminder_window": {"hours": 0, "minutes": 5, "seconds": 0},
         "button_snooze_duration": {"hours": 1, "minutes": 0, "seconds": 0},
@@ -357,6 +361,7 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
         {
             "no_data_grace": {"hours": 0, "minutes": 1, "seconds": 0},
             "startup_delay": {"hours": 0, "minutes": 0, "seconds": 30},
+            "generator_grace": {"hours": 0, "minutes": 10, "seconds": 0},
             "snooze_reminder_window": {"hours": 0, "minutes": 2, "seconds": 0},
         },
     )
@@ -370,6 +375,9 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
         "minutes": 2,
         "seconds": 0,
     }
+    assert hass.data["alert_redux"]["settings"].generator_grace == timedelta(
+        minutes=10
+    )
 
 
 async def test_messages_saved_and_prefilled(
@@ -1410,3 +1418,159 @@ async def test_supersession_propagation_fields(
         },
         {"alert": "alert_redux.garage_door_open"},
     ]
+
+
+# Generators (spec §12.3).
+
+
+async def _start_generator(
+    hass: HomeAssistant, entry: MockConfigEntry, kind: str
+) -> dict[str, Any]:
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_GENERATOR), context={"source": SOURCE_USER}
+    )
+    assert result["type"] is FlowResultType.MENU
+    assert result["menu_options"] == [
+        "state",
+        "on_off",
+        "threshold",
+        "template",
+        "alert_state",
+    ]
+    return await _choose(hass, result, kind)
+
+
+GENERATOR_FORM = {
+    "name": "Unlocked",
+    "priority": "warning",
+    "acknowledgeable": True,
+    "target_state": "unlocked",
+    "targets": {"domains": ["lock", " "], "pattern": " lock.*_door "},
+    "notifications": {},
+}
+
+
+async def test_create_generator(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
+    """The generator flow stores the alert configuration and the targets."""
+    hass.states.async_set("lock.front_door", "unlocked")
+    entry = await setup_alerts()
+    result = await _start_generator(hass, entry, "state")
+    assert result["type"] is FlowResultType.FORM
+    fields = {str(key) for key in result["data_schema"].schema}
+    # The target is the kind's entity, and the subject.
+    assert "entity_id" not in fields
+    assert "subject_entity" not in fields
+    assert "supersession" not in fields
+    assert {"name_template", "targets"} <= fields
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**GENERATOR_FORM, "name_template": "{{ target_name }} is unlocked"},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    (subentry,) = entry.subentries.values()
+    assert subentry.subentry_type == SUBENTRY_GENERATOR
+    assert subentry.title == "Unlocked"
+    assert dict(subentry.data) == {
+        "kind": "state",
+        "priority": "warning",
+        "acknowledgeable": True,
+        "target_state": "unlocked",
+        "name_template": "{{ target_name }} is unlocked",
+        "targets": {"domains": ["lock"], "pattern": "lock.*_door"},
+    }
+    assert hass.states.get("alert_redux.front_door_unlocked").state == "active"
+
+
+async def test_reconfigure_generator(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Editing a generator pre-fills its form and lists its current targets."""
+    hass.states.async_set("lock.front_door", "unlocked")
+    entry = await setup_alerts(
+        generator_subentry(
+            "Unlocked",
+            subentry_id="gen",
+            targets={"domains": ["lock"]},
+            target_state="unlocked",
+        )
+    )
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_GENERATOR),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": "gen"},
+    )
+    assert result["step_id"] == "reconfigure_state"
+    assert result["description_placeholders"] == {"targets": "lock.front_door"}
+    targets = result["data_schema"].schema["targets"].schema.schema
+    assert _suggested(targets) == {"domains": ["lock"]}
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**GENERATOR_FORM, "target_state": "jammed"}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert entry.subentries["gen"].data["target_state"] == "jammed"
+    assert hass.states.get("alert_redux.front_door_unlocked").state == "idle"
+
+
+@pytest.mark.parametrize(
+    ("form", "errors"),
+    [
+        ({"targets": {}}, {"base": "targets_required"}),
+        ({"targets": {"exclude": ["lock.a"]}}, {"base": "targets_required"}),
+        ({"name": "Existing"}, {"name": "name_exists"}),
+    ],
+)
+async def test_generator_errors(
+    hass: HomeAssistant,
+    setup_alerts: SetupAlerts,
+    form: dict[str, Any],
+    errors: dict[str, str],
+) -> None:
+    entry = await setup_alerts(
+        generator_subentry("Existing", targets={"domains": ["lock"]}, target_state="x")
+    )
+    result = await _start_generator(hass, entry, "state")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**GENERATOR_FORM, **form}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == errors
+
+
+async def test_threshold_generator_value(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A threshold generator's value is the target's, so it needs only a limit,
+    and can't have both an attribute and a value template."""
+    entry = await setup_alerts()
+    base = {
+        "name": "Low",
+        "priority": "warning",
+        "acknowledgeable": True,
+        "hysteresis": 0,
+        "targets": {"device_classes": ["battery"]},
+        "notifications": {},
+    }
+    result = await _start_generator(hass, entry, "threshold")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], base
+    )
+    assert result["errors"] == {"base": "limit_required"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **base,
+            "minimum": "20",
+            "attribute": "level",
+            "value_template": "{{ states(target) }}",
+        },
+    )
+    assert result["errors"] == {"base": "value_source"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**base, "minimum": "20"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY

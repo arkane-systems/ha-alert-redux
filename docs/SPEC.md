@@ -665,6 +665,9 @@ doesn't repeat it automatically. It can include the name deliberately through th
     alert's `name`, so generic templates still read sensibly.
   - [Decided] The subject entity is also exposed as a `subject_entity` attribute
     (N1).
+  - [Decided, phase 11] A generated alert's subject is always its target, and
+    its templates also get `target` (the target's entity ID) and `target_name`
+    (§12.3).
 - [Decided, F22] The card shows the **on** message by default. An optional separate
   **display** message can be set for the card.
   - [Decided, phase 3] With neither message configured, the card shows the default
@@ -999,7 +1002,8 @@ built.
   [Decided, phase 9] `buttons` lists the labels of the alert's custom buttons.
   [Decided, phase 10] `throttle` is the effective throttle, `[count, minutes]`,
   or null; `throttled_since` is when throttling started, or null (§9.8).
-- **Generator provenance:** `generated_by` (§12.3).
+- **Generator provenance:** `generated_by` (§12.3). [Decided, phase 11] The
+  generator's sensor's entity ID, or null for a fixed alert.
 
 Attributes that can grow large, or change constantly, should be kept out of the
 recorder with `_unrecorded_attributes`.
@@ -1226,6 +1230,7 @@ was meant to solve.
   [Decided, phase 10] The default throttle is two numbers, a count and minutes,
   both empty for none (§9.8). The quiet-hours entity and threshold are a
   collapsed **Quiet hours** section (§9.9).
+  [Decided, phase 11] Also the **generator startup grace** (§12.3).
 - Each **alert** is a **config subentry** of that entry, created and edited in the
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
@@ -1275,6 +1280,56 @@ doesn't allow editing them individually.
 - **Refresh action** [Decided]: `alert_redux.refresh_generator` re-evaluates a
   generator's targets immediately. It's for debugging; generators normally refresh
   themselves when entities or labels change.
+- [Decided, phase 11] As built:
+  - **Kinds.** Generators make condition alerts: state, threshold, template,
+    on/off, and alert state. Manual alerts make no sense per target, and HA's
+    triggers can't be templated with the target. The form is the kind's alert
+    form, with a name template and a **Targets** section instead of the kind's
+    entity and the subject entity.
+  - **The target** is filled in as the kind's entity (the state alert's entity,
+    the threshold alert's value entity unless a value template gives the value,
+    or the alert state alert's watched alert) and as the subject entity (§9.5).
+    Every template, the messages included, gets `target` (its entity ID) and
+    `target_name`. On/off triggers are the same for every target.
+  - **Matching.** Criteria combine **AND across, OR within**: an entity must
+    match every criterion that's set, and any one value within each. Labels and
+    areas count through the entity's device too. The entity ID pattern is a glob
+    (`lock.*_door`). A list of excluded entities is never targeted. At least one
+    criterion is needed, so a generator can't match everything.
+  - **Which entities can be targets.** Every enabled entity except configuration
+    entities (diagnostic ones, such as battery levels, are obvious targets), and
+    entities with no registry entry, which can only match by domain, device class
+    (from their state), or pattern. Generated alerts are **never** targets, so
+    alert state generators can't feed on themselves or each other; nor are Alert
+    Redux's sensors. Fixed alerts are.
+  - **Identity.** A generated alert's unique ID is the generator's subentry ID
+    and the target's entity registry ID (its entity ID if it has no entry). A
+    renamed target keeps its alert, state and all; the alert follows the new
+    entity ID, and keeps its own. The alert's entity ID is the target's object ID
+    followed by the generator's name (`alert_redux.front_door_unlocked`), fixed
+    once created.
+  - **Naming.** The name template defaults to the target's name followed by the
+    generator's ("Front Door Unlocked"). It's re-rendered as the target's name
+    changes. One that fails to render gives the default, and a problem on the
+    generator's sensor.
+  - **Following changes.** Generators follow the entity and device registries,
+    and entities with no registry entry coming and going, settling each burst of
+    changes for a second. Editing a generator updates its alerts in place;
+    deleting it removes them, each announced by `_deleted` (§11.3).
+  - **Startup grace** [Decided with the user]. While HA starts, generators only
+    add alerts. None is removed until HA has started **and** the **generator
+    startup grace** (an option, 5 minutes by default) has passed, so entities
+    from slow integrations or external sources (Ring-MQTT, say) don't make alerts
+    come and go. An alert whose target hasn't appeared yet is kept from its stored
+    record, and has no data meanwhile (§4.4). Set up while HA is running (a first
+    install, or a reload), generators remove alerts straight away.
+  - **The generator's sensor** is `sensor.alert_redux_generator_<name>`, named
+    "Alert Redux generator <name>". It has no device and no label (§11.5).
+    Attributes: `targets`, `alerts` (entity IDs), and `problems`; the two lists
+    are kept out of the recorder.
+  - Generated alerts get the alerts label (§11.5) and restore their state (§15.1)
+    like any other. Their stored records say which generator and target they
+    belong to, so a restart doesn't take them for deleted alerts.
 
 ### 12.4 References to alerts that no longer exist
 
@@ -1522,7 +1577,7 @@ area, label, …):
 | `alert_redux.disable` / `alert_redux.enable` | Disable or enable. Admin only (phase 6). |
 | `alert_redux.suspend` | Suspend for a `duration`, or `until` a time. Admin only (phase 6). |
 | `alert_redux.fire` / `alert_redux.dismiss` | Fire or dismiss a manual alert; `fire` can take `data`. |
-| `alert_redux.refresh_generator` | Re-evaluate a generator's targets now (debugging; §12.3). |
+| `alert_redux.refresh_generator` | Re-evaluate a generator's targets now (debugging; §12.3). [Decided, phase 11] Takes the generators' sensors as `entity_id`. |
 | `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off). |
 
 **Managing alert definitions by action** [Decided, Q10]. There are **no** separate
@@ -1708,6 +1763,12 @@ Decisions with their reasons, in the order they were made.
 | Snooze button duration: 1 hour by default | Long enough to deal with most things, short enough not to forget [§9.11]. |
 | Throttling counts held notifications, and ends when the rate drops | Follows Alert2: a flapping alert stays quiet until it calms down, then says once what happened [§9.8]. |
 | The throttling summary's wording is fixed | It reports what Alert Redux did, not what the alert is about [§9.8]. |
+| Generators make condition alerts only | The target fills in the kind's entity or a template; triggers can't be templated [§12.3]. |
+| Target criteria: AND across, OR within | Narrowing by several criteria (every battery sensor in the garage) is the common need [§12.3]. |
+| Generated alerts are keyed by the target's registry ID | A renamed target keeps its alert and its state [§12.3]. |
+| Generated alerts are never targets | Alert state generators can't feed on themselves or each other [§12.3]. |
+| Diagnostic entities can be targets | Battery levels and connectivity are obvious alert targets [§12.3]. |
+| No removals until a grace period after startup | Slow integrations and external sources don't make alerts flap [§12.3]. |
 | Quiet hours live in the notifier, with urgencies | Holding and softening are delivery; the notifier stays free of alerts [§9.1, §9.9]. |
 | The owner says what's sent when quiet hours end | Only Alert Redux knows which alerts are still active and how to summarise them [§9.9]. |
 | An unavailable quiet-hours entity isn't quiet, but doesn't release what's held | New notifications fail loud; a blip in the night doesn't deliver the morning summary [§9.9]. |

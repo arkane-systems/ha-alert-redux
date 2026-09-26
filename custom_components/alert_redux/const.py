@@ -28,6 +28,9 @@ DATA_NOTIFIER = "notifier"
 DATA_GROUPS = "groups"
 DATA_SUPERSESSION = "supersession"
 DATA_SUMMARY = "summary"
+DATA_GENERATORS = "generators"
+DATA_GENERATOR_SUBENTRIES = "generator_subentries"
+DATA_ADD_SENSORS = "add_sensors"
 
 # The label applied to every alert (spec §11.5).
 ALERTS_LABEL_NAME = "Alert Redux"
@@ -122,6 +125,7 @@ class EndReason(StrEnum):
 # Config subentry types.
 SUBENTRY_ALERT = "alert"
 SUBENTRY_NOTIFIER_GROUP = "notifier_group"
+SUBENTRY_GENERATOR = "generator"
 
 # Alert subentry data keys.
 CONF_KIND = "kind"
@@ -192,6 +196,22 @@ CONF_THROTTLE_MINUTES = "throttle_minutes"
 SECTION_NOTIFICATIONS = "notifications"
 SECTION_SUPERSESSION = "supersession"
 
+# Generator subentry data keys (spec §12.3): the alert template's own keys, plus
+# the name template and the target criteria. Generators make condition alerts.
+CONF_NAME_TEMPLATE = "name_template"
+CONF_TARGETS = "targets"
+CONF_LABELS = "labels"
+CONF_AREAS = "areas"
+CONF_DOMAINS = "domains"
+CONF_DEVICE_CLASSES = "device_classes"
+CONF_PATTERN = "pattern"
+CONF_EXCLUDE = "exclude"
+GENERATOR_KINDS = CONDITION_KINDS
+# The variables a generated alert's templates get: the target's entity ID and
+# name.
+VAR_TARGET = "target"
+VAR_TARGET_NAME = "target_name"
+
 # Notifier group subentry data keys (the notifier module's own keys).
 CONF_LOUD = "loud"
 CONF_ENTITIES = "entities"
@@ -237,6 +257,10 @@ QUIET_SUMMARY_HEADING = "While quiet hours were on:"
 
 # Config entry options: the global defaults (spec §12.1).
 CONF_STARTUP_DELAY = "startup_delay"
+# How long after Home Assistant has started generators wait before removing
+# alerts whose targets are missing (spec §12.3).
+CONF_GENERATOR_GRACE = "generator_grace"
+DEFAULT_GENERATOR_GRACE = timedelta(minutes=5)
 DEFAULT_NO_DATA_GRACE = timedelta(minutes=10)
 DEFAULT_STARTUP_DELAY = timedelta(0)
 CONF_DEFAULT_GROUPS = "default_groups"
@@ -296,6 +320,7 @@ SERVICE_SNOOZE = "snooze"
 SERVICE_DISABLE = "disable"
 SERVICE_ENABLE = "enable"
 SERVICE_SUSPEND = "suspend"
+SERVICE_REFRESH_GENERATOR = "refresh_generator"
 
 ATTR_DATA = "data"
 ATTR_UNTIL = "until"
@@ -402,3 +427,8 @@ ATTR_PRE_ACKED_BY = "pre_acked_by"
 ATTR_PRE_SNOOZED_UNTIL = "pre_snoozed_until"
 ATTR_BUTTONS = "buttons"
 ATTR_BROKEN_REFERENCES = "broken_references"
+ATTR_GENERATED_BY = "generated_by"
+# The generator sensor's attributes (spec §12.3).
+ATTR_TARGETS = "targets"
+ATTR_ALERTS = "alerts"
+ATTR_PROBLEMS = "problems"
