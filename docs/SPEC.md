@@ -490,6 +490,12 @@ to it through a narrow interface:
 - *is group X currently quiet?*;
 - *clear the notification with this lifecycle key from group X* (§9.10).
 
+[Decided, phase 9] As built, clearing doesn't name groups: the notifier is told
+that the notifications with a key have been **acknowledged** (it clears them from
+the members set to), or to **clear** them everywhere (a deleted alert), or that
+a key has changed (a renamed alert). It remembers which members are showing each
+key's notification, so clearing reaches exactly those (§9.10).
+
 The module handles notifier kinds, groups, retries (§15.2), the fallback, quiet-hours
 delivery rules, notification replacing and clearing, and turning buttons into each
 notifier's format. The aim is that it can later be pulled out into a general-purpose
@@ -537,6 +543,16 @@ A group has:
   | `target` | Legacy action | Passed through as `target`. |
   | Replace and clear | Legacy (mobile), persistent | How earlier notifications for the same alert are replaced or cleared (§9.10). |
   | Buttons | Legacy (mobile) | Whether this member shows buttons (§9.11). Detected automatically for `notify.mobile_app_*`. |
+
+  [Decided, phase 9] A legacy action member's **mobile app features** are
+  *Automatic* (replace, clear, and buttons for `notify.mobile_app_*`, none for
+  other actions), *Replace, clear, and buttons*, *Replace and clear; no
+  buttons* (e.g. a legacy notify group of phones), or *None*. Each legacy member
+  also has **keep the notification when acknowledged** and **clear instead of
+  showing the done message**; the persistent member has **clear when
+  acknowledged** (on by default) and **clear when the alert ends** (off by
+  default). The form can't give fields in a list defaults, so an unset field
+  means the default.
   | Quiet-hours `data` | Legacy action | Alternative `data` used when the group *softens* during quiet hours (§9.9). |
 
 - **Loud or quiet** [Decided, N35]. Only you know which notifiers make noise, and
@@ -779,6 +795,25 @@ cleared when they're no longer needed.
   with the done message (default), or *clear* it.
 - Entity members can't replace or clear. Each notification arrives as a separate
   message.
+- [Decided, phase 9] **Acknowledging** includes snoozing (§6.2) and
+  pre-acknowledgement (§8.3): each clears. **Deleting** an alert clears its
+  notifications, including an alert deleted while HA was down.
+- [Decided, phase 9] The notifier keeps **live records**: which members are
+  showing each key's notification, and with what tag. Clears go to exactly
+  those, so they still reach a phone after it's been removed from the group, or
+  a notification that went to the fallback. A delivered done notification ends
+  its key's records: it stays on show, but there's nothing more to clear. The
+  records are kept in the notifier's store, so they survive a restart.
+- [Decided, phase 9] **Renaming** an alert changes its key. Its records keep the
+  tag they were shown with: clearing the new key clears them, and the next
+  notification to such a member clears the old one first.
+- [Decided, phase 9] **Retries honour replacing.** A newer notification or a
+  clear for a member drops any earlier one for the same tag that's still
+  waiting for a retry, so a retried on notification can't arrive after the
+  acknowledgement. A dropped attempt counts as delivered, so it never goes to
+  the fallback; clears never go to the fallback either.
+- [Decided, phase 9] Alert Redux's `tag` (and `actions`, §9.11) win over the same
+  keys in a member's own `data`.
 
 ### 9.11 Buttons
 
@@ -810,6 +845,19 @@ keyboards could be added later. Other members leave the buttons out.
   action. Acknowledge and Snooze do nothing.
 - [Deferred] Raw extra `data` supplied per alert, for anything buttons can't express,
   could be added later if a need appears.
+- [Decided, phase 9] **Action IDs** are `ALERT_REDUX_<alert's unique ID>_<button>`:
+  the unique ID survives renames. `<button>` is `ACK`, `SNOOZE`, or, for a
+  custom button, `B` and a hash of its label and action. An edited or removed
+  button's old taps then match nothing, and are ignored, rather than running
+  another button's action.
+- [Decided, phase 9] A custom button's action is an HA action sequence, chosen
+  with the action selector and validated when the alert is saved. It runs as the
+  user who tapped (the mobile app fires the event with its user's context).
+- [Decided, phase 9] Every mobile member gets at most **three** buttons, since
+  the platform isn't known for a notify group of phones.
+- [Decided, phase 9] The Snooze button's duration is the alert's own setting, or
+  the **Snooze button duration** option, 1 hour by default. Its title gives the
+  duration ("Snooze 1 hour").
 
 ## 10. Acknowledgement queue
 
@@ -861,6 +909,7 @@ built.
   `target_states`.
   [Decided, phase 7] Also `pre_acked_by` and `pre_snoozed_until` (§8.3), and
   `broken_references` (§12.4), a list of entity IDs.
+  [Decided, phase 9] `buttons` lists the labels of the alert's custom buttons.
 - **Generator provenance:** `generated_by` (§12.3).
 
 Attributes that can grow large, or change constantly, should be kept out of the
@@ -1083,6 +1132,8 @@ was meant to solve.
   edited through its options flow. [Decided, phase 6] Also the snooze-end window
   (§6.2). [Decided, phase 7] Also the supersession debounce and the done window
   (§8.1, §9.7), in seconds, in a collapsed **Supersession** section.
+  [Decided, phase 9] The snooze duration for notification buttons is the
+  **Snooze button duration** (§9.11).
 - Each **alert** is a **config subentry** of that entry, created and edited in the
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
@@ -1546,6 +1597,13 @@ Decisions with their reasons, in the order they were made.
 | The logbook describes only events that add to the state rows | The state rows already show each state change and who made it; describing the rest would show those changes twice [§11.4]. |
 | `_data_restored` event | Data returning to a firing alert in its grace period changes no state, so nothing else would show it [§11.3]. |
 | The no-data count includes firing alerts in their grace period | A broken input shows at once (fail loud) [§11.2]. |
+| The notifier remembers where each notification is showing | Clears reach the members actually showing it, after group edits and for fallback deliveries [§9.1, §9.10]. |
+| Snoozing and pre-acknowledgement clear notifications | Both are acknowledging [§9.10]. |
+| Newer notifications and clears drop waiting retries for the same tag | A retried notification must not arrive after it was replaced or cleared [§9.10]. |
+| A member's mobile features are automatic, or set explicitly | `notify.mobile_app_*` just works; a legacy notify group of phones can opt in [§9.3]. |
+| Button action IDs use the unique ID and a hash of the button | Taps survive renames, and an edited button's old taps can't run a different action [§9.11]. |
+| At most three buttons on every mobile member | Android's limit, and the platform isn't known for notify groups [§9.11]. |
+| Snooze button duration: 1 hour by default | Long enough to deal with most things, short enough not to forget [§9.11]. |
 
 ## 20. Phase plan
 
@@ -1761,6 +1819,13 @@ set added `_data_restored`. Decisions from building it are recorded in §11.2,
 
 *Done when* a mobile notification updates in place, clears when acknowledged, and
 "Close door" works from the phone.
+
+[Phase 9 as built] Built in two parts: 9a (replacing and clearing) and 9b
+(buttons), released together as 0.9.0. The notifier keeps live records of which
+members show each alert's notification, so clears reach exactly those, and new
+notifications and clears drop retries they replace. Button taps are handled in
+`buttons.py`. Decisions from building it are recorded in §9.1, §9.3, §9.10,
+§9.11, §11.1, and §12.1.
 
 ### Phase 10 — Throttling and quiet hours (0.10.0)
 
