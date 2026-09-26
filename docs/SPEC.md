@@ -1923,6 +1923,14 @@ notifications and clears drop retries they replace. Button taps are handled in
 *Done when* a night with quiet hours on produces exactly the specified morning
 summary.
 
+[Phase 10 as built] Built in two parts: 10a (throttling) and 10b (quiet hours),
+released together as 0.10.0. Throttling is the alert's, kept with its stored
+state; it follows Alert2 in counting held notifications. Quiet hours are the
+notifier's, deciding by a generic urgency, and hand what's held back to Alert
+Redux when they end, which sends one reminder per active alert and one summary
+per group. Decisions from building it are recorded in §9.1, §9.3, §9.5, §9.8,
+§9.9, §11.1, §12.1, and §15.2.
+
 ### Phase 11 — Generators (0.11.0)
 
 - Generator subentries and entities; target selection; dynamic creation and removal

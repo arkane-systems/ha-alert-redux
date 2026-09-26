@@ -20,7 +20,7 @@ admin card), phase 7 (supersession, propagation and pre-acknowledgement, the
 alert state kind, dangling references, and the card's superseded alerts), and
 phase 8 (the summary sensors, the logbook platform, and the `_data_restored`
 event), and phase 9 (replacing and clearing notifications, and notification
-buttons).
+buttons), and phase 10 (throttling and quiet hours).
 
 ## Specification
 
