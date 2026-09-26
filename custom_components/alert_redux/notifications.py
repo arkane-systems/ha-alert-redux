@@ -119,10 +119,35 @@ def async_send_notification(
         f"{entity_id} {reason} message",
     )
     notification = Notification(
-        title=title, message=message, key=lifecycle_key(entity_id), variables=variables
+        title=title,
+        message=message,
+        key=lifecycle_key(entity_id),
+        variables=variables,
+        final=reason == REASON_DONE,
     )
     notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]
     if groups is None:
         notifier.async_send_fallback(notification)
     else:
         notifier.async_send(groups, notification)
+
+
+@callback
+def async_notifications_acknowledged(hass: HomeAssistant, entity_id: str) -> None:
+    """Clear an acknowledged alert's notifications, where set to (spec §9.10)."""
+    notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]
+    notifier.async_acknowledged(lifecycle_key(entity_id))
+
+
+@callback
+def async_clear_notifications(hass: HomeAssistant, entity_id: str) -> None:
+    """Clear all of an alert's notifications, e.g. when it's deleted."""
+    notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]
+    notifier.async_clear(lifecycle_key(entity_id))
+
+
+@callback
+def async_notifications_renamed(hass: HomeAssistant, old: str, new: str) -> None:
+    """Follow an alert's entity ID being renamed: its lifecycle key changes."""
+    notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]
+    notifier.async_rekey(lifecycle_key(old), lifecycle_key(new))

@@ -50,6 +50,7 @@ from .const import (
     CONF_ALERT_STATES,
     CONF_ATTRIBUTE,
     CONF_CONDITION,
+    CONF_CLEAR_WHEN_ENDED,
     CONF_DATA,
     CONF_DEFAULT_GROUPS,
     CONF_DEFAULT_REMINDER_SCHEDULE,
@@ -78,7 +79,11 @@ from .const import (
     CONF_OFF_TRIGGERS,
     CONF_ON_TEMPLATE,
     CONF_ON_TRIGGERS,
+    CONF_KEEP_ON_ACK,
+    CONF_MOBILE,
     CONF_PERSISTENT,
+    CONF_PERSISTENT_CLEAR_ON_ACK,
+    CONF_PERSISTENT_CLEAR_WHEN_ENDED,
     CONF_PRIORITY,
     CONF_PROPAGATION,
     CONF_REMINDER_MESSAGE,
@@ -110,6 +115,7 @@ from .const import (
     Propagation,
 )
 from .model import Settings, format_schedule, parse_schedule, to_timedelta
+from .notifier import MobileFeatures
 from .supersession import find_cycle, propagation_of, relationship_targets
 from .triggers import async_validate_triggers, is_storable
 
@@ -1041,11 +1047,56 @@ def _group_schema(hass: HomeAssistant, defaults: dict[str, Any]) -> vol.Schema:
                         },
                         CONF_DATA: {"label": "Data", "selector": ObjectSelector()},
                         CONF_TARGET: {"label": "Target", "selector": TextSelector()},
+                        # Unset means the defaults: the form can't set defaults
+                        # inside a list, so each field reads "off" as the default.
+                        CONF_MOBILE: {
+                            "label": "Mobile app features",
+                            "selector": SelectSelector(
+                                SelectSelectorConfig(
+                                    options=[
+                                        SelectOptionDict(
+                                            value=MobileFeatures.AUTOMATIC,
+                                            label="Automatic (for notify.mobile_app_*)",
+                                        ),
+                                        SelectOptionDict(
+                                            value=MobileFeatures.ALL,
+                                            label="Replace, clear, and buttons",
+                                        ),
+                                        SelectOptionDict(
+                                            value=MobileFeatures.NO_BUTTONS,
+                                            label="Replace and clear; no buttons",
+                                        ),
+                                        SelectOptionDict(
+                                            value=MobileFeatures.NONE,
+                                            label="None",
+                                        ),
+                                    ],
+                                    mode=SelectSelectorMode.DROPDOWN,
+                                )
+                            ),
+                        },
+                        CONF_KEEP_ON_ACK: {
+                            "label": "Keep the notification when acknowledged",
+                            "selector": BooleanSelector(),
+                        },
+                        CONF_CLEAR_WHEN_ENDED: {
+                            "label": "Clear the notification when the alert ends, "
+                            "instead of showing the done message",
+                            "selector": BooleanSelector(),
+                        },
                     },
                 )
             ),
             vol.Required(
                 CONF_PERSISTENT, default=defaults.get(CONF_PERSISTENT, False)
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_PERSISTENT_CLEAR_ON_ACK,
+                default=defaults.get(CONF_PERSISTENT_CLEAR_ON_ACK, True),
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_PERSISTENT_CLEAR_WHEN_ENDED,
+                default=defaults.get(CONF_PERSISTENT_CLEAR_WHEN_ENDED, False),
             ): BooleanSelector(),
         }
     )
@@ -1067,12 +1118,24 @@ def _group_data(user_input: dict[str, Any]) -> tuple[dict[str, Any], str | None]
             entry[CONF_DATA] = data
         if target := str(item.get(CONF_TARGET) or "").strip():
             entry[CONF_TARGET] = target
+        # Only settings that differ from the defaults are kept.
+        if (mobile := item.get(CONF_MOBILE)) and mobile != MobileFeatures.AUTOMATIC:
+            entry[CONF_MOBILE] = mobile
+        for key in (CONF_KEEP_ON_ACK, CONF_CLEAR_WHEN_ENDED):
+            if item.get(key):
+                entry[key] = True
         actions.append(entry)
     data = {
         CONF_LOUD: user_input[CONF_LOUD],
         CONF_ENTITIES: list(user_input.get(CONF_ENTITIES) or []),
         CONF_ACTIONS: actions,
         CONF_PERSISTENT: user_input[CONF_PERSISTENT],
+        CONF_PERSISTENT_CLEAR_ON_ACK: user_input.get(
+            CONF_PERSISTENT_CLEAR_ON_ACK, True
+        ),
+        CONF_PERSISTENT_CLEAR_WHEN_ENDED: user_input.get(
+            CONF_PERSISTENT_CLEAR_WHEN_ENDED, False
+        ),
     }
     if not (data[CONF_ENTITIES] or actions or data[CONF_PERSISTENT]):
         return data, "no_members"

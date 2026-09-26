@@ -21,6 +21,7 @@ from custom_components.alert_redux.notifier import (
     ActionMember,
     EntityMember,
     GroupConfig,
+    MobileFeatures,
     Notification,
     Notifier,
     PersistentMember,
@@ -35,6 +36,7 @@ NOTIFICATION = Notification(
     variables={"name": "Back Door Open", "priority": "critical"},
 )
 PERSISTENT_CREATE = "custom_components.alert_redux.notifier.members.persistent_notification.async_create"
+PERSISTENT_DISMISS = "custom_components.alert_redux.notifier.members.persistent_notification.async_dismiss"
 STORE_KEY = "test.notifier"
 ISSUE_DOMAIN = "test"
 
@@ -175,6 +177,7 @@ async def test_action_member_renders_data(hass: HomeAssistant) -> None:
                 "channel": "alarm",
                 "group": "critical",
                 "tags": ["Back Door Open"],
+                "tag": "alert_redux_back_door_open",
             },
             "target": ["device"],
         }
@@ -184,7 +187,12 @@ async def test_action_member_renders_data(hass: HomeAssistant) -> None:
 async def test_persistent_member(hass: HomeAssistant, persistent: MagicMock) -> None:
     notifier = await _new_notifier(hass, GroupConfig("g", "G", (PersistentMember(),)))
     await _send(notifier, ["g"])
-    persistent.assert_called_once_with(hass, "The back door is open.", "Back Door Open")
+    persistent.assert_called_once_with(
+        hass,
+        "The back door is open.",
+        "Back Door Open",
+        notification_id="alert_redux_back_door_open",
+    )
 
 
 async def test_member_in_two_groups_notified_once(hass: HomeAssistant) -> None:
@@ -277,7 +285,12 @@ async def test_all_failing_goes_to_fallback(
     persistent.assert_not_called()
     for _ in range(5):
         await _tick(hass, freezer, 60)
-    persistent.assert_called_once_with(hass, "The back door is open.", "Back Door Open")
+    persistent.assert_called_once_with(
+        hass,
+        "The back door is open.",
+        "Back Door Open",
+        notification_id="alert_redux_back_door_open",
+    )
     assert len(calls) == 9  # at 0, 5, 15, 35, 75, 135, 195, 255 s, and 300 s
     assert "gave up notifying notify.broken in group G after" in caplog.text
     assert "no one could be notified; sending to the fallback" in caplog.text
@@ -429,3 +442,277 @@ async def test_no_issue_for_member_removed_while_retrying(
         registry.async_get_issue(ISSUE_DOMAIN, "notify_action_missing_g_old_phone")
         is None
     )
+
+
+# Replacing and clearing (spec §9.10)
+
+KEY = NOTIFICATION.key
+DONE = Notification("Back Door Open", "Closed.", KEY, final=True)
+PHONE = ActionMember("mobile_app_phone", target=("device",))
+
+
+def _messages(calls: list[ServiceCall]) -> list[tuple[str, Any]]:
+    return [(call.data["message"], call.data.get("data")) for call in calls]
+
+
+def test_member_settings_from_dict() -> None:
+    group = GroupConfig.from_dict(
+        "g",
+        "G",
+        {
+            "actions": [
+                {"action": "notify.mobile_app_phone"},
+                {"action": "notify.all_phones", "mobile": "no_buttons"},
+                {
+                    "action": "notify.mobile_app_tablet",
+                    "mobile": "none",
+                    "keep_on_ack": True,
+                    "clear_when_ended": True,
+                },
+                {"action": "notify.telegram"},
+            ],
+            "persistent": True,
+            "persistent_clear_on_ack": False,
+            "persistent_clear_when_ended": True,
+        },
+    )
+    phone, phones, tablet, telegram, persistent = group.members
+    assert (phone.replaces, phone.shows_buttons) == (True, True)
+    assert (phones.replaces, phones.shows_buttons) == (True, False)
+    assert (tablet.replaces, tablet.shows_buttons) == (False, False)
+    assert (tablet.clear_on_ack, tablet.clear_when_ended) == (False, True)
+    assert (telegram.replaces, telegram.shows_buttons) == (False, False)
+    assert ActionMember("telegram", mobile=MobileFeatures.ALL).shows_buttons
+    assert persistent == PersistentMember(clear_on_ack=False, clear_when_ended=True)
+
+
+async def test_mobile_replaced_and_cleared_when_acknowledged(
+    hass: HomeAssistant,
+) -> None:
+    """Each notification carries the key as its tag; acknowledging clears it."""
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PHONE,)))
+    await _send(notifier, ["g"])
+    notifier.async_acknowledged(KEY)
+    await hass.async_block_till_done()
+    assert _messages(calls) == [
+        ("The back door is open.", {"tag": KEY}),
+        ("clear_notification", {"tag": KEY}),
+    ]
+    assert calls[1].data["target"] == ["device"]
+    # Nothing is showing any more.
+    notifier.async_acknowledged(KEY)
+    await hass.async_block_till_done()
+    assert len(calls) == 2
+
+
+async def test_keep_on_ack(hass: HomeAssistant) -> None:
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    member = ActionMember("mobile_app_phone", clear_on_ack=False)
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (member,)))
+    await _send(notifier, ["g"])
+    notifier.async_acknowledged(KEY)
+    await hass.async_block_till_done()
+    assert len(calls) == 1
+    # Clearing it outright still reaches it.
+    notifier.async_clear(KEY)
+    await hass.async_block_till_done()
+    assert _messages(calls)[-1] == ("clear_notification", {"tag": KEY})
+
+
+async def test_final_notification_replaces_and_ends_the_record(
+    hass: HomeAssistant,
+) -> None:
+    """The done notification stays on show; there's nothing left to clear."""
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PHONE,)))
+    await _send(notifier, ["g"])
+    notifier.async_send(["g"], DONE)
+    await hass.async_block_till_done()
+    notifier.async_acknowledged(KEY)
+    notifier.async_clear(KEY)
+    await hass.async_block_till_done()
+    assert _messages(calls) == [
+        ("The back door is open.", {"tag": KEY}),
+        ("Closed.", {"tag": KEY}),
+    ]
+
+
+async def test_clear_when_ended(hass: HomeAssistant, persistent: MagicMock) -> None:
+    """A member set to clear gets a clear instead of the final notification, and
+    that doesn't count as undelivered."""
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    member = ActionMember("mobile_app_phone", clear_when_ended=True)
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (member,)))
+    await _send(notifier, ["g"])
+    notifier.async_send(["g"], DONE)
+    await hass.async_block_till_done()
+    assert _messages(calls) == [
+        ("The back door is open.", {"tag": KEY}),
+        ("clear_notification", {"tag": KEY}),
+    ]
+    persistent.assert_not_called()
+
+
+async def test_persistent_replaced_and_dismissed(
+    hass: HomeAssistant, persistent: MagicMock
+) -> None:
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PersistentMember(),)))
+    await _send(notifier, ["g"])
+    assert persistent.call_args.kwargs == {"notification_id": KEY}
+    with patch(PERSISTENT_DISMISS) as dismiss:
+        notifier.async_acknowledged(KEY)
+        await hass.async_block_till_done()
+    dismiss.assert_called_once_with(hass, KEY)
+
+
+async def test_entity_and_plain_action_members_not_cleared(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("notify.kitchen", "unknown")
+    entity = async_mock_service(hass, "notify", "send_message")
+    telegram = async_mock_service(hass, "notify", "telegram")
+    notifier = await _new_notifier(
+        hass,
+        GroupConfig("g", "G", (EntityMember("notify.kitchen"), ActionMember("telegram"))),
+    )
+    await _send(notifier, ["g"])
+    notifier.async_clear(KEY)
+    await hass.async_block_till_done()
+    assert len(entity) == 1
+    assert _messages(telegram) == [("The back door is open.", None)]
+
+
+async def test_clearing_drops_a_waiting_retry(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, persistent: MagicMock
+) -> None:
+    """A notification still waiting for its retry doesn't arrive after the
+    acknowledgement, and isn't sent to the fallback either."""
+    calls = _failing(hass, "mobile_app_phone", failures=1)
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PHONE,)))
+    await _send(notifier, ["g"])
+    notifier.async_acknowledged(KEY)
+    await _tick(hass, freezer, 600)
+    assert len(calls) == 1
+    persistent.assert_not_called()
+
+
+async def test_newer_notification_drops_a_waiting_retry(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, persistent: MagicMock
+) -> None:
+    calls = _failing(hass, "mobile_app_phone", failures=1)
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PHONE,)))
+    await _send(notifier, ["g"])
+    notifier.async_send(["g"], DONE)
+    await _tick(hass, freezer, 600)
+    assert [message for message, _ in _messages(calls)] == [
+        "The back door is open.",
+        "Closed.",
+    ]
+    persistent.assert_not_called()
+
+
+async def test_fallback_notification_cleared(hass: HomeAssistant) -> None:
+    """Clearing reaches a notification that went to the fallback."""
+    with patch(PERSISTENT_CREATE), patch(PERSISTENT_DISMISS) as dismiss:
+        notifier = await _new_notifier(hass)
+        notifier.async_send_fallback(NOTIFICATION)
+        await hass.async_block_till_done()
+        notifier.async_acknowledged(KEY)
+        await hass.async_block_till_done()
+    dismiss.assert_called_once_with(hass, KEY)
+
+
+async def test_cleared_after_group_edit(hass: HomeAssistant) -> None:
+    """Clearing goes to where the notification was shown, not the group now."""
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PHONE,)))
+    await _send(notifier, ["g"])
+    notifier.async_set_groups([GroupConfig("g", "G", (PersistentMember(),))])
+    notifier.async_acknowledged(KEY)
+    await hass.async_block_till_done()
+    assert _messages(calls)[-1] == ("clear_notification", {"tag": KEY})
+
+
+async def test_rekey(hass: HomeAssistant) -> None:
+    """After a key changes, what's showing under the old tag is cleared by the
+    next notification, or by clearing the new key."""
+    new = "alert_redux_side_door_open"
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PHONE,)))
+    await _send(notifier, ["g"])
+    notifier.async_rekey(KEY, new)
+    notifier.async_clear(new)
+    await hass.async_block_till_done()
+    assert _messages(calls)[-1] == ("clear_notification", {"tag": KEY})
+
+    await _send(notifier, ["g"])
+    notifier.async_rekey(KEY, new)
+    notifier.async_send(["g"], Notification("Side Door Open", "Open.", new))
+    await hass.async_block_till_done()
+    assert _messages(calls)[-2:] == [
+        ("clear_notification", {"tag": KEY}),
+        ("Open.", {"tag": new}),
+    ]
+
+
+async def test_live_records_survive_restart(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    group = GroupConfig("g", "G", (PHONE,))
+    notifier = await _new_notifier(hass, group)
+    await _send(notifier, ["g"])
+    await notifier.async_stop()
+    assert list(hass_storage[STORE_KEY]["data"]["live"]) == [KEY]
+
+    notifier = await _new_notifier(hass, group)
+    notifier.async_acknowledged(KEY)
+    await hass.async_block_till_done()
+    assert _messages(calls)[-1] == ("clear_notification", {"tag": KEY})
+
+
+async def test_old_store_format_loads(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer: FrozenDateTimeFactory
+) -> None:
+    """A retry queue saved by 0.8, before tags and member settings, still works."""
+    hass_storage[STORE_KEY] = {
+        "version": 1,
+        "key": STORE_KEY,
+        "data": {
+            "deliveries": [
+                {
+                    "id": "d1",
+                    "notification": {
+                        "title": "Back Door Open",
+                        "message": "The back door is open.",
+                        "key": KEY,
+                        "variables": {},
+                    },
+                    "deadline": "2099-01-01T00:00:00+00:00",
+                    "is_fallback": False,
+                    "delivered": False,
+                    "attempts": [
+                        {
+                            "id": "a1",
+                            "group_id": "g",
+                            "group_name": "G",
+                            "member": {
+                                "kind": "action",
+                                "action": "mobile_app_phone",
+                                "data": None,
+                                "target": [],
+                            },
+                            "tries": 1,
+                            "next_try": None,
+                        }
+                    ],
+                }
+            ],
+            "issues": {},
+        },
+    }
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    await _new_notifier(hass, GroupConfig("g", "G", (ActionMember("mobile_app_phone"),)))
+    await _tick(hass, freezer, 1)
+    assert _messages(calls) == [("The back door is open.", {"tag": KEY})]

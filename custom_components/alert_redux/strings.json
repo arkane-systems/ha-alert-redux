@@ -1105,14 +1105,18 @@
             "loud": "Loud",
             "entities": "Notify entities",
             "actions": "Legacy notify actions",
-            "persistent": "Persistent notification"
+            "persistent": "Persistent notification",
+            "persistent_clear_on_ack": "Clear the persistent notification when acknowledged",
+            "persistent_clear_when_ended": "Clear the persistent notification when the alert ends"
           },
           "data_description": {
             "name": "How alerts and the options refer to this group.",
             "loud": "Turn on for notifiers that make a noise, such as speaker announcements. Quiet hours (a later release) will apply to loud groups only.",
             "entities": "`notify` entities. They receive the message, and the title if they can show one.",
-            "actions": "Legacy `notify.*` actions, such as `notify.mobile_app_phone`. These can take extra `data` (e.g. a mobile notification channel; its values can be templates using the message variables) and a `target`. You can enter an action that isn't loaded yet.",
-            "persistent": "Also create a Home Assistant persistent notification."
+            "actions": "Legacy `notify.*` actions, such as `notify.mobile_app_phone`. These can take extra `data` (e.g. a mobile notification channel; its values can be templates using the message variables) and a `target`. You can enter an action that isn't loaded yet. Mobile app actions replace each alert's notifications with the latest, and clear them when the alert is acknowledged; set *Mobile app features* for other actions that send to phones, such as a notify group of them.",
+            "persistent": "Also create a Home Assistant persistent notification.",
+            "persistent_clear_on_ack": "Remove the alert's persistent notification when it's acknowledged or snoozed.",
+            "persistent_clear_when_ended": "When the alert stops firing, remove its persistent notification instead of replacing it with the done message."
           }
         },
         "reconfigure": {
@@ -1122,14 +1126,18 @@
             "loud": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data::loud%]",
             "entities": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data::entities%]",
             "actions": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data::actions%]",
-            "persistent": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data::persistent%]"
+            "persistent": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data::persistent%]",
+            "persistent_clear_on_ack": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data::persistent_clear_on_ack%]",
+            "persistent_clear_when_ended": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data::persistent_clear_when_ended%]"
           },
           "data_description": {
             "name": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data_description::name%]",
             "loud": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data_description::loud%]",
             "entities": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data_description::entities%]",
             "actions": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data_description::actions%]",
-            "persistent": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data_description::persistent%]"
+            "persistent": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data_description::persistent%]",
+            "persistent_clear_on_ack": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data_description::persistent_clear_on_ack%]",
+            "persistent_clear_when_ended": "[%key:component::alert_redux::config_subentries::notifier_group::step::user::data_description::persistent_clear_when_ended%]"
           }
         }
       },

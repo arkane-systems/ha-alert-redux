@@ -439,8 +439,15 @@ async def test_create_and_edit_group(
             "entities": ["notify.kitchen"],
             "actions": [
                 {"action": "mobile_app_phone", "data": {"channel": "alarm"}},
-                {"action": "notify.telegram", "target": " 123 "},
+                {
+                    "action": "notify.telegram",
+                    "target": " 123 ",
+                    "mobile": "no_buttons",
+                    "keep_on_ack": True,
+                    "clear_when_ended": False,
+                },
             ],
+            "persistent_clear_when_ended": True,
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -451,9 +458,17 @@ async def test_create_and_edit_group(
         "entities": ["notify.kitchen"],
         "actions": [
             {"action": "notify.mobile_app_phone", "data": {"channel": "alarm"}},
-            {"action": "notify.telegram", "target": "123"},
+            # Only settings that differ from the defaults are kept.
+            {
+                "action": "notify.telegram",
+                "target": "123",
+                "mobile": "no_buttons",
+                "keep_on_ack": True,
+            },
         ],
         "persistent": False,
+        "persistent_clear_on_ack": True,
+        "persistent_clear_when_ended": True,
     }
 
     result = await _start_group(hass, entry, subentry.subentry_id)
@@ -470,6 +485,9 @@ async def test_create_and_edit_group(
         "entities": [],
         "actions": [],
         "persistent": True,
+        "persistent_clear_on_ack": True,
+        # Pre-filled from the stored group.
+        "persistent_clear_when_ended": True,
     }
 
 
