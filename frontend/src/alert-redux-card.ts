@@ -12,7 +12,7 @@ import {
   snoozeDurations,
 } from "./alerts";
 import { clockTime, elapsed, remaining, span } from "./format";
-import { cardStyles } from "./styles";
+import { cardStyles, sharedStyles } from "./styles";
 import type { Alert, AlertReduxCardConfig, HomeAssistant } from "./types";
 
 declare global {
@@ -54,7 +54,7 @@ export class AlertReduxCard extends LitElement {
   private _hasProgress = false;
   private _versionChecked = false;
 
-  static styles = cardStyles;
+  static styles = [sharedStyles, cardStyles];
 
   constructor() {
     super();
@@ -78,7 +78,8 @@ export class AlertReduxCard extends LitElement {
     const alerts = collectAlerts(this.hass);
     const firing = alerts.filter(isFiring).length;
     const noData = alerts.filter((alert) => alert.state === "no_data").length;
-    return 1 + Math.max(1, firing * 3) + (noData ? 1 + noData : 0);
+    const disabled = alerts.some((alert) => alert.state === "disabled");
+    return 1 + Math.max(1, firing * 3) + (noData ? 1 + noData : 0) + (disabled ? 1 : 0);
   }
 
   getGridOptions() {
@@ -148,6 +149,7 @@ export class AlertReduxCard extends LitElement {
     const alerts = collectAlerts(this.hass);
     const firing = alerts.filter(isFiring).sort(compareFiring);
     const noData = alerts.filter((alert) => alert.state === "no_data").sort(compareNoData);
+    const disabled = alerts.filter((alert) => alert.state === "disabled").length;
     const title = this._config.title;
     const dark = this.hass.themes?.darkMode ?? false;
 
@@ -159,6 +161,12 @@ export class AlertReduxCard extends LitElement {
             ? firing.map((alert) => this._renderAlert(alert))
             : html`<div class="empty">No alerts are firing.</div>`}
           ${noData.length ? this._renderNoData(noData) : nothing}
+          ${disabled
+            ? html`<div class="disabled-line">
+                <ha-icon icon="mdi:bell-off-outline"></ha-icon>${disabled}
+                ${disabled === 1 ? "alert" : "alerts"} disabled
+              </div>`
+            : nothing}
         </div>
       </ha-card>
     `;
@@ -288,7 +296,7 @@ export class AlertReduxCard extends LitElement {
   private _renderSnoozeMenu(alert: Alert, busy: boolean) {
     const snoozed = alert.state === "ack" && alert.snoozedUntil;
     return html`
-      <div class="snooze-menu" role="group" aria-label="Snooze for">
+      <div class="choices" role="group" aria-label="Snooze for">
         <span class="label">${snoozed ? "Snooze again for" : "Snooze for"}</span>
         ${snoozeDurations(this._config?.snooze_durations).map(
           (minutes) => html`<button

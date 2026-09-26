@@ -16,6 +16,7 @@ from homeassistant.helpers.template import Template
 
 from .const import (
     DATA_NOTIFIER,
+    DEFAULT_DONE_DISABLED_MESSAGE,
     DEFAULT_DONE_MESSAGE,
     DEFAULT_DONE_NO_DATA_MESSAGE,
     DEFAULT_ON_MESSAGE,
@@ -41,6 +42,8 @@ def default_message(reason: str, end_reason: str | None = None) -> str:
         return DEFAULT_REMINDER_MESSAGE
     if end_reason == EndReason.NO_DATA:
         return DEFAULT_DONE_NO_DATA_MESSAGE
+    if end_reason == EndReason.DISABLED:
+        return DEFAULT_DONE_DISABLED_MESSAGE
     return DEFAULT_DONE_MESSAGE
 
 

@@ -218,6 +218,9 @@ precedence rules would get complicated for little gain; revisit if that proves w
   described in §8.3 [Decided, F13].
 - The done notification is still sent when an acknowledged alert stops firing
   [Decided, R10].
+- [Decided, phase 6] Acknowledging a **snoozed** alert makes it a plain
+  acknowledgement: the snooze is cleared, and the alert stays acknowledged until it
+  stops firing. `_acked` fires, with `ack` as both the old and new state.
 - **Unacknowledgeable** alerts can't be acknowledged or snoozed [Decided, N9,
   F14]. The action is refused with an error, and the card shows no
   acknowledge controls for them.
@@ -241,6 +244,13 @@ pre-snoozes (§8.3). When a snooze runs out and the alert is still firing:
 - reminders always give the real firing duration.
 
 [Decided] The 5-minute threshold is a global setting, with 5 minutes as its default.
+[Decided, phase 6] It's the **snooze-end window** option
+(`snooze_reminder_window`). An alert with no reminders (an empty schedule,
+including short event alerts, §9.6) sends nothing when its snooze runs out: it
+becomes `active`, and that's all.
+
+[Decided, phase 6] Snoozing takes a duration. Re-snoozing an acknowledged alert,
+snoozed or not, replaces the deadline with *now + duration*, even if that's sooner.
 
 [Decided, F3] There's no separate state for snoozing. A snoozed alert is `ack` with
 a `snoozed_until` attribute. Snoozing is a kind of acknowledgement, and keeping the
@@ -260,6 +270,22 @@ all its inputs.
   state until its inputs report data, and then evaluates normally, including
   `delay_on`. If it fires, that's a new firing with a fresh notification.
 - Unacknowledgeable alerts **can** be disabled, e.g. for maintenance [Decided, F14].
+- [Decided, phase 6] A disabled alert ignores its inputs by detaching from them: a
+  condition alert stops its sources, triggers, and timers, and an event alert
+  detaches its triggers. Firing or dismissing a disabled manual alert, and
+  acknowledging, unacknowledging, or snoozing a disabled alert, do nothing (§16).
+- [Decided, phase 6] Disabling clears everything about the firing and its
+  evaluation: the acknowledgement and snooze, reminders, pending delays, the no-data
+  state, event expiry, and on/off latches. The done message's default is "{{ name }}
+  was disabled; stopped firing after {{ duration }}." (`end_reason` `disabled`).
+- [Decided, phase 6] Re-enabling starts from scratch. Condition alerts go to
+  `no_data` and wait for data, with no delays to honour; on/off edges are armed
+  again, so an on criterion that's already true fires, as for a new alert (fails
+  loud). Manual and event alerts go straight to `idle`. `_enabled` is the only
+  event; waiting for data fires none, as at startup.
+- [Decided, phase 6] Disabling, enabling, and suspending are **admin-only**
+  actions. They're maintenance and debugging tools, not everyday operations;
+  acknowledging and snoozing stay open to everyone.
 
 ### 6.4 Suspending
 
@@ -269,6 +295,13 @@ a given duration, after which it re-enables automatically as in §6.3. The name
 
 [Decided, F16] As with snoozing, there's no separate state: a suspended alert is
 `disabled` with a `disabled_until` attribute.
+
+[Decided, phase 6] The latest call wins. Suspending an alert that's already
+disabled or suspended sets the new time; disabling a suspended alert makes it
+indefinite. Each fires `_disabled` (old state `disabled`). Disabling an alert
+that's already indefinitely disabled does nothing. The action takes exactly one of
+`duration` or `until` (a time without a time zone is local time); an `until` that
+isn't in the future is an error.
 
 ## 7. States and lifecycle
 
@@ -309,7 +342,9 @@ such as a configuration error.
    any state ── disable / suspend ──▶ disabled ── enable / suspension ends ──▶ no_data
 ```
 
-(A firing alert keeps its `active`/`ack` state through the grace period; see §4.4.)
+(A firing alert keeps its `active`/`ack` state through the grace period; see §4.4.
+Only condition alerts go to `no_data` when enabled; manual and event alerts go
+straight to `idle`, §6.3.)
 
 ## 8. Supersession
 
@@ -536,12 +571,14 @@ doesn't repeat it automatically. It can include the name deliberately through th
     works), so it survives a restart and feeds the card and the done message.
   - the reason for the notification (`on`, `reminder`, or `done`);
   - [Decided, phase 4] for the done message, why the firing ended, as `end_reason`
-    (`resolved`, `dismissed`, or `no_data`; §11.3).
+    (`resolved`, `dismissed`, or `no_data`; §11.3), and from phase 6 `disabled`.
 - [Decided] The default wording is deliberately generic. It's a starting point,
   meant to be overridden with something more specific.
 - [Decided, phase 4] The default done message depends on `end_reason`: an alert
   that lost its data says "{{ name }} lost its data; stopped firing after
-  {{ duration }}.", so that it never reads as resolved.
+  {{ duration }}.", so that it never reads as resolved. [Decided, phase 6] One
+  that was disabled says "{{ name }} was disabled; stopped firing after
+  {{ duration }}."
 - [Decided, phase 4] The on and reminder messages give `duration` as at the time of
   sending (so 0 for the on message), and the done message the length of the whole
   firing. A message that fails to render is logged, and the default for that
@@ -777,6 +814,10 @@ built.
   `hysteresis`, and the current `value`; on/off alerts show `on_template`,
   `on_triggers`, `off_template`, and `off_triggers`. Templates, trigger
   configuration, trigger data, and `value` are kept out of the recorder.
+  [Decided, phase 6] The snooze and disable details are `snoozed_until`,
+  `last_snoozed`, `last_snoozed_by`, `disabled_until`, `last_disabled`,
+  `last_disabled_by`, `last_enabled`, and `last_enabled_by`. A snooze running
+  out, or a suspension ending, records no user.
 - **Generator provenance:** `generated_by` (§12.3).
 
 Attributes that can grow large, or change constantly, should be kept out of the
@@ -836,6 +877,9 @@ tells the whole story and nothing has to be inferred:
   ended, or an event alert's duration ran out), `dismissed` (a manual alert), or
   `no_data` (the grace period ran out; §4.4). Phase 6 adds `disabled` (F15). The
   done notification (§9.7) uses it.
+- [Decided, phase 6] `_snoozed` carries `snoozed_until`, and `_disabled` carries
+  `disabled_until` (null when disabled indefinitely). Disabling a firing alert
+  fires `_ended` (reason `disabled`) and then `_disabled`.
 - [Decided, phase 2] `_no_data` fires when an alert loses its data, and carries
   `missing_inputs`. This happens both when the alert enters `no_data` and when a
   firing alert loses data but keeps its state during the grace period. If the
@@ -900,7 +944,8 @@ was meant to solve.
   duration for notification buttons, the per-priority event durations (phase 5)
   and icons, the
   quiet-hours entity and priority threshold, and the no-data grace period. They're
-  edited through its options flow.
+  edited through its options flow. [Decided, phase 6] Also the snooze-end window
+  (§6.2).
 - Each **alert** is a **config subentry** of that entry, created and edited in the
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
@@ -1007,6 +1052,12 @@ To make sure it gets fixed:
 - [Decided, F22] Disabled and suspended alerts aren't shown on the main card; they
   appear on the admin card only. The main card shows a one-line count instead, e.g.
   "3 alerts disabled".
+- [Decided, phase 6] **Snooze control.** Snooze durations are a preset menu (15
+  and 30 minutes, 1, 2, and 4 hours), which a `snooze_durations` card option (in
+  minutes) replaces. The menu opens as a row of choices below the controls rather
+  than floating over the card, where the alert's box would clip it. A snoozed alert
+  shows "Snoozed · 23 min" in place of its acknowledge button, and its menu adds
+  **Keep acknowledged** (ack) and **Unsnooze** (unack).
 - Filters (hide acknowledged; per priority) [Decided, R22, late phase].
 - Styling follows [weather_alerts_card](https://github.com/seevee/weather_alerts_card)
   [Decided, N31].
@@ -1053,6 +1104,13 @@ To make sure it gets fixed:
 
 - Lists **all** alerts grouped by priority, showing each one's state.
 - Controls to enable, disable, and suspend each alert.
+- [Decided, phase 6] As built: each row shows the icon, name, **kind**, and state
+  (translated), with a few words of detail (since when it's been firing, when a
+  snooze or suspension ends, how long it's had no data). The controls are shown
+  to admins only, since the actions are admin-only (§6.3); everyone else sees a
+  read-only list. Suspend offers 1 hour, 4 hours, 8 hours, 1 day, 1 week, or
+  **Until…** a date and time. It ships in the same bundle as the main card, so
+  there's no second resource.
 - Later phase: create and edit alerts and generators from the card, making it a
   friendlier front end to the subentry flows.
 - [Decided, F27; late phase] Export/import of alert definitions, to make up for
@@ -1155,8 +1213,8 @@ area, label, …):
 |---|---|
 | `alert_redux.ack` / `alert_redux.unack` | Acknowledge, or remove the acknowledgement. |
 | `alert_redux.snooze` | Snooze for a `duration`. |
-| `alert_redux.disable` / `alert_redux.enable` | Disable or enable. |
-| `alert_redux.suspend` | Suspend for a `duration`, or `until` a time. |
+| `alert_redux.disable` / `alert_redux.enable` | Disable or enable. Admin only (phase 6). |
+| `alert_redux.suspend` | Suspend for a `duration`, or `until` a time. Admin only (phase 6). |
 | `alert_redux.fire` / `alert_redux.dismiss` | Fire or dismiss a manual alert; `fire` can take `data`. |
 | `alert_redux.refresh_generator` | Re-evaluate a generator's targets now (debugging; §12.3). |
 | `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off). |
@@ -1310,6 +1368,17 @@ Decisions with their reasons, in the order they were made.
 | Triggers attach once HA has started, after the startup delay | Entities loading at startup would otherwise fire trigger alerts, as automations avoid [§4.2, §15.3]. |
 | Event alerts' trigger variables are `trigger`, stored JSON-safe | The same name as in automations; storing them keeps the card and done message right across restarts [§9.5]. |
 | Duration changes apply from the next fire | A running firing keeps the expiry it was given [§4.2]. |
+| Acknowledging a snoozed alert makes the acknowledgement lasting | Gives "keep it acknowledged" without unack-then-ack [§6.1]. |
+| Snooze durations are a preset menu, configurable per card | Quick to use on a phone; the card option covers other needs [§13.1]. |
+| Re-snoozing replaces the deadline, even with a sooner one | "Re-snooze or extend" means the latest choice wins [§6.2]. |
+| No reminder when a snooze ends on an alert without reminders | It opted out of reminders [§6.2]. |
+| Disabling detaches the alert's inputs | Nothing can fire it, and nothing is evaluated while it's off [§6.3]. |
+| Re-enabling starts from scratch, with on/off edges re-armed | A condition that still holds fires anew; fails loud [§6.3]. |
+| Disable and suspend: the latest call wins | Simple to explain, and each is announced by `_disabled` [§6.4]. |
+| Disable, enable, and suspend are admin-only | They're maintenance and debugging tools, not everyday operations [§6.3]. |
+| The admin card's controls are for admins only | Matches the admin-only actions; others get a read-only list [§13.2]. |
+| Both cards ship in one bundle | Nothing new to register, and one refresh covers both [§13.2]. |
+| Restart checks ride on install restarts | Development already restarts HA to install each subphase; pytest covers every restore path in its own phase, and a ledger confirms them in real HA one install later [§20]. |
 
 ## 20. Phase plan
 
@@ -1320,7 +1389,10 @@ one starts, and each ends with a usable release.
 
 - smoke tests for the new behaviour (`pytest-homeassistant-custom-component`), and
   the card type-checked and rebuilt;
-- a run in a real HA instance;
+- a run in a real HA instance; [Decided, phase 6] checks of behaviour across a
+  restart don't get restarts of their own. They're set up at the end of a run and
+  checked after the next install restart, through the ledger in
+  `docs/restart-checks.md`;
 - CI green, and a `0.N.0` release (manifest version bumped, card rebuilt), so HACS
   can install it;
 - the spec updated if building the phase changed any decisions.
@@ -1462,6 +1534,17 @@ element for a different alert. Decisions from building it are recorded in §4.1,
   enable, disable, and suspend.
 
 *Done when* snoozes, disables, and suspensions behave as specified, across restarts.
+
+[Phase 6 as built] Built in two parts: 6a (snoozing, with the card's snooze
+control) and 6b (disabling and suspending, the card's disabled-alerts line, and the
+admin card), released together as 0.6.0. Disable, enable, and suspend are made
+admin-only with HA's `admin_only` flag on entity actions, which arrived in HA
+2026.9; on older versions they're registered as admin actions that dispatch to the
+entities in the same way, so the minimum HA version stays 2025.3. The entities' one-shot timers
+share a `PointTimer` helper, and the runtime's deadlines (reminder, snooze,
+suspension, event expiry) are synced to them in one place. Decisions from building
+it are recorded in §6.1–§6.4, §7.2, §9.5, §11.1, §11.3, §12.1, §13.1, §13.2, §16,
+and §20.
 
 ### Phase 7 — Supersession (0.7.0)
 

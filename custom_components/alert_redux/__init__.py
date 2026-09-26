@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import CoreState, HomeAssistant
-from homeassistant.helpers import config_validation as cv
+from homeassistant.core import CoreState, HomeAssistant, ServiceCall
+from homeassistant.helpers import config_validation as cv, service
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
@@ -22,6 +23,7 @@ from .const import (
     ATTR_NEW_STATE,
     ATTR_OLD_STATE,
     ATTR_PRIORITY,
+    ATTR_UNTIL,
     ATTR_USER_ID,
     CONF_DEFAULT_GROUPS,
     CONF_FALLBACK_GROUP,
@@ -40,9 +42,12 @@ from .const import (
     EVENT_DELETED,
     NOTIFIER_STORAGE_KEY,
     SERVICE_ACK,
+    SERVICE_DISABLE,
     SERVICE_DISMISS,
+    SERVICE_ENABLE,
     SERVICE_FIRE,
     SERVICE_SNOOZE,
+    SERVICE_SUSPEND,
     SERVICE_UNACK,
     SUBENTRY_ALERT,
     SUBENTRY_NOTIFIER_GROUP,
@@ -76,8 +81,67 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         {vol.Required(ATTR_DURATION): cv.positive_time_period},
         "async_snooze",
     )
+    # Disabling is for maintenance and debugging, not everyday use (spec §16).
+    _register_admin_entity_service(
+        hass, component, SERVICE_DISABLE, None, "async_disable"
+    )
+    _register_admin_entity_service(
+        hass, component, SERVICE_ENABLE, None, "async_enable"
+    )
+    _register_admin_entity_service(
+        hass,
+        component,
+        SERVICE_SUSPEND,
+        vol.All(
+            cv.make_entity_service_schema(
+                {
+                    vol.Exclusive(ATTR_DURATION, "end"): cv.positive_time_period,
+                    vol.Exclusive(ATTR_UNTIL, "end"): cv.datetime,
+                }
+            ),
+            cv.has_at_least_one_key(ATTR_DURATION, ATTR_UNTIL),
+        ),
+        "async_suspend",
+    )
     async_setup_websocket(hass)
     return True
+
+
+def _entity_services_take_admin_only(component: EntityComponent[AlertEntity]) -> bool:
+    """Return whether this Home Assistant can make entity actions admin-only."""
+    return (
+        "admin_only"
+        in inspect.signature(component.async_register_entity_service).parameters
+    )
+
+
+def _register_admin_entity_service(
+    hass: HomeAssistant,
+    component: EntityComponent[AlertEntity],
+    name: str,
+    schema: Any,
+    method: str,
+) -> None:
+    """Register an entity action that only admins may call.
+
+    Home Assistant 2026.9 added admin_only to entity actions. Before that, an admin
+    action dispatches to the entities in the same way, with the same schema.
+    """
+    if _entity_services_take_admin_only(component):
+        component.async_register_entity_service(name, schema, method, admin_only=True)
+        return
+
+    async def _async_handle(call: ServiceCall) -> None:
+        # The component's own registry of entities, by entity ID, as it uses.
+        await service.entity_service_call(hass, component._entities, method, call)
+
+    service.async_register_admin_service(
+        hass,
+        DOMAIN,
+        name,
+        _async_handle,
+        cv.make_entity_service_schema({}) if schema is None else schema,
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

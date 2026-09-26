@@ -39,3 +39,32 @@ snooze:
       example: "00:30:00"
       selector:
         duration:
+
+disable:
+  target:
+    entity:
+      integration: alert_redux
+      domain: alert_redux
+
+enable:
+  target:
+    entity:
+      integration: alert_redux
+      domain: alert_redux
+
+suspend:
+  target:
+    entity:
+      integration: alert_redux
+      domain: alert_redux
+  fields:
+    duration:
+      required: false
+      example: "02:00:00"
+      selector:
+        duration:
+    until:
+      required: false
+      example: "2026-10-01 08:00:00"
+      selector:
+        datetime:

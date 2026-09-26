@@ -72,6 +72,7 @@ class AlertState(StrEnum):
     ACTIVE = "active"
     ACK = "ack"
     NO_DATA = "no_data"
+    DISABLED = "disabled"
 
 
 class AlertKind(StrEnum):
@@ -99,6 +100,7 @@ class EndReason(StrEnum):
     RESOLVED = "resolved"
     DISMISSED = "dismissed"
     NO_DATA = "no_data"
+    DISABLED = "disabled"
 
 
 # Config subentry types.
@@ -164,6 +166,9 @@ DEFAULT_DONE_MESSAGE = "{{ name }} stopped firing after {{ duration }}."
 DEFAULT_DONE_NO_DATA_MESSAGE = (
     "{{ name }} lost its data; stopped firing after {{ duration }}."
 )
+DEFAULT_DONE_DISABLED_MESSAGE = (
+    "{{ name }} was disabled; stopped firing after {{ duration }}."
+)
 
 # Config entry options: the global defaults (spec §12.1).
 CONF_STARTUP_DELAY = "startup_delay"
@@ -198,8 +203,12 @@ SERVICE_DISMISS = "dismiss"
 SERVICE_ACK = "ack"
 SERVICE_UNACK = "unack"
 SERVICE_SNOOZE = "snooze"
+SERVICE_DISABLE = "disable"
+SERVICE_ENABLE = "enable"
+SERVICE_SUSPEND = "suspend"
 
 ATTR_DATA = "data"
+ATTR_UNTIL = "until"
 
 # Events (spec §11.3).
 EVENT_FIRED = f"{DOMAIN}_fired"
@@ -208,6 +217,8 @@ EVENT_ACKED = f"{DOMAIN}_acked"
 EVENT_UNACKED = f"{DOMAIN}_unacked"
 EVENT_SNOOZED = f"{DOMAIN}_snoozed"
 EVENT_SNOOZE_EXPIRED = f"{DOMAIN}_snooze_expired"
+EVENT_DISABLED = f"{DOMAIN}_disabled"
+EVENT_ENABLED = f"{DOMAIN}_enabled"
 EVENT_NO_DATA = f"{DOMAIN}_no_data"
 EVENT_CREATED = f"{DOMAIN}_created"
 EVENT_DELETED = f"{DOMAIN}_deleted"
@@ -229,6 +240,11 @@ ATTR_LAST_UNACKED_BY = "last_unacked_by"
 ATTR_SNOOZED_UNTIL = "snoozed_until"
 ATTR_LAST_SNOOZED = "last_snoozed"
 ATTR_LAST_SNOOZED_BY = "last_snoozed_by"
+ATTR_DISABLED_UNTIL = "disabled_until"
+ATTR_LAST_DISABLED = "last_disabled"
+ATTR_LAST_DISABLED_BY = "last_disabled_by"
+ATTR_LAST_ENABLED = "last_enabled"
+ATTR_LAST_ENABLED_BY = "last_enabled_by"
 ATTR_NAME = "name"
 ATTR_OLD_STATE = "old_state"
 ATTR_NEW_STATE = "new_state"

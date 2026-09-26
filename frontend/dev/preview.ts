@@ -2,7 +2,7 @@
 // without Home Assistant. Build with `npm run preview`, then open dev/preview.html.
 import * as mdi from "@mdi/js";
 
-import "../src/alert-redux-card";
+import "../src/main";
 import type { HassEntity, HomeAssistant } from "../src/types";
 
 // --- Stand-ins for the frontend's own elements ------------------------------------
@@ -165,6 +165,14 @@ const ALERTS: HassEntity[] = [
     no_data_since: ago(1),
   }),
   alert("porch_light", "Porch Light On", "notice", "idle"),
+  alert("pool_pump", "Pool Pump Fault", "warning", "disabled", {
+    icon: "mdi:pool",
+    kind: "threshold",
+  }),
+  alert("office_window", "Office Window Open", "informational", "disabled", {
+    icon: "mdi:window-open",
+    disabled_until: ago(-60 * 14),
+  }),
 ];
 
 // --- The page ---------------------------------------------------------------------
@@ -198,6 +206,7 @@ function hassFor(dark: boolean): HomeAssistant {
     states: empty ? {} : states,
     themes: { darkMode: dark },
     locale: { language: "en-GB" },
+    user: { is_admin: !params.has("user") },
     async callWS<T>() {
       return { version: stale ? "9.9.9" : __CARD_VERSION__ } as T;
     },
@@ -209,6 +218,28 @@ function hassFor(dark: boolean): HomeAssistant {
       });
       if (service === "ack") update(entityId, { state: "ack", ...attributes(null) });
       if (service === "unack") update(entityId, { state: "active", ...attributes(null) });
+      if (service === "disable" || service === "suspend") {
+        const until = data?.until
+          ? String(data.until)
+          : data?.duration
+            ? ago(-Number((data.duration as { minutes: number }).minutes))
+            : null;
+        update(entityId, {
+          state: "disabled",
+          attributes: {
+            ...states[entityId].attributes,
+            disabled_until: until,
+            firing_since: null,
+            snoozed_until: null,
+          },
+        });
+      }
+      if (service === "enable") {
+        update(entityId, {
+          state: "idle",
+          attributes: { ...states[entityId].attributes, disabled_until: null },
+        });
+      }
       if (service === "snooze") {
         const minutes = Number((data?.duration as { minutes: number }).minutes);
         update(entityId, { state: "ack", ...attributes(ago(-minutes)) });
@@ -225,16 +256,29 @@ function refresh() {
 
 function build() {
   for (const column of document.querySelectorAll<HTMLElement>(".column")) {
-    const card = document.createElement("alert-redux-card") as Card;
+    // ?admin shows the admin card; ?user shows it as a non-admin sees it.
+    const admin = params.has("admin") || params.has("user");
+    const card = document.createElement(
+      admin ? "alert-redux-admin-card" : "alert-redux-card",
+    ) as Card;
     card.dataset.theme = column.dataset.theme;
-    card.setConfig({ type: "custom:alert-redux-card", title: "Alerts" });
+    card.setConfig({
+      type: admin ? "custom:alert-redux-admin-card" : "custom:alert-redux-card",
+      title: admin ? "All alerts" : "Alerts",
+    });
     column.append(card);
     cards.push(card);
   }
   refresh();
-  // ?menu=<object ID> opens that alert's snooze menu.
+  // ?menu=<object ID> opens that alert's snooze (or suspend) menu; ?until also
+  // opens the admin card's date and time field.
   const menu = params.get("menu");
-  if (menu) for (const card of cards) Object.assign(card, { _snoozeMenu: `alert_redux.${menu}` });
+  if (menu) {
+    const entityId = `alert_redux.${menu}`;
+    for (const card of cards) {
+      Object.assign(card, { _snoozeMenu: entityId, _menu: entityId, _untilOpen: params.has("until") });
+    }
+  }
 }
 
 document.querySelector("#empty")?.addEventListener("change", (event) => {

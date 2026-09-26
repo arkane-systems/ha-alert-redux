@@ -594,3 +594,99 @@ def test_snooze_end_reminder(minutes: int, remind: bool, next_slot: int) -> None
 def test_snooze_end_reminder_without_reminders() -> None:
     now = T0 + timedelta(minutes=30)
     assert snooze_end_reminder(T0, (), now, timedelta(minutes=5)) == (False, None)
+
+
+def test_disable_ends_a_firing_and_clears_it() -> None:
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    runtime.snooze(T0, T0 + timedelta(hours=1), None)
+    runtime.no_data_since = T0
+    runtime.delay_off_until = T0 + timedelta(minutes=1)
+    later = T0 + timedelta(minutes=5)
+    changes = runtime.disable(later, "user")
+    assert [change for change, _ in changes] == [Change.ENDED, Change.DISABLED]
+    ended = changes[0][1]
+    assert ended.reason is EndReason.DISABLED
+    assert ended.duration_seconds == 300
+    assert changes[1][1].old_state is AlertState.ACK
+    assert runtime.state is AlertState.DISABLED
+    assert not runtime.firing and runtime.snoozed_until is None
+    assert runtime.no_data_since is None and runtime.delay_off_until is None
+    assert runtime.next_reminder is None
+    assert (runtime.last_disabled, runtime.last_disabled_by) == (later, "user")
+
+
+def test_disable_idle() -> None:
+    runtime = AlertRuntime()
+    changes = runtime.disable(T0, None)
+    assert [change for change, _ in changes] == [Change.DISABLED]
+    assert changes[0][1].old_state is AlertState.IDLE
+
+
+def test_disable_and_suspend_latest_wins() -> None:
+    runtime = AlertRuntime()
+    runtime.disable(T0, None)
+    assert runtime.disable(T0, None) == []
+    until = T0 + timedelta(hours=1)
+    changes = runtime.disable(T0, None, until)
+    assert [change for change, _ in changes] == [Change.DISABLED]
+    assert changes[0][1].old_state is AlertState.DISABLED
+    assert runtime.disabled_until == until
+    # Suspending again moves the time; disabling makes it indefinite.
+    runtime.disable(T0, None, until + timedelta(hours=1))
+    assert runtime.disabled_until == until + timedelta(hours=1)
+    assert runtime.disable(T0, None) != []
+    assert runtime.disabled_until is None
+
+
+def test_disabled_ignores_evaluation() -> None:
+    runtime = AlertRuntime()
+    runtime.disable(T0, None)
+    assert runtime.evaluate(True, [], T0, Timing()) == []
+    assert runtime.state is AlertState.DISABLED
+
+
+def test_enable() -> None:
+    runtime = AlertRuntime()
+    assert runtime.enable(T0, None, awaits_data=False) == []
+    runtime.on_armed = False
+    runtime.disable(T0, None, T0 + timedelta(hours=1))
+    changes = runtime.enable(T0, "user", awaits_data=False)
+    assert [change for change, _ in changes] == [Change.ENABLED]
+    assert (changes[0][1].old_state, changes[0][1].new_state) == (
+        AlertState.DISABLED,
+        AlertState.IDLE,
+    )
+    assert runtime.disabled_until is None
+    assert runtime.on_armed
+    assert (runtime.last_enabled, runtime.last_enabled_by) == (T0, "user")
+
+
+def test_enable_awaiting_data() -> None:
+    runtime = AlertRuntime()
+    runtime.disable(T0, None)
+    runtime.enable(T0, None, awaits_data=True)
+    assert runtime.state is AlertState.NO_DATA
+    assert runtime.awaiting_data
+
+
+def test_suspension_ended() -> None:
+    runtime = AlertRuntime()
+    until = T0 + timedelta(hours=1)
+    runtime.disable(T0, None, until)
+    assert runtime.suspension_ended(until - timedelta(seconds=1), awaits_data=False) == []
+    changes = runtime.suspension_ended(until, awaits_data=False)
+    assert [change for change, _ in changes] == [Change.ENABLED]
+    assert runtime.last_enabled_by is None
+    # An indefinitely disabled alert doesn't end its own suspension.
+    runtime.disable(T0, None)
+    assert runtime.suspension_ended(until, awaits_data=False) == []
+
+
+def test_disabled_round_trip() -> None:
+    runtime = AlertRuntime()
+    runtime.disable(T0, "user", T0 + timedelta(hours=1))
+    restored = AlertRuntime.from_dict(runtime.to_dict())
+    assert restored.state is AlertState.DISABLED
+    assert restored.disabled_until == T0 + timedelta(hours=1)
+    assert restored.last_disabled == T0

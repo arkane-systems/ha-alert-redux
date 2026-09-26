@@ -343,3 +343,53 @@ async def test_snooze_expired_during_restart(
     assert hass.states.get(DOOR).state == "active"
     assert len(unacked) == 1
     assert calls[-1].data["message"] == "Back Door Open is still firing (40 minutes)."
+
+
+async def test_disabled_survives_restart(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A disabled condition alert comes back disabled, ignoring its input."""
+    hass.states.async_set("binary_sensor.back_door", "off")
+    entry = await setup_alerts(
+        state_alert("Back Door Open", "binary_sensor.back_door")
+    )
+    await hass.services.async_call(
+        DOMAIN, "disable", {"entity_id": DOOR}, blocking=True
+    )
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(DOOR).state == "disabled"
+
+    hass.states.async_set("binary_sensor.back_door", "on")
+    await hass.async_block_till_done()
+    assert hass.states.get(DOOR).state == "disabled"
+
+
+async def test_suspension_ended_during_restart(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A suspension that ran out while HA was down ends when it's back."""
+    hass.states.async_set("binary_sensor.back_door", "on")
+    entry = await setup_alerts(
+        state_alert("Back Door Open", "binary_sensor.back_door")
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "suspend",
+        {"entity_id": DOOR, "duration": {"minutes": 10}},
+        blocking=True,
+    )
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=30))
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(DOOR)
+    assert state.state == "active"
+    assert state.attributes["disabled_until"] is None
+    assert state.attributes["last_enabled_by"] is None

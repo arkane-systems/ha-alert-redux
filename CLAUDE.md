@@ -13,8 +13,10 @@ and registers it itself.
 Phases 1 (manual alerts) and 2 (state and template condition alerts, no-data
 handling) and 3 (the main card, with messages rendered for it) are implemented, plus
 0.3.1 (the Alert Redux label, spec §11.5), phase 4 (notifications: groups, on /
-reminder / done, retries and the fallback), and phase 5 (on/off and threshold
-condition alerts, trigger and bus event alerts, and the card's progress bar).
+reminder / done, retries and the fallback), phase 5 (on/off and threshold
+condition alerts, trigger and bus event alerts, and the card's progress bar), and
+phase 6 (snoozing, disabling, and suspending, the card's snooze control, and the
+admin card).
 
 ## Specification
 
@@ -43,11 +45,15 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     with `config_subentry_id` so HA removes it with the subentry, and keeps the
     add-entities callback for alerts added later.
   - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
-    persistence, and the rendered messages while firing), `ConditionAlertEntity`
+    persistence, and the rendered messages while firing; snoozing, disabling, and
+    suspending, for every kind), `ConditionAlertEntity`
     (state, on/off, threshold, and template kinds: watches its sources, judges them
     by the kind's rule in `_judge`, and runs the delays and no-data grace period on
     one timer), and `EventAlertEntity` (trigger and bus event kinds: fires on its
-    triggers, for a duration).
+    triggers, for a duration). One-shot timers use `PointTimer`, and
+    `_async_update_timers` sets them from the runtime's deadlines (reminder,
+    snooze, suspension, event expiry). Kinds detach and re-attach their inputs on
+    disable and enable through `_async_inputs_stopped` / `_async_inputs_started`.
   - `model.py` — `AlertRuntime`, the HA-free state machine (including condition
     evaluation, `evaluate()`, event durations, and on/off edges), its
     serialization, the threshold rule (`threshold_holds`), and the global
@@ -102,12 +108,18 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `brand/icon.png`, `brand/icon@2x.png` — integration icon (256 and 512 px),
     rendered from `assets/alert-redux-icon.svg`.
 - **`frontend/`** — card source (TypeScript + Lit), bundled with esbuild.
-  - `src/alert-redux-card.ts` — the main card element; `alerts.ts` (reading, sorting,
-    and classifying alert entities), `format.ts`, `styles.ts`, `types.ts`.
+  - `src/main.ts` — the bundle's entry point, importing both cards.
+  - `src/alert-redux-card.ts` — the main card element; `src/alert-redux-admin-card.ts`
+    — the admin card; `alerts.ts` (reading, sorting, and classifying alert entities),
+    `format.ts`, `styles.ts` (`sharedStyles` for both cards, plus the main card's),
+    `types.ts`.
   - `dev/preview.html` + `dev/preview.ts` — the card against a mock `hass`, in light
     and dark themes, with stub `ha-card`/`ha-icon`. `npm run preview` builds it into
     `dev/dist/` (gitignored); serve `frontend/dev/` over HTTP and open
-    `preview.html` (`?empty` and `?stale` preset its toggles). Not shipped.
+    `preview.html` (`?empty` and `?stale` preset its toggles; `?admin` shows the
+    admin card and `?user` shows it as a non-admin; `?menu=<object ID>` opens that
+    alert's snooze or suspend menu, and `?until` its date and time field). Not
+    shipped.
 - **`assets/`** — the icon's SVG master and the 32 px README header icon.
 - **`tests/`** — smoke tests using `pytest-homeassistant-custom-component`.
 
@@ -141,6 +153,12 @@ The test plugin tracks current HA, which needs Python 3.14; keep
 `requirements_test.txt` close to the HA version actually in use, since HA behaviour
 changes between releases (spec §11.5 records one that bit us). CI also runs HACS
 validation and hassfest.
+
+Checks of behaviour across a restart on the real HA instance don't get restarts of
+their own: they're set up at the end of a real-HA run and checked after the next
+install restart. `docs/restart-checks.md` is the ledger of pending and done checks,
+with a note on this instance's restart timing. Read it at the start of every
+real-HA run.
 
 ## Versioning
 

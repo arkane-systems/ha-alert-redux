@@ -864,7 +864,8 @@
           "idle": "Idle",
           "active": "Active",
           "ack": "Acknowledged",
-          "no_data": "No data"
+          "no_data": "No data",
+          "disabled": "Disabled"
         },
         "state_attributes": {
           "priority": {
@@ -874,6 +875,17 @@
               "warning": "[%key:component::alert_redux::selector::priority::options::warning%]",
               "notice": "[%key:component::alert_redux::selector::priority::options::notice%]",
               "informational": "[%key:component::alert_redux::selector::priority::options::informational%]"
+            }
+          },
+          "kind": {
+            "state": {
+              "manual": "[%key:component::alert_redux::selector::kind::options::manual%]",
+              "state": "[%key:component::alert_redux::selector::kind::options::state%]",
+              "on_off": "[%key:component::alert_redux::selector::kind::options::on_off%]",
+              "threshold": "[%key:component::alert_redux::selector::kind::options::threshold%]",
+              "template": "[%key:component::alert_redux::selector::kind::options::template%]",
+              "trigger": "[%key:component::alert_redux::selector::kind::options::trigger%]",
+              "event": "[%key:component::alert_redux::selector::kind::options::event%]"
             }
           }
         }
@@ -888,6 +900,17 @@
         "warning": "Warning",
         "notice": "Notice",
         "informational": "Informational"
+      }
+    },
+    "kind": {
+      "options": {
+        "manual": "Manual",
+        "state": "State",
+        "on_off": "On/off",
+        "threshold": "Threshold",
+        "template": "Template",
+        "trigger": "Trigger",
+        "event": "Bus event"
       }
     }
   },
@@ -923,6 +946,28 @@
           "description": "How long to snooze the alert for."
         }
       }
+    },
+    "disable": {
+      "name": "Disable",
+      "description": "Disables an alert, so that it can't fire, until it's enabled again. A firing alert stops firing, and its done notification says it was disabled. Admin only."
+    },
+    "enable": {
+      "name": "Enable",
+      "description": "Enables a disabled or suspended alert. It starts from scratch: a condition alert waits for its inputs, then evaluates as normal. Admin only."
+    },
+    "suspend": {
+      "name": "Suspend",
+      "description": "Disables an alert for a while, or until a time, after which it's enabled again. Give either a duration or a time. Admin only.",
+      "fields": {
+        "duration": {
+          "name": "Duration",
+          "description": "How long to suspend the alert for."
+        },
+        "until": {
+          "name": "Until",
+          "description": "When to enable the alert again."
+        }
+      }
     }
   },
   "exceptions": {
@@ -931,6 +976,9 @@
     },
     "not_manual": {
       "message": "{entity_id} isn't a manual alert, so it can't be fired or dismissed by action."
+    },
+    "suspend_in_past": {
+      "message": "{entity_id} can't be suspended until a time that has already passed."
     }
   },
   "options": {

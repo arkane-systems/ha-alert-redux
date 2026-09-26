@@ -23,6 +23,7 @@ from .const import (
     ATTR_DELAY_OFF_UNTIL,
     ATTR_DELAY_ON,
     ATTR_DELAY_ON_UNTIL,
+    ATTR_DISABLED_UNTIL,
     ATTR_DISPLAY_MESSAGE,
     ATTR_DURATION,
     ATTR_DURATION_SECONDS,
@@ -36,6 +37,10 @@ from .const import (
     ATTR_KIND,
     ATTR_LAST_ACKED,
     ATTR_LAST_ACKED_BY,
+    ATTR_LAST_DISABLED,
+    ATTR_LAST_DISABLED_BY,
+    ATTR_LAST_ENABLED,
+    ATTR_LAST_ENABLED_BY,
     ATTR_LAST_ENDED,
     ATTR_LAST_FIRED,
     ATTR_LAST_SNOOZED,
@@ -111,6 +116,8 @@ from .const import (
     DOMAIN,
     EVENT_ACKED,
     EVENT_CREATED,
+    EVENT_DISABLED,
+    EVENT_ENABLED,
     EVENT_ENDED,
     EVENT_FIRED,
     EVENT_KINDS,
@@ -168,6 +175,8 @@ _CHANGE_EVENTS = {
     Change.UNACKED: EVENT_UNACKED,
     Change.SNOOZED: EVENT_SNOOZED,
     Change.SNOOZE_EXPIRED: EVENT_SNOOZE_EXPIRED,
+    Change.DISABLED: EVENT_DISABLED,
+    Change.ENABLED: EVENT_ENABLED,
 }
 
 
@@ -227,6 +236,8 @@ class AlertEntity(Entity):
 
     _attr_should_poll = False
     _attr_translation_key = "alert"
+    # Whether the alert has inputs to wait for when it's enabled (spec §6.3).
+    _awaits_data = False
     _unrecorded_attributes = frozenset(
         {ATTR_FIRE_DATA, ATTR_MESSAGE, ATTR_DISPLAY_MESSAGE}
     )
@@ -246,6 +257,7 @@ class AlertEntity(Entity):
         self._labelled = False
         self._reminder_timer = PointTimer(self._async_reminder_due)
         self._snooze_timer = PointTimer(self._async_snooze_due)
+        self._suspension_timer = PointTimer(self._async_suspension_due)
         self._attr_unique_id = subentry.subentry_id
         self._configure(subentry)
 
@@ -303,6 +315,11 @@ class AlertEntity(Entity):
             ATTR_SNOOZED_UNTIL: runtime.snoozed_until,
             ATTR_LAST_SNOOZED: runtime.last_snoozed,
             ATTR_LAST_SNOOZED_BY: runtime.last_snoozed_by,
+            ATTR_DISABLED_UNTIL: runtime.disabled_until,
+            ATTR_LAST_DISABLED: runtime.last_disabled,
+            ATTR_LAST_DISABLED_BY: runtime.last_disabled_by,
+            ATTR_LAST_ENABLED: runtime.last_enabled,
+            ATTR_LAST_ENABLED_BY: runtime.last_enabled_by,
             ATTR_MESSAGE: self._messages.message if self._messages else None,
             ATTR_DISPLAY_MESSAGE: (
                 self._messages.display_message if self._messages else None
@@ -453,14 +470,16 @@ class AlertEntity(Entity):
 
     @callback
     def _async_update_timers(self) -> None:
-        """Set the timers to the runtime's deadlines: reminder and snooze."""
+        """Set the timers to the runtime's deadlines: reminder, snooze, suspension."""
         self._reminder_timer.at(self.hass, self._runtime.next_reminder)
         self._snooze_timer.at(self.hass, self._runtime.snoozed_until)
+        self._suspension_timer.at(self.hass, self._runtime.disabled_until)
 
     @callback
     def _async_cancel_timers(self) -> None:
         self._reminder_timer.cancel()
         self._snooze_timer.cancel()
+        self._suspension_timer.cancel()
 
     @callback
     def _async_reminder_due(self, _now: datetime) -> None:
@@ -514,6 +533,27 @@ class AlertEntity(Entity):
             self._async_send_reminder(now)
 
     @callback
+    def _async_suspension_due(self, _now: datetime) -> None:
+        """Enable a suspended alert: its time is up (spec §6.4)."""
+        runtime = self._runtime
+        if runtime.disabled_until is None:
+            return
+        self._context = None
+        # The timer may run a moment early; the suspension ends at its time.
+        now = max(dt_util.utcnow(), runtime.disabled_until)
+        if changes := runtime.suspension_ended(now, awaits_data=self._awaits_data):
+            self._apply_changes(changes)
+            self._async_inputs_started()
+
+    @callback
+    def _async_inputs_started(self) -> None:
+        """Start watching the alert's inputs, e.g. when it's enabled."""
+
+    @callback
+    def _async_inputs_stopped(self) -> None:
+        """Stop watching the alert's inputs, e.g. when it's disabled."""
+
+    @callback
     def _async_replan_reminder(self) -> None:
         """Plan the next reminder afresh, e.g. after the schedule changed."""
         self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
@@ -560,6 +600,10 @@ class AlertEntity(Entity):
     async def async_fire(self, data: dict[str, Any] | None = None) -> None:
         """Fire a manual alert, or fire it again if it is already firing."""
         self._require_manual()
+        if self._runtime.disabled:
+            # A disabled alert can't fire (spec §6.3).
+            _LOGGER.debug("%s: fire ignored; disabled", self.entity_id)
+            return
         now = dt_util.utcnow()
         transition = self._runtime.fire(now, data)
         if transition.fire_count == 1:
@@ -612,6 +656,61 @@ class AlertEntity(Entity):
         # Reminders resume on the firing's original schedule (spec §6.1, §6.2).
         self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
         self._apply(EVENT_UNACKED, transition)
+
+    async def async_disable(self) -> None:
+        """Disable the alert until it's enabled again (spec §6.3)."""
+        self._async_disable(None)
+
+    async def async_suspend(
+        self, duration: timedelta | None = None, until: datetime | None = None
+    ) -> None:
+        """Disable the alert for a while, or until a time (spec §6.4).
+
+        A time without a time zone is local time.
+        """
+        now = dt_util.utcnow()
+        end = now + duration if duration is not None else dt_util.as_utc(until)
+        if end <= now:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="suspend_in_past",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
+        self._async_disable(end)
+
+    @callback
+    def _async_disable(self, until: datetime | None) -> None:
+        """Disable or suspend: end any firing, and stop watching the inputs."""
+        now = dt_util.utcnow()
+        if not (changes := self._runtime.disable(now, self._user_id, until)):
+            _LOGGER.debug("%s: disable ignored; already disabled", self.entity_id)
+            return
+        self._async_inputs_stopped()
+        extra = {
+            Change.ENDED: next(
+                (_ended_data(t) for change, t in changes if change is Change.ENDED),
+                {},
+            ),
+            Change.DISABLED: {ATTR_DISABLED_UNTIL: until},
+        }
+        self._apply_changes(changes, extra)
+        for change, transition in changes:
+            if change is Change.ENDED:
+                # The done message says it was disabled, not resolved (§6.3).
+                self._async_notify_done(transition)
+
+    async def async_enable(self) -> None:
+        """Enable a disabled or suspended alert, starting from scratch (§6.3)."""
+        now = dt_util.utcnow()
+        if not (
+            changes := self._runtime.enable(
+                now, self._user_id, awaits_data=self._awaits_data
+            )
+        ):
+            _LOGGER.debug("%s: enable ignored; not disabled", self.entity_id)
+            return
+        self._apply_changes(changes)
+        self._async_inputs_started()
 
     @property
     def _user_id(self) -> str | None:
@@ -721,6 +820,8 @@ class ConditionAlertEntity(AlertEntity):
         }
     )
 
+    _awaits_data = True
+
     def __init__(
         self, subentry: ConfigSubentry, store: AlertStore, settings: Settings
     ) -> None:
@@ -821,8 +922,12 @@ class ConditionAlertEntity(AlertEntity):
 
     @callback
     def _async_restored(self) -> None:
-        """Count as having no data until the inputs report (spec §15.3)."""
-        self._runtime.await_data(dt_util.utcnow())
+        """Count as having no data until the inputs report (spec §15.3).
+
+        A disabled alert has nothing to wait for.
+        """
+        if not self._runtime.disabled:
+            self._runtime.await_data(dt_util.utcnow())
 
     async def async_added_to_hass(self) -> None:
         """Start watching, after the startup delay if HA is starting."""
@@ -831,11 +936,22 @@ class ConditionAlertEntity(AlertEntity):
         if startup_until is not None and dt_util.utcnow() < startup_until:
             self._startup_timer.at(self.hass, startup_until)
         else:
-            self._async_start_source()
+            self._async_inputs_started()
 
     @callback
     def _async_startup_done(self, _now: datetime) -> None:
-        self._async_start_source()
+        self._async_inputs_started()
+
+    @callback
+    def _async_inputs_started(self) -> None:
+        """Start watching the condition, unless disabled or still starting up."""
+        if not self._runtime.disabled and not self._startup_timer.pending:
+            self._async_start_source()
+
+    @callback
+    def _async_inputs_stopped(self) -> None:
+        self._async_stop_source()
+        self._results = None
 
     async def async_will_remove_from_hass(self) -> None:
         """Stop watching the condition."""
@@ -855,8 +971,7 @@ class ConditionAlertEntity(AlertEntity):
         self._runtime.delay_on_until = None
         self._runtime.delay_off_until = None
         super().async_update_config(subentry)
-        if not self._startup_timer.pending:
-            self._async_start_source()
+        self._async_inputs_started()
 
     @callback
     def async_settings_changed(self) -> None:
@@ -1007,7 +1122,7 @@ class ConditionAlertEntity(AlertEntity):
 
         write forces the state to be written, e.g. for a changed attribute.
         """
-        if self._results is None:
+        if self._results is None or self._runtime.disabled:
             return
         # Changes here are the alert's own, not those of the last user action.
         self._context = None
@@ -1138,7 +1253,7 @@ class EventAlertEntity(AlertEntity):
             self._async_expired(now)
         else:
             self._async_update_timers()
-        self._async_start_watcher()
+        self._async_inputs_started()
 
     async def async_will_remove_from_hass(self) -> None:
         """Stop watching the triggers, and the duration."""
@@ -1154,7 +1269,17 @@ class EventAlertEntity(AlertEntity):
         """
         self._async_stop_watcher()
         super().async_update_config(subentry)
-        self._async_start_watcher()
+        self._async_inputs_started()
+
+    @callback
+    def _async_inputs_started(self) -> None:
+        """Attach the triggers, unless disabled."""
+        if not self._runtime.disabled:
+            self._async_start_watcher()
+
+    @callback
+    def _async_inputs_stopped(self) -> None:
+        self._async_stop_watcher()
 
     @callback
     def _async_start_watcher(self) -> None:
@@ -1179,6 +1304,8 @@ class EventAlertEntity(AlertEntity):
         self, trigger: dict[str, Any], context: Context | None
     ) -> None:
         """Fire, or fire again, if the condition allows."""
+        if self._runtime.disabled:
+            return
         if self._condition and not self._condition_allows(trigger):
             _LOGGER.debug("%s: triggered, but the condition is false", self.entity_id)
             return
