@@ -93,6 +93,10 @@ from .const import (
     CONF_PERSISTENT_CLEAR_WHEN_ENDED,
     CONF_PRIORITY,
     CONF_PROPAGATION,
+    CONF_QUIET_BEHAVIOUR,
+    CONF_QUIET_DATA,
+    CONF_QUIET_ENTITY,
+    CONF_QUIET_THRESHOLD,
     CONF_REMINDER_MESSAGE,
     CONF_REMINDER_SCHEDULE,
     CONF_REQUIRE_UNLOCK,
@@ -117,7 +121,9 @@ from .const import (
     CONF_VALUE_TEMPLATE,
     DOMAIN,
     EVENT_KINDS,
+    QUIET_THRESHOLD_DEFAULT,
     SECTION_NOTIFICATIONS,
+    SECTION_QUIET_HOURS,
     SECTION_SUPERSESSION,
     SUBENTRY_ALERT,
     SUBENTRY_NOTIFIER_GROUP,
@@ -134,7 +140,7 @@ from .model import (
     parse_throttle,
     to_timedelta,
 )
-from .notifier import MobileFeatures
+from .notifier import MobileFeatures, QuietBehaviour
 from .supersession import find_cycle, propagation_of, relationship_targets
 from .triggers import async_validate_triggers, is_storable
 
@@ -220,6 +226,9 @@ class AlertReduxOptionsFlow(OptionsFlow):
                             user_input.get(SECTION_SUPERSESSION)
                             or _supersession_options(settings)
                         ),
+                        **_quiet_hours_options(
+                            user_input.get(SECTION_QUIET_HOURS), settings
+                        ),
                     }
                 )
 
@@ -238,6 +247,9 @@ class AlertReduxOptionsFlow(OptionsFlow):
                 settings.button_snooze_duration
             ),
         }
+        quiet_defaults = defaults.get(SECTION_QUIET_HOURS) or _quiet_hours_options(
+            None, settings
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -290,6 +302,23 @@ class AlertReduxOptionsFlow(OptionsFlow):
                         ),
                         {"collapsed": True},
                     ),
+                    vol.Optional(SECTION_QUIET_HOURS): section(
+                        vol.Schema(
+                            {
+                                vol.Optional(
+                                    CONF_QUIET_ENTITY,
+                                    description=_suggested(
+                                        quiet_defaults, CONF_QUIET_ENTITY
+                                    ),
+                                ): _quiet_entity_selector(),
+                                vol.Required(
+                                    CONF_QUIET_THRESHOLD,
+                                    default=quiet_defaults[CONF_QUIET_THRESHOLD],
+                                ): _priority_selector(CONF_PRIORITY),
+                            }
+                        ),
+                        {"collapsed": True},
+                    ),
                     vol.Optional(SECTION_SUPERSESSION): section(
                         vol.Schema(
                             {
@@ -314,6 +343,44 @@ class AlertReduxOptionsFlow(OptionsFlow):
             ),
             errors=errors,
         )
+
+
+def _quiet_hours_options(
+    section_input: dict[str, Any] | None, settings: Settings
+) -> dict[str, Any]:
+    """Return the quiet-hours options (spec §9.9) from the form's section, or
+    the current settings when the section wasn't sent."""
+    if section_input is None:
+        return {
+            CONF_QUIET_ENTITY: settings.quiet_entity,
+            CONF_QUIET_THRESHOLD: settings.quiet_threshold.value,
+        }
+    return {
+        CONF_QUIET_ENTITY: section_input.get(CONF_QUIET_ENTITY) or None,
+        CONF_QUIET_THRESHOLD: section_input[CONF_QUIET_THRESHOLD],
+    }
+
+
+def _quiet_entity_selector() -> EntitySelector:
+    """Return a selector of the on/off entities that can drive quiet hours."""
+    return EntitySelector(
+        EntitySelectorConfig(
+            domain=["input_boolean", "schedule", "binary_sensor", "switch"]
+        )
+    )
+
+
+def _priority_selector(
+    translation_key: str, extra: tuple[str, ...] = ()
+) -> SelectSelector:
+    """Return a selector of the priorities, after any extra choices."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[*extra, *(priority.value for priority in Priority)],
+            translation_key=translation_key,
+            mode=SelectSelectorMode.DROPDOWN,
+        )
+    )
 
 
 def _throttle_fields(throttle: Throttle | None) -> dict[str, float]:
@@ -1181,6 +1248,24 @@ def _group_schema(hass: HomeAssistant, defaults: dict[str, Any]) -> vol.Schema:
             vol.Required(CONF_LOUD, default=defaults.get(CONF_LOUD, False)): (
                 BooleanSelector()
             ),
+            # Quiet hours (spec §9.9); only for loud groups.
+            vol.Optional(
+                CONF_QUIET_ENTITY, description=_suggested(defaults, CONF_QUIET_ENTITY)
+            ): _quiet_entity_selector(),
+            vol.Required(
+                CONF_QUIET_THRESHOLD,
+                default=defaults.get(CONF_QUIET_THRESHOLD, QUIET_THRESHOLD_DEFAULT),
+            ): _priority_selector(CONF_QUIET_THRESHOLD, (QUIET_THRESHOLD_DEFAULT,)),
+            vol.Required(
+                CONF_QUIET_BEHAVIOUR,
+                default=defaults.get(CONF_QUIET_BEHAVIOUR, QuietBehaviour.HOLD),
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=[behaviour.value for behaviour in QuietBehaviour],
+                    translation_key=CONF_QUIET_BEHAVIOUR,
+                    mode=SelectSelectorMode.LIST,
+                )
+            ),
             vol.Optional(
                 CONF_ENTITIES, description=_suggested(defaults, CONF_ENTITIES)
             ): EntitySelector(EntitySelectorConfig(domain="notify", multiple=True)),
@@ -1241,6 +1326,11 @@ def _group_schema(hass: HomeAssistant, defaults: dict[str, Any]) -> vol.Schema:
                             "instead of showing the done message",
                             "selector": BooleanSelector(),
                         },
+                        CONF_QUIET_DATA: {
+                            "label": "Quiet-hours data (used instead of Data when "
+                            "a softening group is in quiet hours)",
+                            "selector": ObjectSelector(),
+                        },
                     },
                 )
             ),
@@ -1269,10 +1359,11 @@ def _group_data(user_input: dict[str, Any]) -> tuple[dict[str, Any], str | None]
         if not action.startswith("notify."):
             action = f"notify.{action}"
         entry: dict[str, Any] = {CONF_ACTION: action}
-        if data := item.get(CONF_DATA):
-            if not isinstance(data, dict):
-                return {}, "invalid_data"
-            entry[CONF_DATA] = data
+        for key in (CONF_DATA, CONF_QUIET_DATA):
+            if data := item.get(key):
+                if not isinstance(data, dict):
+                    return {}, "invalid_data"
+                entry[key] = data
         if target := str(item.get(CONF_TARGET) or "").strip():
             entry[CONF_TARGET] = target
         # Only settings that differ from the defaults are kept.
@@ -1294,6 +1385,13 @@ def _group_data(user_input: dict[str, Any]) -> tuple[dict[str, Any], str | None]
             CONF_PERSISTENT_CLEAR_WHEN_ENDED, False
         ),
     }
+    if quiet_entity := user_input.get(CONF_QUIET_ENTITY):
+        data[CONF_QUIET_ENTITY] = quiet_entity
+    threshold = user_input.get(CONF_QUIET_THRESHOLD, QUIET_THRESHOLD_DEFAULT)
+    if threshold != QUIET_THRESHOLD_DEFAULT:
+        data[CONF_QUIET_THRESHOLD] = threshold
+    if (behaviour := user_input.get(CONF_QUIET_BEHAVIOUR)) == QuietBehaviour.SOFTEN:
+        data[CONF_QUIET_BEHAVIOUR] = str(behaviour)
     if not (data[CONF_ENTITIES] or actions or data[CONF_PERSISTENT]):
         return data, "no_members"
     return data, None

@@ -495,6 +495,10 @@ that the notifications with a key have been **acknowledged** (it clears them fro
 the members set to), or to **clear** them everywhere (a deleted alert), or that
 a key has changed (a renamed alert). It remembers which members are showing each
 key's notification, so clearing reaches exactly those (§9.10).
+[Decided, phase 10] Quiet hours are the notifier's own: each notification
+carries an **urgency**, a number that Alert Redux maps from its priority, and
+thresholds are urgencies too. When a group's quiet hours end, the notifier hands
+its held notifications to its owner, which says what to send instead (§9.9).
 
 The module handles notifier kinds, groups, retries (§15.2), the fallback, quiet-hours
 delivery rules, notification replacing and clearing, and turning buttons into each
@@ -554,6 +558,10 @@ A group has:
   default). The form can't give fields in a list defaults, so an unset field
   means the default.
   | Quiet-hours `data` | Legacy action | Alternative `data` used when the group *softens* during quiet hours (§9.9). |
+
+  [Decided, phase 10] A group's quiet-hours settings (its own entity and
+  threshold, and hold or soften) are on the group form, for loud groups only;
+  they're stored only when they aren't the defaults.
 
 - **Loud or quiet** [Decided, N35]. Only you know which notifiers make noise, and
   integrations can't tell us (N34: `notify_mqtt` can't even know who's listening).
@@ -621,6 +629,8 @@ doesn't repeat it automatically. It can include the name deliberately through th
     form (states and events as dictionaries, so `trigger.to_state.state` still
     works), so it survives a restart and feeds the card and the done message.
   - the reason for the notification (`on`, `reminder`, or `done`);
+  - [Decided, phase 10] for the done message, when the firing `started` and
+    `ended`, as ISO 8601 text (they feed the quiet-hours summary, §9.9);
   - [Decided, phase 4] for the done message, why the firing ended, as `end_reason`
     (`resolved`, `dismissed`, or `no_data`; §11.3), and from phase 6 `disabled`.
 - [Decided] The default wording is deliberately generic. It's a starting point,
@@ -804,6 +814,43 @@ For each loud group, when its quiet-hours entity turns off:
   when it ended.
 - [Deferred, R7] The summary may later be delivered through the acknowledgement
   queue (§10) instead.
+
+**As built** [Decided, phase 10]
+
+- The global entity and threshold are in a collapsed **Quiet hours** section of
+  the options; the entity can be an `input_boolean`, `schedule`,
+  `binary_sensor`, or `switch`. With no entity, quiet hours apply only to groups
+  with their own.
+- An entity that's **unavailable or unknown** can't say it's quiet hours, so new
+  notifications go out (fail loud), but what's held stays held until the entity
+  is off. An entity that **doesn't exist** once integrations have had the retry
+  timeout to set up is a Repairs issue (`quiet_entity_missing`), which clears
+  when it appears or is no longer used; meanwhile quiet hours don't apply.
+- Holding is per member: in a softening group, members with quiet-hours `data`
+  get softened notifications, and the rest hold. What's sent when quiet hours
+  end goes to the members that held. A held notification never goes to the
+  fallback.
+- **When quiet hours end**, Alert Redux decides per alert, from what was held
+  for it:
+  - an alert that's `active` (and not superseded) gets one reminder, with its
+    real duration;
+  - its firings that ended while held are one line of the summary: "Back Door
+    Open: first started 01:12, last stopped 02:24, fired 2 times for 12
+    minutes in all." (or "started …, stopped …, fired for …" for one firing),
+    with the day as well for a time that isn't today;
+  - a throttling summary (§9.8) held for a firing that ended is a line of its
+    own; throttling holds the done notification itself, so the throttling
+    summary is what reports it.
+  The summary is one notification per group, titled "Quiet hours summary",
+  headed "While quiet hours were on:", with its own key
+  (`alert_redux_quiet_hours_<group>`), so each night's replaces the last. Its
+  wording is fixed. An alert whose firing ended while held, and that gets no
+  reminder, has its earlier notification cleared from the members that held, as
+  its done notification would have done.
+- Held notifications are kept in the notifier's store. Quiet hours that ended
+  while HA was down end once it has started. Deleting an alert drops what was
+  held for it; renaming it moves that to its new key. Deleting a group drops
+  what it held.
 
 ### 9.10 Replacing and clearing notifications
 
@@ -1164,7 +1211,8 @@ was meant to solve.
   [Decided, phase 9] The snooze duration for notification buttons is the
   **Snooze button duration** (§9.11).
   [Decided, phase 10] The default throttle is two numbers, a count and minutes,
-  both empty for none (§9.8).
+  both empty for none (§9.8). The quiet-hours entity and threshold are a
+  collapsed **Quiet hours** section (§9.9).
 - Each **alert** is a **config subentry** of that entry, created and edited in the
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
@@ -1417,6 +1465,8 @@ After a restart:
   tries, with a last try at the timeout itself. The timeout (the **retry timeout**
   option) defaults to 5 minutes, counted from when the notification was sent. A
   legacy action that's registered while members wait for it is retried at once.
+- [Decided, phase 10] Held quiet-hours notifications are kept in the same
+  store (§9.9).
 - [Decided, phase 4] The queue is kept in the notifier module's own store, separate
   from the alerts' (so that the module stays extractable, §9.1), and resumes after a
   restart. A notification whose timeout passed while HA was down goes to the
@@ -1637,6 +1687,10 @@ Decisions with their reasons, in the order they were made.
 | Snooze button duration: 1 hour by default | Long enough to deal with most things, short enough not to forget [§9.11]. |
 | Throttling counts held notifications, and ends when the rate drops | Follows Alert2: a flapping alert stays quiet until it calms down, then says once what happened [§9.8]. |
 | The throttling summary's wording is fixed | It reports what Alert Redux did, not what the alert is about [§9.8]. |
+| Quiet hours live in the notifier, with urgencies | Holding and softening are delivery; the notifier stays free of alerts [§9.1, §9.9]. |
+| The owner says what's sent when quiet hours end | Only Alert Redux knows which alerts are still active and how to summarise them [§9.9]. |
+| An unavailable quiet-hours entity isn't quiet, but doesn't release what's held | New notifications fail loud; a blip in the night doesn't deliver the morning summary [§9.9]. |
+| One quiet-hours summary line per alert | A door opened three times in the night is one line, with the times it was opened and for how long in all [§9.9]. |
 
 ## 20. Phase plan
 

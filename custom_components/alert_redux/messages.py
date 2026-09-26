@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 import logging
 from typing import Any
 
@@ -48,12 +49,15 @@ def message_context(
     duration_seconds: float = 0,
     end_reason: str | None = None,
     trigger: Mapping[str, Any] | None = None,
+    started: datetime | None = None,
+    ended: datetime | None = None,
 ) -> dict[str, Any]:
     """Return the variables available to an alert's message templates.
 
     reason is why the notification is sent (on, reminder, or done); end_reason is
-    why the firing ended, for the done message. trigger is an event alert's trigger
-    variables, as in automations; other kinds have none.
+    why the firing ended, for the done message, and started and ended when the
+    firing started and ended (as ISO 8601 text). trigger is an event alert's
+    trigger variables, as in automations; other kinds have none.
     """
     subject_name = name
     if subject_entity is not None and (state := hass.states.get(subject_entity)):
@@ -70,6 +74,8 @@ def message_context(
         "end_reason": end_reason,
         "duration": readable_duration(duration_seconds),
         "duration_seconds": duration_seconds,
+        "started": started.isoformat() if started else None,
+        "ended": ended.isoformat() if ended else None,
     }
     if trigger is not None:
         variables["trigger"] = dict(trigger)

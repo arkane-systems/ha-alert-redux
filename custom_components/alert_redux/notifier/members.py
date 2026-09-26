@@ -50,9 +50,17 @@ def member_available(hass: HomeAssistant, member: Member) -> bool:
 
 
 async def async_deliver(
-    hass: HomeAssistant, member: Member, notification: Notification, tag: str
+    hass: HomeAssistant,
+    member: Member,
+    notification: Notification,
+    tag: str,
+    soft: bool = False,
 ) -> None:
-    """Send the notification to the member, raising if it's missing or fails."""
+    """Send the notification to the member, raising if it's missing or fails.
+
+    A soft notification uses the member's quiet-hours data instead of its data
+    (spec §9.9).
+    """
     if not member_available(hass, member):
         raise MemberMissing(f"{member} doesn't exist or is unavailable")
     if isinstance(member, PersistentMember):
@@ -79,8 +87,8 @@ async def async_deliver(
         "title": notification.title,
     }
     extra: dict[str, Any] = {}
-    if member.data:
-        extra = dict(render_data(hass, member.data, notification.variables))
+    if member_data := member.quiet_data if soft else member.data:
+        extra = dict(render_data(hass, member_data, notification.variables))
     # Alert Redux's own keys win over the member's data.
     if member.replaces:
         extra["tag"] = tag

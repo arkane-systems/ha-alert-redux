@@ -7,15 +7,18 @@ its messages. Delivery is the notifier module's job.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.template import Template
+from homeassistant.util import dt as dt_util
 
 from .const import (
+    DATA_ENTITIES,
     DATA_NOTIFIER,
     DEFAULT_DONE_DISABLED_MESSAGE,
     DEFAULT_DONE_MESSAGE,
@@ -23,12 +26,18 @@ from .const import (
     DEFAULT_ON_MESSAGE,
     DEFAULT_REMINDER_MESSAGE,
     DOMAIN,
+    QUIET_SUMMARY_HEADING,
+    QUIET_SUMMARY_TITLE,
     THROTTLE_ENDS_MARKER,
+    AlertState,
     EndReason,
 )
 from .messages import readable_duration
 from .model import Settings, ThrottleSummary
 from .notifier import Button, Notification, Notifier
+
+if TYPE_CHECKING:
+    from .entity import AlertEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -139,25 +148,44 @@ def render_message(
 def async_send_notification(
     hass: HomeAssistant,
     *,
+    groups: tuple[str, ...] | None,
+    **details: Any,
+) -> None:
+    """Render and send one of an alert's notifications (see build_notification).
+
+    groups comes from effective_groups: None sends to the fallback, and an empty
+    tuple sends nothing.
+    """
+    if groups == ():
+        return
+    notification = build_notification(hass, **details)
+    notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]
+    if groups is None:
+        notifier.async_send_fallback(notification)
+    else:
+        notifier.async_send(groups, notification)
+
+
+def build_notification(
+    hass: HomeAssistant,
+    *,
     entity_id: str,
     title: str,
-    groups: tuple[str, ...] | None,
     template: str | None,
     variables: Mapping[str, Any],
     buttons: tuple[Button, ...] = (),
     prefix: str | None = None,
     message: str | None = None,
     final: bool | None = None,
-) -> None:
-    """Render and send one of an alert's notifications.
+    urgency: int = 0,
+) -> Notification:
+    """Render one of an alert's notifications.
 
-    groups comes from effective_groups: None sends to the fallback, and an empty
-    tuple sends nothing. A final notification (by default, the done
-    notification) carries no buttons (spec §9.11). A message given ready-made
-    isn't rendered; a prefix goes in front of the message.
+    A final notification (by default, the done notification) carries no
+    buttons (spec §9.11). A message given ready-made isn't rendered; a prefix
+    goes in front of the message. The urgency is the alert's priority's, for
+    quiet hours (§9.9).
     """
-    if groups == ():
-        return
     reason = variables["reason"]
     if final is None:
         final = reason == REASON_DONE
@@ -171,19 +199,15 @@ def async_send_notification(
         )
     if prefix:
         message = f"{prefix} {message}"
-    notification = Notification(
+    return Notification(
         title=title,
         message=message,
         key=lifecycle_key(entity_id),
         variables=variables,
         buttons=() if final else buttons,
         final=final,
+        urgency=urgency,
     )
-    notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]
-    if groups is None:
-        notifier.async_send_fallback(notification)
-    else:
-        notifier.async_send(groups, notification)
 
 
 @callback
@@ -205,3 +229,102 @@ def async_notifications_renamed(hass: HomeAssistant, old: str, new: str) -> None
     """Follow an alert's entity ID being renamed: its lifecycle key changes."""
     notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]
     notifier.async_rekey(lifecycle_key(old), lifecycle_key(new))
+
+
+@dataclass(slots=True)
+class _Ended:
+    """What an alert's firings that ended during quiet hours add up to."""
+
+    name: str
+    started: datetime | None
+    stopped: datetime | None
+    seconds: float = 0
+    times: int = 0
+
+
+@callback
+def async_quiet_hours_ended(
+    hass: HomeAssistant, group_id: str, held: dict[str, list[Notification]]
+) -> list[Notification]:
+    """Say what a group gets when its quiet hours end (spec §9.9).
+
+    An alert still firing and unacknowledged gets one reminder, with the real
+    firing duration; one acknowledged in the meantime gets nothing more. The
+    firings that ended are listed in one summary: each alert with when it first
+    started, when it last stopped, how long it fired, and how many times.
+    Throttling summaries held for ended firings are listed as they are.
+    """
+    entities: dict[str, AlertEntity] = hass.data[DOMAIN][DATA_ENTITIES]
+    by_key = {
+        lifecycle_key(entity.entity_id): entity
+        for entity in entities.values()
+        if entity.hass is not None
+    }
+    notifications: list[Notification] = []
+    ended: dict[str, _Ended] = {}
+    lines: list[str] = []
+    for key, notifications_held in held.items():
+        entity = by_key.get(key)
+        if (
+            entity is not None
+            and entity.state == AlertState.ACTIVE
+            and (reminder := entity.quiet_hours_reminder()) is not None
+        ):
+            notifications.append(reminder)
+        for notification in notifications_held:
+            variables = notification.variables
+            if variables.get("reason") == REASON_DONE:
+                row = ended.setdefault(
+                    key, _Ended(variables.get("name") or notification.title, None, None)
+                )
+                started = _parse_time(variables.get("started"))
+                stopped = _parse_time(variables.get("ended"))
+                if started and (row.started is None or started < row.started):
+                    row.started = started
+                if stopped and (row.stopped is None or stopped > row.stopped):
+                    row.stopped = stopped
+                row.seconds += variables.get("duration_seconds") or 0
+                row.times += 1
+            elif notification.final:
+                lines.append(f"{notification.title}: {notification.message}")
+    now = dt_util.utcnow()
+    lines = [_summary_line(row, now) for row in ended.values()] + lines
+    if lines:
+        notifications.append(
+            Notification(
+                title=QUIET_SUMMARY_TITLE,
+                message="\n".join([QUIET_SUMMARY_HEADING, *lines]),
+                key=f"{DOMAIN}_quiet_hours_{group_id}",
+                final=True,
+            )
+        )
+    return notifications
+
+
+def _parse_time(value: Any) -> datetime | None:
+    return dt_util.parse_datetime(value) if isinstance(value, str) else None
+
+
+def _summary_line(row: _Ended, now: datetime) -> str:
+    """Return a summary's line for an alert, e.g. "Back Door Open: started
+    01:12, stopped 01:20, fired for 8 minutes"."""
+    duration = readable_duration(row.seconds)
+    if row.times == 1:
+        return (
+            f"{row.name}: started {_clock(row.started, now)}, stopped "
+            f"{_clock(row.stopped, now)}, fired for {duration}."
+        )
+    return (
+        f"{row.name}: first started {_clock(row.started, now)}, last stopped "
+        f"{_clock(row.stopped, now)}, fired {row.times} times for {duration} in all."
+    )
+
+
+def _clock(when: datetime | None, now: datetime) -> str:
+    """Return a time as the local clock, with the day if it isn't today."""
+    if when is None:
+        return "at an unknown time"
+    local = dt_util.as_local(when)
+    if local.date() != dt_util.as_local(now).date():
+        return local.strftime("%a %H:%M")
+    return local.strftime("%H:%M")

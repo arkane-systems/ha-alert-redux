@@ -57,6 +57,12 @@ class Priority(StrEnum):
         """Return 0 for the highest priority, increasing as priority falls."""
         return list(Priority).index(self)
 
+    @property
+    def urgency(self) -> int:
+        """Return the notifier's urgency: 0 for the lowest priority, increasing
+        as priority rises (spec §9.9)."""
+        return len(Priority) - 1 - self.rank
+
 
 DEFAULT_PRIORITY_ICONS: dict[Priority, str] = {
     Priority.EMERGENCY: "mdi:alarm-light",
@@ -202,6 +208,14 @@ CONF_KEEP_ON_ACK = "keep_on_ack"
 CONF_CLEAR_WHEN_ENDED = "clear_when_ended"
 CONF_PERSISTENT_CLEAR_ON_ACK = "persistent_clear_on_ack"
 CONF_PERSISTENT_CLEAR_WHEN_ENDED = "persistent_clear_when_ended"
+# Quiet hours (spec §9.9): a loud group's own entity, threshold (a priority, or
+# absent for the default), and behaviour; a legacy action's quiet-hours data.
+CONF_QUIET_ENTITY = "quiet_entity"
+CONF_QUIET_THRESHOLD = "quiet_threshold"
+CONF_QUIET_BEHAVIOUR = "quiet_behaviour"
+CONF_QUIET_DATA = "quiet_data"
+# The group form's threshold choice that means the default.
+QUIET_THRESHOLD_DEFAULT = "default"
 
 # Messages (spec §9.5).
 DEFAULT_ON_MESSAGE = "{{ name }} is firing."
@@ -217,6 +231,9 @@ DEFAULT_DONE_DISABLED_MESSAGE = (
 # the summary sent when it ends. Fixed text, not templates.
 THROTTLE_STARTS_MARKER = "[Throttling starts]"
 THROTTLE_ENDS_MARKER = "[Throttling ends]"
+# The end-of-quiet-hours summary (spec §9.9). Fixed text, not templates.
+QUIET_SUMMARY_TITLE = "Quiet hours summary"
+QUIET_SUMMARY_HEADING = "While quiet hours were on:"
 
 # Config entry options: the global defaults (spec §12.1).
 CONF_STARTUP_DELAY = "startup_delay"
@@ -229,6 +246,10 @@ CONF_FALLBACK_GROUP = "fallback_group"
 CONF_RETRY_TIMEOUT = "retry_timeout"
 # The default throttle (spec §9.8): [count, minutes], or absent or [] for none.
 CONF_DEFAULT_THROTTLE = "default_throttle"
+# The global quiet-hours entity and priority threshold (spec §9.9); the options
+# form shows them as a section. The same keys as the group's overrides.
+SECTION_QUIET_HOURS = "quiet_hours"
+DEFAULT_QUIET_THRESHOLD = "warning"
 DEFAULT_RETRY_TIMEOUT = timedelta(minutes=5)
 # How long a notification's Snooze button snoozes for (spec §9.11); also an
 # alert's own setting.

@@ -1266,6 +1266,9 @@
           "data": {
             "name": "Name",
             "loud": "Loud",
+            "quiet_entity": "Quiet-hours entity",
+            "quiet_threshold": "Quiet-hours priority threshold",
+            "quiet_behaviour": "During quiet hours",
             "entities": "Notify entities",
             "actions": "Legacy notify actions",
             "persistent": "Persistent notification",
@@ -1274,7 +1277,10 @@
           },
           "data_description": {
             "name": "How alerts and the options refer to this group.",
-            "loud": "Turn on for notifiers that make a noise, such as speaker announcements. Quiet hours (a later release) will apply to loud groups only.",
+            "loud": "Turn on for notifiers that make a noise, such as speaker announcements. Quiet hours apply to loud groups only.",
+            "quiet_entity": "Loud groups only. An on/off entity (such as a Schedule helper) that puts this group in quiet hours while it's on, instead of the global one set in the integration's options.",
+            "quiet_threshold": "Loud groups only. Quiet hours apply to alerts below this priority; the default is the one set in the integration's options.",
+            "quiet_behaviour": "Loud groups only. *Hold* keeps notifications until quiet hours end. *Soften* sends them with each legacy action's quiet-hours data instead of its data (e.g. a silent channel); members without quiet-hours data hold. When quiet hours end, alerts still firing get one reminder, and the ones that stopped are listed in one summary.",
             "entities": "`notify` entities. They receive the message, and the title if they can show one.",
             "actions": "Legacy `notify.*` actions, such as `notify.mobile_app_phone`. These can take extra `data` (e.g. a mobile notification channel; its values can be templates using the message variables) and a `target`. You can enter an action that isn't loaded yet. Mobile app actions replace each alert's notifications with the latest, and clear them when the alert is acknowledged; set *Mobile app features* for other actions that send to phones, such as a notify group of them.",
             "persistent": "Also create a Home Assistant persistent notification.",
@@ -1287,6 +1293,9 @@
           "data": {
             "name": "Name",
             "loud": "Loud",
+            "quiet_entity": "Quiet-hours entity",
+            "quiet_threshold": "Quiet-hours priority threshold",
+            "quiet_behaviour": "During quiet hours",
             "entities": "Notify entities",
             "actions": "Legacy notify actions",
             "persistent": "Persistent notification",
@@ -1295,7 +1304,10 @@
           },
           "data_description": {
             "name": "How alerts and the options refer to this group.",
-            "loud": "Turn on for notifiers that make a noise, such as speaker announcements. Quiet hours (a later release) will apply to loud groups only.",
+            "loud": "Turn on for notifiers that make a noise, such as speaker announcements. Quiet hours apply to loud groups only.",
+            "quiet_entity": "Loud groups only. An on/off entity (such as a Schedule helper) that puts this group in quiet hours while it's on, instead of the global one set in the integration's options.",
+            "quiet_threshold": "Loud groups only. Quiet hours apply to alerts below this priority; the default is the one set in the integration's options.",
+            "quiet_behaviour": "Loud groups only. *Hold* keeps notifications until quiet hours end. *Soften* sends them with each legacy action's quiet-hours data instead of its data (e.g. a silent channel); members without quiet-hours data hold. When quiet hours end, alerts still firing get one reminder, and the ones that stopped are listed in one summary.",
             "entities": "`notify` entities. They receive the message, and the title if they can show one.",
             "actions": "Legacy `notify.*` actions, such as `notify.mobile_app_phone`. These can take extra `data` (e.g. a mobile notification channel; its values can be templates using the message variables) and a `target`. You can enter an action that isn't loaded yet. Mobile app actions replace each alert's notifications with the latest, and clear them when the alert is acknowledged; set *Mobile app features* for other actions that send to phones, such as a notify group of them.",
             "persistent": "Also create a Home Assistant persistent notification.",
@@ -1420,6 +1432,22 @@
         "no_data": "No data",
         "disabled": "Disabled"
       }
+    },
+    "quiet_threshold": {
+      "options": {
+        "default": "Use the default",
+        "emergency": "Emergency",
+        "critical": "Critical",
+        "warning": "Warning",
+        "notice": "Notice",
+        "informational": "Informational"
+      }
+    },
+    "quiet_behaviour": {
+      "options": {
+        "hold": "Hold",
+        "soften": "Soften"
+      }
     }
   },
   "services": {
@@ -1540,6 +1568,18 @@
               "supersession_debounce": "How long a superseded alert's on notification waits, to see whether an alert superseding it starts firing too.",
               "done_window": "How long a superseded alert's done notification waits, to see whether an alert superseding it stops firing too. If one does, only that alert's done notification is sent."
             }
+          },
+          "quiet_hours": {
+            "name": "Quiet hours",
+            "description": "Quiet hours hold back or soften notifications to loud notifier groups for lower-priority alerts. Groups can set their own entity, threshold, and behaviour.",
+            "data": {
+              "quiet_entity": "Quiet-hours entity",
+              "quiet_threshold": "Priority threshold"
+            },
+            "data_description": {
+              "quiet_entity": "An on/off entity, such as a Schedule helper or an input boolean: it's quiet hours while it's on. Leave empty for no quiet hours, except for groups with their own entity.",
+              "quiet_threshold": "Quiet hours apply to alerts below this priority. Alerts at it or above always get through."
+            }
           }
         }
       }
@@ -1561,6 +1601,10 @@
     "broken_reference": {
       "title": "An alert refers to an alert that doesn't exist",
       "description": "The alert {alert} refers to {missing}, which doesn't exist: it was deleted or renamed, or its generator no longer makes it.\n\n{alert} keeps working, failing towards more notifications rather than fewer: it no longer suppresses or is suppressed by the missing alert, acknowledgements aren't passed on, and an alert state alert watching it has no data.\n\nTo fix this, edit {alert} to remove or replace the reference, or recreate the missing alert. This issue goes away by itself once the reference is fixed."
+    },
+    "quiet_entity_missing": {
+      "title": "Quiet-hours entity not found",
+      "description": "The quiet-hours entity `{entity}` doesn't exist, so quiet hours don't apply where it's used: {used_by}. Choose an existing entity in the integration's options or the notifier group, or create it."
     }
   }
 }

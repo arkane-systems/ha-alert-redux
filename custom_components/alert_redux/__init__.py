@@ -60,14 +60,19 @@ from .const import (
     SERVICE_UNACK,
     SUBENTRY_ALERT,
     SUBENTRY_NOTIFIER_GROUP,
+    Priority,
 )
 from .buttons import async_setup_buttons
 from .entity import AlertEntity, create_alert_entity
 from .frontend import async_register_frontend, async_setup_websocket
 from .labels import async_setup_label
 from .model import AlertRuntime, Settings
-from .notifications import async_clear_notifications, async_notifications_renamed
-from .notifier import GroupConfig, Notifier
+from .notifications import (
+    async_clear_notifications,
+    async_notifications_renamed,
+    async_quiet_hours_ended,
+)
+from .notifier import GroupConfig, Notification, Notifier
 from .issues import async_check_broken_references, async_check_default_groups
 from .store import AlertStore
 from .summary import SummaryCoordinator
@@ -180,8 +185,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     data[DATA_LABEL] = async_setup_label(hass, store)
 
+    @callback
+    def _quiet_hours_ended(
+        group_id: str, held: dict[str, list[Notification]]
+    ) -> list[Notification]:
+        return async_quiet_hours_ended(hass, group_id, held)
+
     notifier = data[DATA_NOTIFIER] = Notifier(
-        hass, store_key=NOTIFIER_STORAGE_KEY, issue_domain=DOMAIN
+        hass,
+        store_key=NOTIFIER_STORAGE_KEY,
+        issue_domain=DOMAIN,
+        on_quiet_ended=_quiet_hours_ended,
     )
     await notifier.async_load()
     _async_configure_notifier(notifier, settings)
@@ -374,7 +388,10 @@ def _async_forget_deleted_groups(
 
 def _async_configure_notifier(notifier: Notifier, settings: Settings) -> None:
     notifier.async_configure(
-        fallback_group=settings.fallback_group, retry_timeout=settings.retry_timeout
+        fallback_group=settings.fallback_group,
+        retry_timeout=settings.retry_timeout,
+        quiet_entity=settings.quiet_entity,
+        quiet_threshold=settings.quiet_threshold.urgency,
     )
 
 
@@ -391,9 +408,14 @@ def _group_configs(
     groups: dict[str, tuple[str, dict[str, Any]]],
 ) -> list[GroupConfig]:
     return [
-        GroupConfig.from_dict(group_id, name, definition)
+        GroupConfig.from_dict(group_id, name, definition, _threshold_urgency)
         for group_id, (name, definition) in groups.items()
     ]
+
+
+def _threshold_urgency(priority: str) -> int:
+    """Return a group's quiet-hours threshold, a priority, as an urgency."""
+    return Priority(priority).urgency
 
 
 def _async_forget_deleted_alerts(
