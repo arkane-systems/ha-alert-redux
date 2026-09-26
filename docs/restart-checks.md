@@ -24,17 +24,15 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-**For the next install restart.**
-
-- **Generated supersession across the restart** (phase 11b). Test Switch Still
-  On's alert for `input_boolean.alert_redux_test_generator_renamed`
-  (`alert_redux.alert_redux_test_generator_renamed_test_switch_still_on`) is
-  `ack`, pre-acknowledged by Test Switch On's alert for the same target, which
-  it supersedes. *Expect:* both come back `ack`, Still On with the same
-  `pre_acked_by`, Switch On with `superseded_by` Still On's alert, and no
-  on notifications.
+None.
 
 ## Done
+
+- **2026-09-26, v0.11.0 install restart. Generated supersession across the
+  restart** (phase 11b). Test Switch Still On's alert came back `ack`, firing
+  since 22:36:59 UTC as before, still pre-acknowledged by Test Switch On's
+  alert; Switch On came back `ack` with `superseded_by` Still On's alert. No
+  new logbook entries or notifications. Passed.
 
 - **2026-09-26, 11b install restart. A generated alert keeps its state across
   the restart** (phase 11a). Test Switch On's alert came back `ack`, firing
