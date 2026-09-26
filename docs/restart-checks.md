@@ -24,32 +24,49 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-**For the phase 11 install restart** (the user asked that 0.10.1 not get a
-restart of its own). The three checks below share one set-up. Office Only's
-quiet hours follow `input_boolean.alert_redux_test_quiet_hours`, with its own
-threshold of Critical; Test Bus Event Alert (Quiet and Office Only) throttles
-at 3 per 5 minutes and lasts 2 minutes.
-*Set up just before the install restart:* turn the helper on; fire
-`alert_redux_test_event` (with `source: test`) four times in a row, so the
-third starts throttling and the fourth is held; then request the restart about
-4 minutes 45 seconds after the third, so that throttling's end falls about 15
-seconds after the request (in 10b the new process was loading Alert Redux 24
-seconds after it).
+**For the next install restart (11b).**
+*Set up just before the install restart:* check that
+`alert_redux.alert_redux_test_generator_target_test_switch_on` is still `ack`,
+and turn on debug logging for `custom_components.alert_redux.notifier` (for the
+re-armed quiet-hours check below), then set that check up as described.
 
+- **A generated alert keeps its state across the restart** (phase 11a). Test
+  Switch On's alert for `input_boolean.alert_redux_test_generator_renamed`
+  (entity ID `alert_redux.alert_redux_test_generator_target_test_switch_on`)
+  was acknowledged, firing since 2026-09-26 22:01:29 UTC. *Expect:* it comes
+  back `ack` with the same `firing_since`, no `_created` or `_deleted` event for
+  it (or for Test Lock Jammed's five alerts), and both generator sensors show the
+  same counts (1 and 5).
+- **Held quiet-hours notifications survive the restart** (phase 10b; failed in
+  the phase 11 install restart, see Done). Set up as in 10b: Office Only's quiet
+  hours follow `input_boolean.alert_redux_test_quiet_hours` (its own threshold
+  Critical); Test Bus Event Alert (Quiet and Office Only) throttles at 3 per 5
+  minutes and lasts 2 minutes. Turn the helper on; fire `alert_redux_test_event`
+  (with `source: test`) four times; request the restart about 4 minutes 25
+  seconds after the third, so that throttling's end falls about 35 seconds
+  after the request. *Expect:* once HA is back, the phones get one
+  "[Throttling ends]" summary and the Echo stays silent; turning the helper off
+  afterwards has the Echo announce one Quiet hours summary listing it. The
+  debug log should show the summary being held, saved, and released.
 - **Throttling whose end falls due while HA is down sends its summary at
-  startup** (phase 10a). *Expect:* once HA is back, the phones get one
-  "[Throttling ends] Fired 1× while throttled, …; stopped firing … after 2
-  minutes." summary, and `throttled_since` is null.
-- **Quiet hours hold through startup** (0.10.1). That summary is sent while HA
-  is starting, possibly before the helper has its state. *Expect:* the Echo
-  stays silent through the restart and afterwards, while the helper is on.
-- **Held quiet-hours notifications survive the restart** (phase 10b).
-  *Expect:* turning the helper off afterwards has the Echo announce one Quiet
-  hours summary: "Test Bus Event Alert: [Throttling ends] Fired 1× while
-  throttled, …" (throttling held the done notification itself, so its summary
-  is what's listed), and nothing else.
+  startup** (phase 10a). Not yet exercised (see Done); shares the set-up above.
 
 ## Done
+
+- **2026-09-26, phase 11 install restart. Quiet hours hold through startup**
+  (0.10.1). The helper was on through the restart; the Echo stayed silent
+  during and after it. Passed.
+- **2026-09-26, phase 11 install restart. Held quiet-hours notifications
+  survive the restart** (phase 10b). **Failed:** turning the helper off at
+  22:01 UTC, after the restart, had the Echo announce nothing. The throttling
+  summary it should have listed was produced by the old process (below), 4
+  seconds into its shutdown; whether it was held and saved, or lost, isn't
+  known (logging was at WARNING). Re-armed above, with debug logging.
+- **2026-09-26, phase 11 install restart. Throttling whose end falls due while
+  HA is down** (phase 10a). *Not exercised:* the restart was requested at
+  21:54:05 UTC, only 4 seconds before throttling's end (21:54:09), so the old
+  process ended it live; the phones got the summary and `throttled_since` was
+  null afterwards. Still pending.
 
 - **2026-09-26, 10b install restart. Throttling across a restart** (phase
   10a). Test Bus Event Alert was throttled from 17:42:14 UTC, one notification
