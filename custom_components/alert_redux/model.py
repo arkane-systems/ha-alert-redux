@@ -232,6 +232,8 @@ class Change(StrEnum):
     UNACKED = "unacked"
     SNOOZED = "snoozed"
     SNOOZE_EXPIRED = "snooze_expired"
+    DISABLED = "disabled"
+    ENABLED = "enabled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,6 +264,13 @@ class AlertRuntime:
     snoozed_until: datetime | None = None
     last_snoozed: datetime | None = None
     last_snoozed_by: str | None = None
+    # Disabled, or suspended until disabled_until (spec §6.3, §6.4).
+    disabled: bool = False
+    disabled_until: datetime | None = None
+    last_disabled: datetime | None = None
+    last_disabled_by: str | None = None
+    last_enabled: datetime | None = None
+    last_enabled_by: str | None = None
     # Condition alerts: missing data, and the pending delay deadlines.
     no_data_since: datetime | None = None
     missing_inputs: list[str] = field(default_factory=list)
@@ -290,6 +299,8 @@ class AlertRuntime:
         A firing alert that has lost its data keeps its firing state during the
         grace period (spec §4.4); only a non-firing alert shows no_data.
         """
+        if self.disabled:
+            return AlertState.DISABLED
         if self.firing:
             return AlertState.ACK if self.acked else AlertState.ACTIVE
         if self.no_data_since is not None:
@@ -412,6 +423,68 @@ class AlertRuntime:
         transition = Transition(AlertState.ACK, self.state, self.fire_count)
         return [(Change.SNOOZE_EXPIRED, transition), (Change.UNACKED, transition)]
 
+    def disable(
+        self, now: datetime, user_id: str | None, until: datetime | None = None
+    ) -> list[tuple[Change, Transition]]:
+        """Disable the alert, until a time to suspend it (spec §6.3, §6.4).
+
+        A firing ends, with reason disabled, and everything about it and about
+        evaluating the condition is cleared. The latest call wins: suspending a
+        disabled alert sets the new time, and disabling a suspended one makes it
+        indefinite. Disabling an indefinitely disabled alert does nothing.
+        """
+        if self.disabled and self.disabled_until is None and until is None:
+            return []
+        old = self.state
+        changes: list[tuple[Change, Transition]] = []
+        if (ended := self.end(now, EndReason.DISABLED)) is not None:
+            changes.append((Change.ENDED, ended))
+        self.disabled = True
+        self.disabled_until = until
+        self.last_disabled = now
+        self.last_disabled_by = user_id
+        self.no_data_since = None
+        self.missing_inputs = []
+        self.delay_on_until = None
+        self.delay_off_until = None
+        self.on_latched = False
+        self.off_latched = False
+        self.awaiting_data = False
+        changes.append((Change.DISABLED, Transition(old, self.state, 0)))
+        return changes
+
+    def enable(
+        self, now: datetime, user_id: str | None, *, awaits_data: bool
+    ) -> list[tuple[Change, Transition]]:
+        """Enable a disabled or suspended alert, starting from scratch (§6.3).
+
+        An alert with inputs awaits data; on/off edges are armed again, as for
+        a new alert.
+        """
+        if not self.disabled:
+            return []
+        self.disabled = False
+        self.disabled_until = None
+        self.last_enabled = now
+        self.last_enabled_by = user_id
+        self.on_armed = True
+        self.off_armed = True
+        if awaits_data:
+            self.await_data(now)
+        return [(Change.ENABLED, Transition(AlertState.DISABLED, self.state, 0))]
+
+    def suspension_ended(
+        self, now: datetime, *, awaits_data: bool
+    ) -> list[tuple[Change, Transition]]:
+        """Enable a suspended alert once its time has come."""
+        if (
+            not self.disabled
+            or self.disabled_until is None
+            or now < self.disabled_until
+        ):
+            return []
+        return self.enable(now, None, awaits_data=awaits_data)
+
     def plan_reminder(self, schedule: Sequence[float], now: datetime) -> None:
         """Set the next reminder: the next slot after now (spec §6.2).
 
@@ -445,6 +518,8 @@ class AlertRuntime:
         Deadlines are kept in the runtime; the caller schedules a call at
         next_deadline() and evaluates the latest result again then.
         """
+        if self.disabled:
+            return []
         if condition is None:
             return self._evaluate_no_data(missing_inputs, now, timing)
 
@@ -603,6 +678,9 @@ _DATETIME_FIELDS = frozenset(
         "last_unacked",
         "snoozed_until",
         "last_snoozed",
+        "disabled_until",
+        "last_disabled",
+        "last_enabled",
         "no_data_since",
         "delay_on_until",
         "delay_off_until",

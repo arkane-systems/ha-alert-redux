@@ -22,6 +22,7 @@ from .const import (
     ATTR_NEW_STATE,
     ATTR_OLD_STATE,
     ATTR_PRIORITY,
+    ATTR_UNTIL,
     ATTR_USER_ID,
     CONF_DEFAULT_GROUPS,
     CONF_FALLBACK_GROUP,
@@ -40,9 +41,12 @@ from .const import (
     EVENT_DELETED,
     NOTIFIER_STORAGE_KEY,
     SERVICE_ACK,
+    SERVICE_DISABLE,
     SERVICE_DISMISS,
+    SERVICE_ENABLE,
     SERVICE_FIRE,
     SERVICE_SNOOZE,
+    SERVICE_SUSPEND,
     SERVICE_UNACK,
     SUBENTRY_ALERT,
     SUBENTRY_NOTIFIER_GROUP,
@@ -75,6 +79,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_SNOOZE,
         {vol.Required(ATTR_DURATION): cv.positive_time_period},
         "async_snooze",
+    )
+    # Disabling is for maintenance and debugging, not everyday use (spec §16).
+    component.async_register_entity_service(
+        SERVICE_DISABLE, None, "async_disable", admin_only=True
+    )
+    component.async_register_entity_service(
+        SERVICE_ENABLE, None, "async_enable", admin_only=True
+    )
+    component.async_register_entity_service(
+        SERVICE_SUSPEND,
+        vol.All(
+            cv.make_entity_service_schema(
+                {
+                    vol.Exclusive(ATTR_DURATION, "end"): cv.positive_time_period,
+                    vol.Exclusive(ATTR_UNTIL, "end"): cv.datetime,
+                }
+            ),
+            cv.has_at_least_one_key(ATTR_DURATION, ATTR_UNTIL),
+        ),
+        "async_suspend",
+        admin_only=True,
     )
     async_setup_websocket(hass)
     return True

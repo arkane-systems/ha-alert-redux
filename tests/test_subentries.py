@@ -191,3 +191,28 @@ async def test_edit_event_alert_reattaches_triggers(
     hass.bus.async_fire("parcel_left", {})
     await hass.async_block_till_done()
     assert hass.states.get("alert_redux.parcel").state == "active"
+
+
+async def test_editing_a_disabled_alert(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """An edited disabled alert stays disabled, and doesn't watch its input."""
+    hass.states.async_set("binary_sensor.back_door", "off")
+    entry = await setup_alerts(
+        state_alert("Back Door Open", "binary_sensor.back_door", subentry_id="door")
+    )
+    await hass.services.async_call(
+        DOMAIN, "disable", {"entity_id": DOOR}, blocking=True
+    )
+    subentry = entry.subentries["door"]
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, "priority": "critical"}
+    )
+    await hass.async_block_till_done()
+    state = hass.states.get(DOOR)
+    assert state.state == "disabled"
+    assert state.attributes["priority"] == "critical"
+
+    hass.states.async_set("binary_sensor.back_door", "on")
+    await hass.async_block_till_done()
+    assert hass.states.get(DOOR).state == "disabled"
