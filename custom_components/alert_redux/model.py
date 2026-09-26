@@ -17,18 +17,22 @@ from typing import Any
 from .const import (
     CONF_DEFAULT_GROUPS,
     CONF_DEFAULT_REMINDER_SCHEDULE,
+    CONF_DONE_WINDOW,
     CONF_EVENT_DURATIONS,
     CONF_FALLBACK_GROUP,
     CONF_NO_DATA_GRACE,
     CONF_RETRY_TIMEOUT,
     CONF_SNOOZE_REMINDER_WINDOW,
     CONF_STARTUP_DELAY,
+    CONF_SUPERSESSION_DEBOUNCE,
+    DEFAULT_DONE_WINDOW,
     DEFAULT_EVENT_DURATIONS,
     DEFAULT_NO_DATA_GRACE,
     DEFAULT_REMINDER_SCHEDULE,
     DEFAULT_RETRY_TIMEOUT,
     DEFAULT_SNOOZE_REMINDER_WINDOW,
     DEFAULT_STARTUP_DELAY,
+    DEFAULT_SUPERSESSION_DEBOUNCE,
     AlertState,
     EndReason,
     Priority,
@@ -67,6 +71,11 @@ class Settings:
     # When a snooze ends, a reminder slot closer than this makes the immediate
     # reminder unnecessary (spec §6.2).
     snooze_reminder_window: timedelta = DEFAULT_SNOOZE_REMINDER_WINDOW
+    # A superseded alert's on notification waits this long for a superseding
+    # alert to fire (spec §8.1), and its done notification this long for one to
+    # end (§9.7).
+    supersession_debounce: timedelta = DEFAULT_SUPERSESSION_DEBOUNCE
+    done_window: timedelta = DEFAULT_DONE_WINDOW
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> Settings:
@@ -77,6 +86,8 @@ class Settings:
         retry = to_timedelta(options.get(CONF_RETRY_TIMEOUT))
         durations = options.get(CONF_EVENT_DURATIONS) or {}
         window = to_timedelta(options.get(CONF_SNOOZE_REMINDER_WINDOW))
+        debounce = to_timedelta(options.get(CONF_SUPERSESSION_DEBOUNCE))
+        done_window = to_timedelta(options.get(CONF_DONE_WINDOW))
         return cls(
             no_data_grace=DEFAULT_NO_DATA_GRACE if grace is None else grace,
             startup_delay=DEFAULT_STARTUP_DELAY if startup is None else startup,
@@ -93,6 +104,10 @@ class Settings:
             snooze_reminder_window=(
                 DEFAULT_SNOOZE_REMINDER_WINDOW if window is None else window
             ),
+            supersession_debounce=(
+                DEFAULT_SUPERSESSION_DEBOUNCE if debounce is None else debounce
+            ),
+            done_window=DEFAULT_DONE_WINDOW if done_window is None else done_window,
         )
 
     def update(self, other: Settings) -> None:

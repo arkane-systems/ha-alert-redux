@@ -117,7 +117,29 @@ const ALERTS: HassEntity[] = [
   }),
   alert("back_door_open", "Back Door Open", "warning", "active", {
     icon: "mdi:door-open",
-    display_message: "The back door has been open for more than 10 minutes.",
+    display_message: "The back door is open.",
+    superseded_by: ["alert_redux.back_door_left_open"],
+  }),
+  // Supersession: Back Door Left Open supersedes Back Door Open, and Workshop
+  // Open Overnight supersedes a chain of two.
+  alert("back_door_left_open", "Back Door Left Open", "critical", "active", {
+    icon: "mdi:door-open",
+    message: "The back door has been open for 10 minutes.",
+    firing_since: ago(2),
+  }),
+  alert("workshop_overnight", "Workshop Open Overnight", "critical", "active", {
+    icon: "mdi:garage-alert",
+    firing_since: ago(30),
+  }),
+  alert("workshop_left_open", "Workshop Door Left Open", "warning", "ack", {
+    icon: "mdi:garage-open",
+    firing_since: ago(50),
+    superseded_by: ["alert_redux.workshop_overnight"],
+  }),
+  alert("workshop_open", "Workshop Door Open", "notice", "ack", {
+    icon: "mdi:garage-open",
+    firing_since: ago(60),
+    superseded_by: ["alert_redux.workshop_overnight", "alert_redux.workshop_left_open"],
   }),
   alert("garage_left_open", "Garage Door Left Open", "warning", "ack", {
     icon: "mdi:garage-open",
@@ -272,6 +294,11 @@ function build() {
   refresh();
   // ?menu=<object ID> opens that alert's snooze (or suspend) menu; ?until also
   // opens the admin card's date and time field.
+  // ?expanded shows every alert's superseded alerts.
+  if (params.has("expanded")) {
+    const expanded = new Set(Object.keys(states));
+    for (const card of cards) Object.assign(card, { _expanded: expanded });
+  }
   const menu = params.get("menu");
   if (menu) {
     const entityId = `alert_redux.${menu}`;

@@ -68,6 +68,9 @@ export function toAlert(entity: HassEntity): Alert {
       : [],
     snoozedUntil: toDate(attributes.snoozed_until),
     disabledUntil: toDate(attributes.disabled_until),
+    supersededBy: Array.isArray(attributes.superseded_by)
+      ? attributes.superseded_by.map(String)
+      : [],
   };
 }
 
@@ -90,6 +93,40 @@ export function compareFiring(a: Alert, b: Alert): number {
     time(b.firingSince) - time(a.firingSince) ||
     a.name.localeCompare(b.name)
   );
+}
+
+/** A firing alert shown on the card, with the firing alerts it supersedes. */
+export interface AlertGroup {
+  alert: Alert;
+  superseded: Alert[];
+}
+
+/**
+ * The firing alerts, in card order, with each superseded alert tucked under its
+ * root: the first alert in card order that supersedes it and isn't superseded
+ * itself (spec §8.1, §13.1). A chain is flattened under its root.
+ */
+export function groupSuperseded(firing: Alert[]): AlertGroup[] {
+  const shown = new Set(firing.map((alert) => alert.entityId));
+  const isRoot = (alert: Alert) => !alert.supersededBy.some((id) => shown.has(id));
+  const roots = new Map<string, AlertGroup>();
+  const groups: AlertGroup[] = [];
+  for (const alert of firing) {
+    if (!isRoot(alert)) continue;
+    const group = { alert, superseded: [] };
+    roots.set(alert.entityId, group);
+    groups.push(group);
+  }
+  for (const alert of firing) {
+    if (isRoot(alert)) continue;
+    const root = firing.find(
+      (other) => roots.has(other.entityId) && alert.supersededBy.includes(other.entityId),
+    );
+    if (root) roots.get(root.entityId)!.superseded.push(alert);
+    // Only a supersession cycle leaves an alert without a root; show it anyway.
+    else groups.push({ alert, superseded: [] });
+  }
+  return groups;
 }
 
 /** No-data alerts: by priority, then name. */
@@ -116,6 +153,7 @@ export const KIND_NAMES: Record<string, string> = {
   on_off: "On/off",
   threshold: "Threshold",
   template: "Template",
+  alert_state: "Alert state",
   trigger: "Trigger",
   event: "Bus event",
 };

@@ -71,7 +71,7 @@ changes. It can't be fired or dismissed manually [Decided, R3].
 | **On/off** | Separate *on* and *off* criteria, each a condition and/or trigger. Turns on when the on criterion becomes true, and off when the off criterion becomes true (edge-triggered, as in Alert2). [Decided, phase 5] Each side is a template, triggers, or both. A template-only side counts on its false-to-true change; a side with triggers counts when one fires while its template (if any) is true. The off side is edge-triggered too: an off criterion already true when the alert fires has to go false and true again. An unknown previous value counts as false, so an on criterion already true when a new alert is first evaluated fires it. The edge state is persisted, so a restart or a data dropout doesn't create a false edge. Only the side that can change the state counts for missing data (the on side while idle, the off side while firing). |
 | **Threshold** | A numeric value (from an entity, attribute, or template) with a minimum and/or maximum, and hysteresis. The limits can themselves come from entities or templates [P18]. [Decided, phase 5] The limits are templates, where a plain number works as-is. It fires when the value is strictly above the maximum or below the minimum, and a firing ends once the value is back inside by the hysteresis (an absolute amount, default 0). A value, or a configured limit, that isn't a number means no data. |
 | **Template** | A template that evaluates to true or false. The fully general option. [Decided, phase 2] Only a clearly true or false result counts (`true`/`on`/`yes`/`1`, `false`/`off`/`no`/`0`, or a real boolean or number). An error, an undefined variable, or a result of `none`, `unknown`, `unavailable`, or anything else means no data (§4.4). A template binary sensor would read those as false, but for an alert that silently hides a broken template. |
-| **Alert state** | [Decided, F24] Fires when another alert has been in a given state (e.g. `active`, meaning unacknowledged) for a given time. This gives escalation without templates (§8.4). |
+| **Alert state** | [Decided, F24] Fires when another alert has been in a given state (e.g. `active`, meaning unacknowledged) for a given time. This gives escalation without templates (§8.4). [Decided, phase 7] The watched alert is chosen by entity ID, and the states are a set: `active` alone means unacknowledged, and `active` plus `ack` means firing. "For a given time" is the alert's `delay_on`, so it's kept across restarts, and it starts again whenever the watched alert leaves those states (acknowledging it, say). The watched alert is the subject entity. A missing or `unavailable` watched alert means no data. |
 
 All condition alerts support:
 
@@ -370,6 +370,19 @@ notifications; see below).
   alert", and collapsed by default. Alerts that are implied by another alert then
   don't clutter the card (§13.1).
 - Supersession cycles (A ⊃ B ⊃ A) are a configuration error.
+- [Decided, phase 7] An alert refers to the alerts it supersedes by **entity ID**,
+  in a collapsed **Supersession** section of its form, as a list of
+  relationships (so that each can carry its propagation setting, §8.2). The form
+  refuses the alert itself, repeats, and cycles.
+- [Decided, phase 7] `superseded_by` lists the **firing** alerts that supersede
+  this one, transitively, highest priority first. It's shown whether or not this
+  alert is firing. `supersedes` lists the configured alerts.
+- [Decided, phase 7] The debounce applies only to alerts that something
+  supersedes; others notify at once, as before. When it ends, the on notification
+  is sent only if the alert is still `active` and not superseded. A dropped on
+  notification is never sent late. Reminders keep their schedule, but a slot that
+  falls due while the alert is superseded is skipped, as is the snooze-end
+  reminder (§6.2). The debounce is the **supersession debounce** option.
 
 ### 8.2 Propagating acknowledgements
 
@@ -651,6 +664,9 @@ doesn't repeat it automatically. It can include the name deliberately through th
   notification waits that long to see whether the superseding alert also stops
   firing. The default is longer than the 0.5 s debounce because the two alerts may
   have different `delay_off` settings.
+- [Decided, phase 7] "Together" means a superseding alert stops firing within the
+  done window of the superseded one, **before or after** it. A done notification
+  held when Alert Redux is unloaded is sent rather than lost.
 - [Decided] **Done notifications are throttled too.** While an alert is throttled, its
   done notifications are held along with its on notifications. The throttling
   summary sent when throttling ends (§9.8) covers what happened. Throttling is
@@ -818,6 +834,9 @@ built.
   `last_snoozed`, `last_snoozed_by`, `disabled_until`, `last_disabled`,
   `last_disabled_by`, `last_enabled`, and `last_enabled_by`. A snooze running
   out, or a suspension ending, records no user.
+  [Decided, phase 7] `supersedes` and `superseded_by` are lists of entity IDs
+  (§8.1). Alert state alerts show `source_entity` (the watched alert) and
+  `target_states`.
 - **Generator provenance:** `generated_by` (§12.3).
 
 Attributes that can grow large, or change constantly, should be kept out of the
@@ -880,6 +899,11 @@ tells the whole story and nothing has to be inferred:
 - [Decided, phase 6] `_snoozed` carries `snoozed_until`, and `_disabled` carries
   `disabled_until` (null when disabled indefinitely). Disabling a firing alert
   fires `_ended` (reason `disabled`) and then `_disabled`.
+- [Decided, phase 7] `_superseded` fires on a **firing** alert when an alert
+  superseding it starts firing, so that its `superseded_by` goes from empty to
+  non-empty. It carries `superseded_by`, and its old and new states are the same.
+  An alert that starts firing while already superseded gets no `_superseded`
+  (its `superseded_by` didn't change), and nor does restoring after a restart.
 - [Decided, phase 2] `_no_data` fires when an alert loses its data, and carries
   `missing_inputs`. This happens both when the alert enters `no_data` and when a
   firing alert loses data but keeps its state during the grace period. If the
@@ -945,7 +969,8 @@ was meant to solve.
   and icons, the
   quiet-hours entity and priority threshold, and the no-data grace period. They're
   edited through its options flow. [Decided, phase 6] Also the snooze-end window
-  (§6.2).
+  (§6.2). [Decided, phase 7] Also the supersession debounce and the done window
+  (§8.1, §9.7), in seconds, in a collapsed **Supersession** section.
 - Each **alert** is a **config subentry** of that entry, created and edited in the
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
@@ -1045,7 +1070,11 @@ To make sure it gets fixed:
   alert's box, running from when the alert last fired to `event_expires`, and
   toned down when acknowledged.
 - Superseded alerts are hidden behind a collapsed disclosure toggle under the alert
-  that supersedes them [Decided, F7, §8.1].
+  that supersedes them [Decided, F7, §8.1]. [Decided, phase 7] A chain goes under
+  its **root**: the first alert in card order that supersedes it and isn't itself
+  superseded. The disclosure ("› 2 superseded alerts") sits under the root's box,
+  and opens to show the superseded alerts in card order, slightly indented, with
+  all their controls.
 - A **no-data section** at the bottom lists alerts that currently lack data.
 - **Empty state:** the card always shows, with a small grey "No alerts are firing"
   when there's nothing to show.
@@ -1378,6 +1407,11 @@ Decisions with their reasons, in the order they were made.
 | Disable, enable, and suspend are admin-only | They're maintenance and debugging tools, not everyday operations [§6.3]. |
 | The admin card's controls are for admins only | Matches the admin-only actions; others get a read-only list [§13.2]. |
 | Both cards ship in one bundle | Nothing new to register, and one refresh covers both [§13.2]. |
+| Alerts refer to other alerts by entity ID, following renames | Readable in attributes and Repairs issues; an alert deleted and recreated under the same name gets the same ID, so references to it work again [§8.1, §12.4]. |
+| `superseded_by` lists firing superseders, transitively, whether or not the alert is firing | Shows at a glance what is suppressing it; the card groups by it [§8.1, §13.1]. |
+| The debounce applies only to alerts that something supersedes | Nothing else has a reason to wait [§8.1]. |
+| The done window counts a superseding alert ending before or after | Two alerts with different `delay_off`s end in either order [§9.7]. |
+| The alert state kind's time is its `delay_on` | One mechanism, already kept across restarts [§4.1]. |
 | Restart checks ride on install restarts | Development already restarts HA to install each subphase; pytest covers every restore path in its own phase, and a ledger confirms them in real HA one install later [§20]. |
 
 ## 20. Phase plan

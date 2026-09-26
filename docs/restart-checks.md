@@ -14,11 +14,13 @@ still gets a dedicated restart when it's made.
 
 Test alerts are the ones named "Test …", and send only to the Quiet group.
 
-**Timing on this instance:** Alert Redux is set up again about 25 seconds after a
-restart is requested (well before the "started" event, about two minutes after).
-The real downtime is only those 25 seconds, so a deadline meant to fall *during*
-it should be about 10 seconds after the request: e.g. snooze or suspend for 1
-minute, then request the restart 50 seconds later.
+**Timing on this instance:** Alert Redux has been set up again anywhere from 25
+seconds (6b) to 56 seconds (7a) after a restart is requested, well before the
+"started" event, about two minutes after. The old process keeps running for at
+least 10 seconds after the request: in 7a it still handled deadlines 10 seconds
+after it. So a deadline meant to fall *during* the downtime should be about 20
+seconds after the request: e.g. snooze or suspend for 1 minute, then request the
+restart 40 seconds later.
 
 - **Snooze runs out during the restart** (phase 6a). *Set up just before an
   install restart:* snooze a firing, Quiet-only test alert so that the deadline
@@ -27,20 +29,37 @@ minute, then request the restart 50 seconds later.
   rule applied at startup (an immediate reminder unless a slot is under 5 min
   away).
 
-- **Disabled survives the restart** (phase 6b, set up 2026-09-26). Test
-  Threshold Alert disabled indefinitely at 01:12:25 UTC.
-  *Expect:* still `disabled`, `disabled_until` null, and ignoring its value
-  entity (it doesn't fire or go to `no_data`). Afterwards, enable it.
-- **Suspension outlasts the restart** (phase 6b, set up 2026-09-26). Test On Off
-  Alert suspended until 2026-10-03 01:12:25 UTC.
-  *Expect:* still `disabled` with that `disabled_until`. Afterwards, enable it.
 - **Suspension ends during the restart** (phase 6b). *Set up just before an
   install restart:* suspend a Quiet-only test alert so that its time falls about
   10 s after requesting the restart (see the timing note).
   *Expect:* enabled once HA is back, with `last_enabled_by` null; a condition
   alert evaluates from scratch (`no_data` until its inputs report).
 
+- **A superseded alert stays suppressed across the restart** (phase 7a). *Set
+  up just before an install restart:* open the test door
+  (`input_boolean.alert_redux_test_value` on) and wait for Test Door Left Open to
+  fire (1 minute), so that Test Door Open is superseded; then restart.
+  *Expect:* both still firing, with the same `firing_since`; no on
+  notifications; Test Door Open's `superseded_by` is `[test_door_left_open]`
+  once HA is back, with no `alert_redux_superseded` event; its reminders are
+  skipped while Left Open fires. Close the door afterwards: only Left Open's
+  (and Test Door Unacknowledged's) done notification.
+
 ## Done
+
+- **2026-09-26, 7a install restart. Disabled survives the restart** (phase 6b).
+  Test Threshold Alert came back `disabled`, `disabled_until` null, ignoring its
+  value. Passed; enabled afterwards.
+- **2026-09-26, 7a install restart. Suspension outlasts the restart** (phase 6b).
+  Test On Off Alert came back `disabled` until 2026-10-03 01:12:25. Passed;
+  enabled afterwards.
+- **2026-09-26, 7a install restart. Snooze runs out, and suspension ends, during
+  the restart** (phases 6a, 6b). *Not exercised:* Test Condition Alert's snooze
+  and Test Sensor Is On's suspension both fell due at 11:08:43, 10 seconds after
+  the restart request, and the old process handled both live (1 ms late); Alert
+  Redux was set up again at 11:09:29. Both behaved correctly live, and Test
+  Sensor Is On then fired at startup from its restored `delay_on`. Still
+  pending, with the revised timing note.
 
 - **2026-09-26, 6b install restart. Snooze outlasts the restart** (phase 6a).
   Test Condition Alert came back `ack`, still snoozed until 2026-10-02 23:56:11,

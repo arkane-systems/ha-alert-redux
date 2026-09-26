@@ -26,6 +26,7 @@
             "on_off": "On/off: separate criteria turn it on and off",
             "threshold": "Threshold: a value is above or below a limit",
             "template": "Template: a template is true",
+            "alert_state": "Alert state: another alert has been in a given state for a while",
             "trigger": "Trigger: fires on a Home Assistant trigger, for a while",
             "event": "Bus event: fires on an event, for a while"
           }
@@ -72,6 +73,16 @@
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
               }
             }
           }
@@ -129,6 +140,16 @@
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
@@ -183,6 +204,16 @@
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
@@ -227,6 +258,16 @@
                 "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             }
           }
@@ -283,6 +324,16 @@
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
@@ -336,6 +387,16 @@
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
@@ -385,6 +446,16 @@
                 "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             }
           }
@@ -438,6 +509,16 @@
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
@@ -486,6 +567,16 @@
                 "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             }
           }
@@ -537,6 +628,16 @@
                 "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             }
           }
@@ -602,6 +703,16 @@
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
@@ -662,6 +773,16 @@
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
@@ -720,6 +841,16 @@
                 "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             }
           }
@@ -784,6 +915,147 @@
                 "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            }
+          }
+        },
+        "alert_state": {
+          "title": "Add an alert state alert",
+          "description": "An alert state alert fires when another alert has been in a given state for a while, e.g. `active` (firing and unacknowledged) for 30 minutes. Use it to escalate an alert nobody has acknowledged.",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::state::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::state::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::state::data::icon%]",
+            "alert": "Alert",
+            "alert_states": "States",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data::condition%]",
+            "delay_on": "For how long",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::state::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::state::data::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::icon%]",
+            "alert": "The alert to watch.",
+            "alert_states": "This alert fires while the watched alert is in one of these states. `Active` means firing and unacknowledged; `Acknowledged` includes snoozed.",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::condition%]",
+            "delay_on": "How long the watched alert must stay in those states before this alert fires. Acknowledging it, or its firing ending, starts the time again.",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::acknowledgeable%]",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched alert.",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            }
+          }
+        },
+        "reconfigure_alert_state": {
+          "title": "Edit alert",
+          "data": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::icon%]",
+            "alert": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::alert%]",
+            "alert_states": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::alert_states%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::no_data_grace%]"
+          },
+          "data_description": {
+            "name": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::data_description::name%]",
+            "priority": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::priority%]",
+            "icon": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::icon%]",
+            "alert": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::alert%]",
+            "alert_states": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::alert_states%]",
+            "condition": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::condition%]",
+            "delay_on": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::delay_on%]",
+            "delay_off": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::delay_off%]",
+            "acknowledgeable": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::acknowledgeable%]",
+            "subject_entity": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::subject_entity%]",
+            "no_data_grace": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data_description::no_data_grace%]"
+          },
+          "sections": {
+            "notifications": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::description%]",
+              "data": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data::done_message%]"
+              },
+              "data_description": {
+                "use_default_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_groups%]",
+                "notifier_groups": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::notifier_groups%]",
+                "use_default_reminders": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::use_default_reminders%]",
+                "reminder_schedule": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_schedule%]",
+                "message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::message%]",
+                "display_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::display_message%]",
+                "reminder_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::reminder_message%]",
+                "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]"
+              }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         }
@@ -798,7 +1070,12 @@
         "limit_required": "Set a minimum, a maximum, or both.",
         "invalid_limits": "The minimum must be less than the maximum.",
         "criterion_required": "Each side needs a template, triggers, or both.",
-        "delay_needs_template": "A delay needs a template on its side: triggers alone can't stay true for the delay."
+        "delay_needs_template": "A delay needs a template on its side: triggers alone can't stay true for the delay.",
+        "alert_state_self": "An alert can't watch itself.",
+        "alert_states_missing": "Choose at least one state.",
+        "supersedes_self": "An alert can't supersede itself.",
+        "supersedes_duplicate": "Each alert can be listed only once.",
+        "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself."
       },
       "abort": {
         "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
@@ -884,6 +1161,7 @@
               "on_off": "[%key:component::alert_redux::selector::kind::options::on_off%]",
               "threshold": "[%key:component::alert_redux::selector::kind::options::threshold%]",
               "template": "[%key:component::alert_redux::selector::kind::options::template%]",
+              "alert_state": "[%key:component::alert_redux::selector::kind::options::alert_state%]",
               "trigger": "[%key:component::alert_redux::selector::kind::options::trigger%]",
               "event": "[%key:component::alert_redux::selector::kind::options::event%]"
             }
@@ -909,8 +1187,18 @@
         "on_off": "On/off",
         "threshold": "Threshold",
         "template": "Template",
+        "alert_state": "Alert state",
         "trigger": "Trigger",
         "event": "Bus event"
+      }
+    },
+    "alert_states": {
+      "options": {
+        "idle": "[%key:component::alert_redux::entity::alert_redux::alert::state::idle%]",
+        "active": "[%key:component::alert_redux::entity::alert_redux::alert::state::active%]",
+        "ack": "[%key:component::alert_redux::entity::alert_redux::alert::state::ack%]",
+        "no_data": "[%key:component::alert_redux::entity::alert_redux::alert::state::no_data%]",
+        "disabled": "[%key:component::alert_redux::entity::alert_redux::alert::state::disabled%]"
       }
     }
   },
@@ -1013,6 +1301,18 @@
               "warning": "Warning",
               "notice": "Notice",
               "informational": "Informational"
+            }
+          },
+          "supersession": {
+            "name": "Supersession",
+            "description": "Timings for alerts that other alerts supersede.",
+            "data": {
+              "supersession_debounce": "Debounce",
+              "done_window": "Done window"
+            },
+            "data_description": {
+              "supersession_debounce": "How long a superseded alert's on notification waits, to see whether an alert superseding it starts firing too.",
+              "done_window": "How long a superseded alert's done notification waits, to see whether an alert superseding it stops firing too. If one does, only that alert's done notification is sent."
             }
           }
         }

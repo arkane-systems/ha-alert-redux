@@ -46,8 +46,10 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     add-entities callback for alerts added later.
   - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
     persistence, and the rendered messages while firing; snoozing, disabling, and
-    suspending, for every kind), `ConditionAlertEntity`
-    (state, on/off, threshold, and template kinds: watches its sources, judges them
+    suspending, for every kind; supersession's on debounce, skipped reminders, and
+    held done notifications), `ConditionAlertEntity`
+    (state, on/off, threshold, template, and alert state kinds: watches its sources,
+    judges them
     by the kind's rule in `_judge`, and runs the delays and no-data grace period on
     one timer), and `EventAlertEntity` (trigger and bus event kinds: fires on its
     triggers, for a duration). One-shot timers use `PointTimer`, and
@@ -61,6 +63,12 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `sources.py` — condition inputs reporting their result or no data:
     `StateSource`, `TemplateSource`, `ThresholdSource` (a `Reading`), and
     `SourceSet`, which reports a kind's sources (and the extra condition) together.
+  - `supersession.py` — `SupersessionGraph` (HA-free: relationships by entity ID,
+    their transitive closure, `find_cycle`) and `Supersession`, the coordinator in
+    `hass.data` that the entities share: it builds the graph from the entities'
+    own configuration, answers `superseded_by` and the done-window decision, and
+    passes on an alert starting or stopping firing (the entities call it from
+    `async_write_ha_state`).
   - `triggers.py` — `TriggerWatcher`: attaches HA triggers once HA has started and
     after the startup delay, handing on each firing's variables made JSON-safe.
     Used by event alerts and on/off sides.

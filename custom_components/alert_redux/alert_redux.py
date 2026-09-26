@@ -38,7 +38,7 @@ async def async_setup_entry(
     """
     data = hass.data[DOMAIN]
     data[DATA_ADD_ENTITIES] = async_add_entities
-    entities = data[DATA_ENTITIES] = {}
+    entities = data[DATA_ENTITIES]
     for subentry in entry.subentries.values():
         if subentry.subentry_type != SUBENTRY_ALERT:
             continue

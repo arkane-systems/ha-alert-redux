@@ -26,6 +26,7 @@
             "on_off": "On/off: separate criteria turn it on and off",
             "threshold": "Threshold: a value is above or below a limit",
             "template": "Template: a template is true",
+            "alert_state": "Alert state: another alert has been in a given state for a while",
             "trigger": "Trigger: fires on a Home Assistant trigger, for a while",
             "event": "Bus event: fires on an event, for a while"
           }
@@ -72,6 +73,16 @@
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
               }
             }
           }
@@ -129,6 +140,16 @@
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
             }
           }
         },
@@ -183,6 +204,16 @@
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
             }
           }
         },
@@ -227,6 +258,16 @@
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
               }
             }
           }
@@ -283,6 +324,16 @@
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
             }
           }
         },
@@ -336,6 +387,16 @@
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
             }
           }
         },
@@ -385,6 +446,16 @@
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
               }
             }
           }
@@ -438,6 +509,16 @@
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
             }
           }
         },
@@ -486,6 +567,16 @@
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
               }
             }
           }
@@ -537,6 +628,16 @@
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
               }
             }
           }
@@ -602,6 +703,16 @@
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
             }
           }
         },
@@ -662,6 +773,16 @@
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
             }
           }
         },
@@ -720,6 +841,16 @@
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
               }
             }
           }
@@ -784,6 +915,147 @@
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
+            }
+          }
+        },
+        "alert_state": {
+          "title": "Add an alert state alert",
+          "description": "An alert state alert fires when another alert has been in a given state for a while, e.g. `active` (firing and unacknowledged) for 30 minutes. Use it to escalate an alert nobody has acknowledged.",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "alert": "Alert",
+            "alert_states": "States",
+            "condition": "Extra condition",
+            "delay_on": "For how long",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Shown on the card and used as the notification title. The entity ID is derived from it when the alert is created.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "alert": "The alert to watch.",
+            "alert_states": "This alert fires while the watched alert is in one of these states. `Active` means firing and unacknowledged; `Acknowledged` includes snoozed.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "How long the watched alert must stay in those states before this alert fires. Acknowledging it, or its firing ending, starts the time again.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched alert.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
+            }
+          }
+        },
+        "reconfigure_alert_state": {
+          "title": "Edit alert",
+          "data": {
+            "name": "Name",
+            "priority": "Priority",
+            "icon": "Icon",
+            "alert": "Alert",
+            "alert_states": "States",
+            "condition": "Extra condition",
+            "delay_on": "For how long",
+            "delay_off": "Delay before ending",
+            "acknowledgeable": "Acknowledgeable",
+            "subject_entity": "Subject entity",
+            "no_data_grace": "No-data grace period"
+          },
+          "data_description": {
+            "name": "Renaming doesn't change the entity ID; rename that in the entity settings if you want to.",
+            "priority": "Sets the alert's colour and sort order.",
+            "icon": "Leave empty to use the priority's default icon.",
+            "alert": "The alert to watch.",
+            "alert_states": "This alert fires while the watched alert is in one of these states. `Active` means firing and unacknowledged; `Acknowledged` includes snoozed.",
+            "condition": "Optional. A template that must also render true for the alert to fire; when it stops being true, the alert ends.",
+            "delay_on": "How long the watched alert must stay in those states before this alert fires. Acknowledging it, or its firing ending, starts the time again.",
+            "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
+            "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched alert.",
+            "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
+          },
+          "sections": {
+            "notifications": {
+              "name": "Notifications and messages",
+              "description": "Who is notified, how often reminders are sent, and what the messages say.",
+              "data": {
+                "use_default_groups": "Use the default notifier groups",
+                "notifier_groups": "Notifier groups",
+                "use_default_reminders": "Use the default reminder schedule",
+                "reminder_schedule": "Reminder schedule",
+                "message": "On message",
+                "display_message": "Card message",
+                "reminder_message": "Reminder message",
+                "done_message": "Done message"
+              },
+              "data_description": {
+                "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
+                "notifier_groups": "Used when the default groups are turned off. Leave empty to notify nobody.",
+                "use_default_reminders": "Use the default reminder schedule set in the integration's options. Turn off to set this alert's own.",
+                "reminder_schedule": "Used when the default schedule is turned off. Minutes between reminders while the alert is firing and unacknowledged, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
+                "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
+                "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
+                "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "Alerts this one takes precedence over. While this alert is firing, they don't send on or reminder notifications, and if they stop firing together with it, only this alert's done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+              }
             }
           }
         }
@@ -798,7 +1070,12 @@
         "limit_required": "Set a minimum, a maximum, or both.",
         "invalid_limits": "The minimum must be less than the maximum.",
         "criterion_required": "Each side needs a template, triggers, or both.",
-        "delay_needs_template": "A delay needs a template on its side: triggers alone can't stay true for the delay."
+        "delay_needs_template": "A delay needs a template on its side: triggers alone can't stay true for the delay.",
+        "alert_state_self": "An alert can't watch itself.",
+        "alert_states_missing": "Choose at least one state.",
+        "supersedes_self": "An alert can't supersede itself.",
+        "supersedes_duplicate": "Each alert can be listed only once.",
+        "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself."
       },
       "abort": {
         "reconfigure_successful": "Re-configuration was successful"
@@ -884,6 +1161,7 @@
               "on_off": "On/off",
               "threshold": "Threshold",
               "template": "Template",
+              "alert_state": "Alert state",
               "trigger": "Trigger",
               "event": "Bus event"
             }
@@ -909,8 +1187,18 @@
         "on_off": "On/off",
         "threshold": "Threshold",
         "template": "Template",
+        "alert_state": "Alert state",
         "trigger": "Trigger",
         "event": "Bus event"
+      }
+    },
+    "alert_states": {
+      "options": {
+        "idle": "Idle",
+        "active": "Active",
+        "ack": "Acknowledged",
+        "no_data": "No data",
+        "disabled": "Disabled"
       }
     }
   },
@@ -1013,6 +1301,18 @@
               "warning": "Warning",
               "notice": "Notice",
               "informational": "Informational"
+            }
+          },
+          "supersession": {
+            "name": "Supersession",
+            "description": "Timings for alerts that other alerts supersede.",
+            "data": {
+              "supersession_debounce": "Debounce",
+              "done_window": "Done window"
+            },
+            "data_description": {
+              "supersession_debounce": "How long a superseded alert's on notification waits, to see whether an alert superseding it starts firing too.",
+              "done_window": "How long a superseded alert's done notification waits, to see whether an alert superseding it stops firing too. If one does, only that alert's done notification is sent."
             }
           }
         }

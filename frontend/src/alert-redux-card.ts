@@ -6,10 +6,12 @@ import {
   collectAlerts,
   compareFiring,
   compareNoData,
+  groupSuperseded,
   isAlertEntity,
   remainingFraction,
   isFiring,
   snoozeDurations,
+  type AlertGroup,
 } from "./alerts";
 import { clockTime, elapsed, remaining, span } from "./format";
 import { cardStyles, sharedStyles } from "./styles";
@@ -37,6 +39,7 @@ export class AlertReduxCard extends LitElement {
     _serverVersion: { state: true },
     _busy: { state: true },
     _snoozeMenu: { state: true },
+    _expanded: { state: true },
   };
 
   declare hass?: HomeAssistant;
@@ -47,6 +50,8 @@ export class AlertReduxCard extends LitElement {
   declare _busy: Set<string>;
   /** The entity ID whose snooze menu is open, if any. */
   declare _snoozeMenu?: string;
+  /** The entity IDs of alerts whose superseded alerts are shown. */
+  declare _expanded: Set<string>;
 
   private _tick?: number;
   private _progressTick?: number;
@@ -59,6 +64,7 @@ export class AlertReduxCard extends LitElement {
   constructor() {
     super();
     this._busy = new Set();
+    this._expanded = new Set();
   }
 
   static getStubConfig(): Partial<AlertReduxCardConfig> {
@@ -76,10 +82,19 @@ export class AlertReduxCard extends LitElement {
   getCardSize(): number {
     if (!this.hass) return 2;
     const alerts = collectAlerts(this.hass);
-    const firing = alerts.filter(isFiring).length;
+    const groups = groupSuperseded(alerts.filter(isFiring).sort(compareFiring));
+    const shown = groups.reduce(
+      (size, group) =>
+        size +
+        3 +
+        (group.superseded.length
+          ? 1 + (this._expanded.has(group.alert.entityId) ? group.superseded.length * 3 : 0)
+          : 0),
+      0,
+    );
     const noData = alerts.filter((alert) => alert.state === "no_data").length;
     const disabled = alerts.some((alert) => alert.state === "disabled");
-    return 1 + Math.max(1, firing * 3) + (noData ? 1 + noData : 0) + (disabled ? 1 : 0);
+    return 1 + Math.max(1, shown) + (noData ? 1 + noData : 0) + (disabled ? 1 : 0);
   }
 
   getGridOptions() {
@@ -158,7 +173,7 @@ export class AlertReduxCard extends LitElement {
         <div class="content ${title ? "has-header" : ""} ${dark ? "dark" : "light"}">
           ${this._serverVersion ? this._renderBanner(this._serverVersion) : nothing}
           ${firing.length
-            ? firing.map((alert) => this._renderAlert(alert))
+            ? groupSuperseded(firing).map((group) => this._renderGroup(group))
             : html`<div class="empty">No alerts are firing.</div>`}
           ${noData.length ? this._renderNoData(noData) : nothing}
           ${disabled
@@ -180,6 +195,34 @@ export class AlertReduxCard extends LitElement {
         <button class="primary" @click=${() => location.reload()}>Reload</button>
       </div>
     `;
+  }
+
+  /** An alert, and the alerts it supersedes behind a disclosure (spec §8.1). */
+  private _renderGroup(group: AlertGroup) {
+    const count = group.superseded.length;
+    if (!count) return this._renderAlert(group.alert);
+    const id = group.alert.entityId;
+    const open = this._expanded.has(id);
+    return html`
+      ${this._renderAlert(group.alert)}
+      <div class="superseded">
+        <button
+          class="disclosure"
+          aria-expanded=${open ? "true" : "false"}
+          @click=${() => this._toggleExpanded(id)}
+        >
+          <ha-icon icon=${open ? "mdi:chevron-down" : "mdi:chevron-right"}></ha-icon>${count}
+          superseded ${count === 1 ? "alert" : "alerts"}
+        </button>
+        ${open ? group.superseded.map((alert) => this._renderAlert(alert)) : nothing}
+      </div>
+    `;
+  }
+
+  private _toggleExpanded(entityId: string): void {
+    const expanded = new Set(this._expanded);
+    if (!expanded.delete(entityId)) expanded.add(entityId);
+    this._expanded = expanded;
   }
 
   private _renderAlert(alert: Alert) {

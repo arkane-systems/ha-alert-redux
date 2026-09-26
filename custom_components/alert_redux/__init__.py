@@ -38,6 +38,7 @@ from .const import (
     DATA_STARTUP_UNTIL,
     DATA_STORE,
     DATA_SUBENTRIES,
+    DATA_SUPERSESSION,
     DOMAIN,
     EVENT_DELETED,
     NOTIFIER_STORAGE_KEY,
@@ -59,6 +60,7 @@ from .model import AlertRuntime, Settings
 from .notifier import GroupConfig, Notifier
 from .issues import async_check_default_groups
 from .store import AlertStore
+from .supersession import Supersession
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -175,6 +177,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     notifier.async_start()
     async_check_default_groups(hass, entry, settings)
 
+    # The platform fills in the entities; supersession looks them up there.
+    entities: dict[str, AlertEntity] = {}
+    data[DATA_ENTITIES] = entities
+    data[DATA_SUPERSESSION] = Supersession(entities, settings)
+
     component: EntityComponent[AlertEntity] = data[DATA_COMPONENT]
     if not await component.async_setup_entry(entry):
         return False
@@ -241,6 +248,8 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
             if entity.hass is not None:
                 entity.async_write_ha_state()
 
+    # Relationships, or the alerts themselves, may have changed (spec §8).
+    data[DATA_SUPERSESSION].async_refresh()
     async_check_default_groups(hass, entry, data[DATA_SETTINGS])
 
 
