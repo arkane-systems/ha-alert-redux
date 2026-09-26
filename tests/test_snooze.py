@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import Context, HomeAssistant, ServiceCall
+from homeassistant.core import Context, Event, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -66,8 +66,15 @@ async def test_snooze_acks_and_expires(
         for name in (EVENT_SNOOZED, EVENT_ACKED, EVENT_SNOOZE_EXPIRED, EVENT_UNACKED)
     }
     order: list[str] = []
+
+    @callback
+    def _record(event: Event) -> None:
+        # A callback runs in the event loop, in firing order; a plain function
+        # would run in the executor, and could record them out of order.
+        order.append(event.event_type)
+
     for name in events:
-        hass.bus.async_listen(name, lambda event: order.append(event.event_type))
+        hass.bus.async_listen(name, _record)
     await _call(hass, "fire")
 
     await _tick(hass, freezer, 2)
