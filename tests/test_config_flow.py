@@ -624,6 +624,9 @@ async def test_alert_notification_settings_round_trip(
                 "use_default_groups": False,
                 "use_default_reminders": False,
                 "reminder_schedule": "5, 15",
+                "use_default_throttle": False,
+                "throttle_count": 3,
+                "throttle_minutes": 10,
                 "reminder_message": "Still {{ duration }}",
                 "done_message": "Done",
             },
@@ -635,6 +638,7 @@ async def test_alert_notification_settings_round_trip(
     )
     assert subentry.data["notifier_groups"] == []
     assert subentry.data["reminder_schedule"] == [5, 15]
+    assert subentry.data["throttle"] == [3, 10]
     assert subentry.data["reminder_message"] == "Still {{ duration }}"
     assert subentry.data["done_message"] == "Done"
 
@@ -648,8 +652,14 @@ async def test_alert_notification_settings_round_trip(
         for key in section_schema
         if key.default is not vol.UNDEFINED
     }
-    assert defaults == {"use_default_groups": False, "use_default_reminders": False}
+    assert defaults == {
+        "use_default_groups": False,
+        "use_default_reminders": False,
+        "use_default_throttle": False,
+    }
     assert _suggested(section_schema)["reminder_schedule"] == "5, 15"
+    assert _suggested(section_schema)["throttle_count"] == 3
+    assert _suggested(section_schema)["throttle_minutes"] == 10
 
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
@@ -659,6 +669,7 @@ async def test_alert_notification_settings_round_trip(
             "notifications": {
                 "use_default_groups": True,
                 "use_default_reminders": True,
+                "use_default_throttle": True,
             },
         },
     )
@@ -666,6 +677,54 @@ async def test_alert_notification_settings_round_trip(
     subentry = entry.subentries[subentry.subentry_id]
     assert "notifier_groups" not in subentry.data
     assert "reminder_schedule" not in subentry.data
+    assert "throttle" not in subentry.data
+
+
+@pytest.mark.parametrize(
+    ("count", "minutes"),
+    [(3, None), (None, 5), (2.5, 5), (3, 0)],
+)
+async def test_alert_invalid_throttle(
+    hass: HomeAssistant,
+    setup_alerts: SetupAlerts,
+    count: float | None,
+    minutes: float | None,
+) -> None:
+    """A throttle needs a whole count of at least one and positive minutes."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    notifications: dict[str, object] = {"use_default_throttle": False}
+    if count is not None:
+        notifications["throttle_count"] = count
+    if minutes is not None:
+        notifications["throttle_minutes"] = minutes
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**FORM, "supersession": {}, "notifications": notifications},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_throttle"}
+
+
+async def test_alert_no_throttle(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """An alert's own throttle left empty means it isn't throttled at all."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "supersession": {},
+            "notifications": {"use_default_throttle": False},
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    subentry = next(
+        s for s in entry.subentries.values() if s.subentry_type == SUBENTRY_ALERT
+    )
+    assert subentry.data["throttle"] == []
 
 
 async def test_alert_invalid_schedule(
@@ -723,6 +782,33 @@ async def test_options_notification_defaults(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["fallback_group"] == "phones"
+    assert entry.options["default_throttle"] == []
+
+
+async def test_options_default_throttle(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """The default throttle is stored as [count, minutes], and pre-filled."""
+    entry = await setup_alerts()
+    form = {
+        "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
+        "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
+    }
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**form, "throttle_count": 3}
+    )
+    assert result["errors"] == {"base": "invalid_throttle"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**form, "throttle_count": 3, "throttle_minutes": 5}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["default_throttle"] == [3, 5]
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    suggested = _suggested(result["data_schema"].schema)
+    assert suggested["throttle_count"] == 3
+    assert suggested["throttle_minutes"] == 5
 
 
 async def test_notifications_section_is_required_without_default(

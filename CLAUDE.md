@@ -51,19 +51,21 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
     persistence, and the rendered messages while firing; snoozing, disabling, and
     suspending, for every kind; supersession's on debounce, skipped reminders, and
-    held done notifications), `ConditionAlertEntity`
+    held done notifications; throttling on and done notifications, and the
+    throttling summary), `ConditionAlertEntity`
     (state, on/off, threshold, template, and alert state kinds: watches its sources,
     judges them
     by the kind's rule in `_judge`, and runs the delays and no-data grace period on
     one timer), and `EventAlertEntity` (trigger and bus event kinds: fires on its
     triggers, for a duration). One-shot timers use `PointTimer`, and
     `_async_update_timers` sets them from the runtime's deadlines (reminder,
-    snooze, suspension, event expiry). Kinds detach and re-attach their inputs on
+    snooze, suspension, event expiry, throttling's end). Kinds detach and re-attach their inputs on
     disable and enable through `_async_inputs_stopped` / `_async_inputs_started`.
   - `model.py` — `AlertRuntime`, the HA-free state machine (including condition
     evaluation, `evaluate()`, event durations, and on/off edges), its
-    serialization, the threshold rule (`threshold_holds`), and the global
-    `Settings`.
+    serialization, the threshold rule (`threshold_holds`), the throttle rule
+    (`Throttle`, `AlertRuntime.throttle_note` / `throttle_expire`), and the
+    global `Settings`.
   - `sources.py` — condition inputs reporting their result or no data:
     `StateSource`, `TemplateSource`, `ThresholdSource` (a `Reading`), and
     `SourceSet`, which reports a kind's sources (and the extra condition) together.
@@ -95,7 +97,8 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `notifications.py` — the alert side of notifying: which groups an alert sends
     to (its own, the defaults, or the fallback), rendering the on / reminder / done
     messages, and handing them to the notifier with the alert's lifecycle key;
-    telling the notifier when an alert is acknowledged, deleted, or renamed. Reminder timing lives in `model.py`
+    telling the notifier when an alert is acknowledged, deleted, or renamed; the
+    throttling summary's text. Reminder timing lives in `model.py`
     (`AlertRuntime.next_reminder`, `next_reminder_slot`) and `entity.py`.
   - `notifier/` — the **self-contained notifier module** (spec §9.1): groups and
     members (`model.py`), delivery per member kind (`members.py`), the retry queue's

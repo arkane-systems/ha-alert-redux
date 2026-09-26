@@ -59,6 +59,7 @@ from .const import (
     CONF_DATA,
     CONF_DEFAULT_GROUPS,
     CONF_DEFAULT_REMINDER_SCHEDULE,
+    CONF_DEFAULT_THROTTLE,
     CONF_DELAY_OFF,
     CONF_DELAY_ON,
     CONF_DISPLAY_MESSAGE,
@@ -105,10 +106,14 @@ from .const import (
     CONF_TARGET,
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
+    CONF_THROTTLE,
+    CONF_THROTTLE_COUNT,
+    CONF_THROTTLE_MINUTES,
     CONF_TRIGGERS,
     CONF_USER_DISMISSABLE,
     CONF_USE_DEFAULT_GROUPS,
     CONF_USE_DEFAULT_REMINDERS,
+    CONF_USE_DEFAULT_THROTTLE,
     CONF_VALUE_TEMPLATE,
     DOMAIN,
     EVENT_KINDS,
@@ -121,7 +126,14 @@ from .const import (
     Priority,
     Propagation,
 )
-from .model import Settings, format_schedule, parse_schedule, to_timedelta
+from .model import (
+    Settings,
+    Throttle,
+    format_schedule,
+    parse_schedule,
+    parse_throttle,
+    to_timedelta,
+)
 from .notifier import MobileFeatures
 from .supersession import find_cycle, propagation_of, relationship_targets
 from .triggers import async_validate_triggers, is_storable
@@ -179,13 +191,21 @@ class AlertReduxOptionsFlow(OptionsFlow):
                 )
             except ValueError:
                 errors["base"] = "invalid_schedule"
-            else:
+            try:
+                throttle = parse_throttle(
+                    user_input.get(CONF_THROTTLE_COUNT),
+                    user_input.get(CONF_THROTTLE_MINUTES),
+                )
+            except ValueError:
+                errors["base"] = "invalid_throttle"
+            if not errors:
                 return self.async_create_entry(
                     data={
                         CONF_NO_DATA_GRACE: user_input[CONF_NO_DATA_GRACE],
                         CONF_STARTUP_DELAY: user_input[CONF_STARTUP_DELAY],
                         CONF_DEFAULT_GROUPS: user_input.get(CONF_DEFAULT_GROUPS, []),
                         CONF_DEFAULT_REMINDER_SCHEDULE: list(schedule),
+                        CONF_DEFAULT_THROTTLE: throttle.to_stored() if throttle else [],
                         CONF_FALLBACK_GROUP: user_input.get(CONF_FALLBACK_GROUP),
                         CONF_RETRY_TIMEOUT: user_input[CONF_RETRY_TIMEOUT],
                         CONF_SNOOZE_REMINDER_WINDOW: user_input[
@@ -208,6 +228,7 @@ class AlertReduxOptionsFlow(OptionsFlow):
             CONF_STARTUP_DELAY: _duration_dict(settings.startup_delay),
             CONF_DEFAULT_GROUPS: list(settings.default_groups),
             CONF_DEFAULT_REMINDER_SCHEDULE: format_schedule(settings.reminder_schedule),
+            **_throttle_fields(settings.throttle),
             CONF_FALLBACK_GROUP: settings.fallback_group,
             CONF_RETRY_TIMEOUT: _duration_dict(settings.retry_timeout),
             CONF_SNOOZE_REMINDER_WINDOW: _duration_dict(
@@ -237,6 +258,7 @@ class AlertReduxOptionsFlow(OptionsFlow):
                             defaults, CONF_DEFAULT_REMINDER_SCHEDULE
                         ),
                     ): TextSelector(),
+                    **_throttle_schema(defaults),
                     vol.Optional(
                         CONF_FALLBACK_GROUP,
                         description=_suggested(defaults, CONF_FALLBACK_GROUP),
@@ -292,6 +314,35 @@ class AlertReduxOptionsFlow(OptionsFlow):
             ),
             errors=errors,
         )
+
+
+def _throttle_fields(throttle: Throttle | None) -> dict[str, float]:
+    """Return a throttle as the form's two numbers; none leaves them empty."""
+    if throttle is None:
+        return {}
+    return {CONF_THROTTLE_COUNT: throttle.count, CONF_THROTTLE_MINUTES: throttle.minutes}
+
+
+def _throttle_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
+    """Return the throttle's two fields (spec §9.8): both empty for none."""
+    return {
+        vol.Optional(
+            CONF_THROTTLE_COUNT, description=_suggested(defaults, CONF_THROTTLE_COUNT)
+        ): NumberSelector(
+            NumberSelectorConfig(min=1, step=1, mode=NumberSelectorMode.BOX)
+        ),
+        vol.Optional(
+            CONF_THROTTLE_MINUTES,
+            description=_suggested(defaults, CONF_THROTTLE_MINUTES),
+        ): NumberSelector(
+            NumberSelectorConfig(
+                min=0,
+                step="any",
+                unit_of_measurement="min",
+                mode=NumberSelectorMode.BOX,
+            )
+        ),
+    }
 
 
 def _supersession_options(settings: Settings) -> dict[str, float]:
@@ -430,6 +481,11 @@ def _notifications_section(entry: ConfigEntry, defaults: dict[str, Any]) -> sect
             CONF_REMINDER_SCHEDULE,
             description=_suggested(defaults, CONF_REMINDER_SCHEDULE),
         ): TextSelector(),
+        vol.Required(
+            CONF_USE_DEFAULT_THROTTLE,
+            default=defaults.get(CONF_USE_DEFAULT_THROTTLE, True),
+        ): BooleanSelector(),
+        **_throttle_schema(defaults),
     }
     for key in (
         CONF_MESSAGE,
@@ -481,6 +537,8 @@ def _alert_form_defaults(data: dict[str, Any]) -> dict[str, Any]:
     defaults[CONF_USE_DEFAULT_REMINDERS] = CONF_REMINDER_SCHEDULE not in data
     if CONF_REMINDER_SCHEDULE in data:
         defaults[CONF_REMINDER_SCHEDULE] = format_schedule(data[CONF_REMINDER_SCHEDULE])
+    defaults[CONF_USE_DEFAULT_THROTTLE] = CONF_THROTTLE not in data
+    defaults.update(_throttle_fields(Throttle.from_stored(data.get(CONF_THROTTLE))))
     return defaults
 
 
@@ -769,6 +827,8 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
                 errors[CONF_NAME] = "name_exists"
             try:
                 data = {CONF_KIND: kind, **_alert_data(kind, user_input)}
+            except _InvalidThrottle:
+                errors["base"] = "invalid_throttle"
             except ValueError:
                 errors["base"] = "invalid_schedule"
             else:
@@ -901,7 +961,21 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         data[CONF_REMINDER_SCHEDULE] = list(
             parse_schedule(user_input.get(CONF_REMINDER_SCHEDULE, ""))
         )
+    if not user_input.get(CONF_USE_DEFAULT_THROTTLE, True):
+        try:
+            throttle = parse_throttle(
+                user_input.get(CONF_THROTTLE_COUNT),
+                user_input.get(CONF_THROTTLE_MINUTES),
+            )
+        except ValueError as err:
+            raise _InvalidThrottle from err
+        # Empty means the alert isn't throttled, whatever the default.
+        data[CONF_THROTTLE] = throttle.to_stored() if throttle else []
     return data
+
+
+class _InvalidThrottle(ValueError):
+    """The form's throttle doesn't make sense."""
 
 
 def _button(item: Any) -> dict[str, Any]:

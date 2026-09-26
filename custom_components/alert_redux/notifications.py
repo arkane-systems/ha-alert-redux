@@ -7,6 +7,7 @@ its messages. Delivery is the notifier module's job.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 import logging
 from typing import Any
 
@@ -22,9 +23,11 @@ from .const import (
     DEFAULT_ON_MESSAGE,
     DEFAULT_REMINDER_MESSAGE,
     DOMAIN,
+    THROTTLE_ENDS_MARKER,
     EndReason,
 )
-from .model import Settings
+from .messages import readable_duration
+from .model import Settings, ThrottleSummary
 from .notifier import Button, Notification, Notifier
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,6 +35,8 @@ _LOGGER = logging.getLogger(__name__)
 REASON_ON = "on"
 REASON_REMINDER = "reminder"
 REASON_DONE = "done"
+# The summary sent when throttling ends (spec §9.8).
+REASON_THROTTLE_SUMMARY = "throttle_summary"
 
 
 def default_message(reason: str, end_reason: str | None = None) -> str:
@@ -45,6 +50,43 @@ def default_message(reason: str, end_reason: str | None = None) -> str:
     if end_reason == EndReason.DISABLED:
         return DEFAULT_DONE_DISABLED_MESSAGE
     return DEFAULT_DONE_MESSAGE
+
+
+def throttle_summary_message(
+    summary: ThrottleSummary, now: datetime, *, firing: bool
+) -> str:
+    """Return the summary of what was held while an alert was throttled (§9.8).
+
+    E.g. "[Throttling ends] Fired 7× while throttled, most recently 12 minutes
+    ago; stopped firing 3 minutes ago after 40 seconds."
+    """
+    parts: list[str] = []
+    if summary.held_fires and summary.last_held is not None:
+        parts.append(
+            f"Fired {summary.held_fires}× while throttled, most recently "
+            f"{_ago(summary.last_held, now)}"
+        )
+    if firing:
+        parts.append("still firing")
+    elif summary.ended is not None:
+        ended = f"stopped firing {_ago(summary.ended, now)}"
+        if summary.duration_seconds is not None:
+            ended += f" after {readable_duration(summary.duration_seconds)}"
+        if summary.end_reason == EndReason.NO_DATA:
+            ended += " (lost its data)"
+        elif summary.end_reason == EndReason.DISABLED:
+            ended += " (disabled)"
+        parts.append(ended)
+    text = "; ".join(parts)
+    return f"{THROTTLE_ENDS_MARKER} {text[:1].upper()}{text[1:]}."
+
+
+def _ago(when: datetime, now: datetime) -> str:
+    """Return how long ago something was, e.g. "12 minutes ago"; "just now"."""
+    seconds = (now - when).total_seconds()
+    if seconds < 1:
+        return "just now"
+    return f"{readable_duration(seconds)} ago"
 
 
 def lifecycle_key(entity_id: str) -> str:
@@ -103,29 +145,39 @@ def async_send_notification(
     template: str | None,
     variables: Mapping[str, Any],
     buttons: tuple[Button, ...] = (),
+    prefix: str | None = None,
+    message: str | None = None,
+    final: bool | None = None,
 ) -> None:
     """Render and send one of an alert's notifications.
 
     groups comes from effective_groups: None sends to the fallback, and an empty
-    tuple sends nothing. Done notifications carry no buttons (spec §9.11).
+    tuple sends nothing. A final notification (by default, the done
+    notification) carries no buttons (spec §9.11). A message given ready-made
+    isn't rendered; a prefix goes in front of the message.
     """
     if groups == ():
         return
     reason = variables["reason"]
-    message = render_message(
-        hass,
-        template,
-        default_message(reason, variables.get("end_reason")),
-        variables,
-        f"{entity_id} {reason} message",
-    )
+    if final is None:
+        final = reason == REASON_DONE
+    if message is None:
+        message = render_message(
+            hass,
+            template,
+            default_message(reason, variables.get("end_reason")),
+            variables,
+            f"{entity_id} {reason} message",
+        )
+    if prefix:
+        message = f"{prefix} {message}"
     notification = Notification(
         title=title,
         message=message,
         key=lifecycle_key(entity_id),
         variables=variables,
-        buttons=() if reason == REASON_DONE else buttons,
-        final=reason == REASON_DONE,
+        buttons=() if final else buttons,
+        final=final,
     )
     notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]
     if groups is None:
