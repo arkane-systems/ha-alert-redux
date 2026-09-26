@@ -1352,6 +1352,16 @@
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
+              }
             }
           }
         },
@@ -1441,6 +1451,16 @@
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
               }
             }
           }
@@ -1534,6 +1554,16 @@
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
+              }
             }
           }
         },
@@ -1617,6 +1647,16 @@
                 "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
+              }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
               }
             }
           }
@@ -1702,12 +1742,22 @@
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
+              }
             }
           }
         },
         "reconfigure_state": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",
@@ -1786,12 +1836,22 @@
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
+              }
             }
           }
         },
         "reconfigure_on_off": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",
@@ -1876,12 +1936,22 @@
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
+              }
             }
           }
         },
         "reconfigure_threshold": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",
@@ -1968,12 +2038,22 @@
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
+              }
             }
           }
         },
         "reconfigure_template": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",
@@ -2052,12 +2132,22 @@
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
+              }
             }
           }
         },
         "reconfigure_alert_state": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",
@@ -2136,6 +2226,16 @@
                 "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
                 "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
+            },
+            "supersession": {
+              "name": "Supersession",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "Supersedes"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
+              }
             }
           }
         }
@@ -2153,7 +2253,13 @@
         "alert_states_missing": "Choose at least one state.",
         "button_incomplete": "Each notification button needs a label and an action.",
         "invalid_button_action": "A notification button's action isn't valid.",
-        "targets_required": "Set at least one target criterion: labels, areas, domains, device classes, or a pattern."
+        "targets_required": "Set at least one target criterion: labels, areas, domains, device classes, or a pattern.",
+        "supersedes_self": "A generator can't supersede itself.",
+        "supersedes_duplicate": "Each generator or alert can be listed only once.",
+        "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself, for some target.",
+        "propagation_unacknowledgeable": "This alert can't be acknowledged, so acknowledgements can't be passed on to it. Set each relationship to do nothing, or make the alert acknowledgeable.",
+        "snooze_duration_missing": "A relationship set to snooze this alert needs a duration to snooze it for.",
+        "relationship_target": "Each relationship needs either a generator or a fixed alert, not both."
       },
       "abort": {
         "reconfigure_successful": "Re-configuration was successful"
@@ -2525,6 +2631,10 @@
     "quiet_entity_missing": {
       "title": "Quiet-hours entity not found",
       "description": "The quiet-hours entity `{entity}` doesn't exist, so quiet hours don't apply where it's used: {used_by}. Choose an existing entity in the integration's options or the notifier group, or create it."
+    },
+    "broken_generator_reference": {
+      "title": "A generator refers to something that doesn't exist",
+      "description": "The generator {generator} supersedes {missing}, which doesn't exist: it was deleted or renamed.\n\nThe generator's alerts keep working, failing towards more notifications rather than fewer: they no longer suppress the missing alerts, and acknowledgements aren't passed on.\n\nTo fix this, edit {generator} to remove or replace the relationship. This issue goes away by itself once it's fixed."
     }
   }
 }

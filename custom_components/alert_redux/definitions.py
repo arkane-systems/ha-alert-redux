@@ -7,7 +7,7 @@ variables that describe the target.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -29,12 +29,27 @@ class AlertDefinition:
     # Extra template variables, available to every template the alert renders.
     variables: Mapping[str, Any] = field(default_factory=dict)
 
+    @property
+    def target_key(self) -> str | None:
+        """Return a generated alert's target key: what its generator knows its
+        target by (spec §12.3)."""
+        if self.generator is None:
+            return None
+        return self.unique_id.removeprefix(f"{self.generator}_")
+
     @classmethod
     def from_subentry(cls, subentry: ConfigSubentry) -> AlertDefinition:
         """Return a fixed alert's definition."""
         return cls(
             unique_id=subentry.subentry_id, name=subentry.title, data=subentry.data
         )
+
+
+# Turns a generated alert's relationships to other generators into
+# relationships to their alerts for the same target.
+RelationshipResolver = Callable[
+    [AlertDefinition, list[dict[str, Any]]], list[dict[str, Any]]
+]
 
 
 def generator_unique_id(generator: str) -> str:

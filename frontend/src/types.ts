@@ -62,4 +62,6 @@ export interface Alert {
   disabledUntil: Date | null;
   /** The firing alerts that supersede this one, transitively (spec §8.1). */
   supersededBy: string[];
+  /** A generated alert's generator: its sensor's entity ID (spec §12.3). */
+  generatedBy: string | null;
 }

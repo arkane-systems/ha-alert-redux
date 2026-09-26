@@ -33,6 +33,7 @@ from homeassistant.const import (
     ATTR_DEVICE_CLASS,
     EVENT_STATE_CHANGED,
     EntityCategory,
+    Platform,
 )
 from homeassistant.core import (
     CALLBACK_TYPE,
@@ -62,12 +63,14 @@ from .const import (
     CONF_DEVICE_CLASSES,
     CONF_DOMAINS,
     CONF_ENTITY_ID,
+    CONF_GENERATOR,
     CONF_EXCLUDE,
     CONF_KIND,
     CONF_LABELS,
     CONF_NAME_TEMPLATE,
     CONF_PATTERN,
     CONF_SUBJECT_ENTITY,
+    CONF_SUPERSEDES,
     CONF_TARGETS,
     CONF_VALUE_TEMPLATE,
     DATA_ADD_ENTITIES,
@@ -80,7 +83,7 @@ from .const import (
     VAR_TARGET_NAME,
     AlertKind,
 )
-from .definitions import AlertDefinition
+from .definitions import AlertDefinition, generator_unique_id
 from .model import AlertRuntime, Settings
 from .notifications import async_clear_notifications
 from .store import AlertStore
@@ -489,6 +492,52 @@ class GeneratorManager:
         self._listeners.pop(subentry_id, None)
         self._on_changed()
 
+    def resolve_relationships(
+        self, definition: AlertDefinition, relationships: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Return a generated alert's relationships by entity ID.
+
+        One to another generator becomes one to that generator's alert for the
+        same target, and is left out if it has none (spec §12.3).
+        """
+        resolved: list[dict[str, Any]] = []
+        for rel in relationships:
+            if (other := rel.get(CONF_GENERATOR)) is None:
+                resolved.append(rel)
+                continue
+            generator = self.generators.get(other)
+            entity = (
+                generator.entities.get(definition.target_key or "")
+                if generator is not None
+                else None
+            )
+            if entity is not None and entity.entity_id:
+                resolved.append(
+                    {
+                        **{k: v for k, v in rel.items() if k != CONF_GENERATOR},
+                        CONF_ALERT: entity.entity_id,
+                    }
+                )
+        return resolved
+
+    def supersedes(self, subentry_id: str) -> list[str]:
+        """Return what a generator's alerts supersede, for its sensor: other
+        generators' sensors, and fixed alerts."""
+        generator = self.generators[subentry_id]
+        registry = er.async_get(self.hass)
+        links: list[str] = []
+        for rel in generator.alert_data.get(CONF_SUPERSEDES) or []:
+            if (other := rel.get(CONF_GENERATOR)) is not None:
+                links.append(
+                    registry.async_get_entity_id(
+                        Platform.SENSOR, DOMAIN, generator_unique_id(other)
+                    )
+                    or other
+                )
+            elif alert := rel.get(CONF_ALERT):
+                links.append(alert)
+        return links
+
     @callback
     def async_add_listener(
         self, subentry_id: str, listener: Callable[[], None]
@@ -612,6 +661,7 @@ class GeneratorManager:
         from .entity import create_alert_entity  # noqa: PLC0415 (circular)
 
         entity = create_alert_entity(definition, self._store, self._settings)
+        entity.relationship_resolver = self.resolve_relationships
         # The entity ID a new alert gets: the target's, then the generator's name
         # (spec §12.3). The registry keeps it from then on.
         object_id = (definition.target or key).split(".", 1)[-1]

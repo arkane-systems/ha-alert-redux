@@ -3,11 +3,13 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.8.0). Every alert kind works: manual, state,
+> **Status:** early development (0.11.0). Every alert kind works: manual, state,
 > on/off, threshold, template, alert state, trigger, and bus event alerts. The card
 > shows, acknowledges, and snoozes them, they send on, reminder, and done
-> notifications, the admin card disables and suspends them, alerts can supersede
-> each other, and summary sensors and the Activity card make them easy to build on.
+> notifications (with throttling, quiet hours, and buttons), the admin card
+> disables and suspends them, alerts can supersede each other, generators make
+> alerts for every matching entity, and summary sensors and the Activity card make
+> them easy to build on.
 > The rest arrives in later releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
 > The design is in [docs/SPEC.md](docs/SPEC.md).
 
@@ -159,6 +161,12 @@ default the target's name followed by the generator's ("Front Door Unlocked"), a
 its entity ID from the target and the generator (`alert_redux.front_door_unlocked`).
 If the target is renamed, its alert keeps its state and follows it. Generated
 alerts are edited through their generator, and show it in `generated_by`.
+
+A generator can also **supersede**: in its Supersession section, choose another
+generator, and each of its alerts supersedes that generator's alert for the same
+target (each door's *Left Open* over its *Open*), or choose a fixed alert, which
+each of its alerts supersedes. Propagation works as for alerts. The admin card
+marks generated alerts "generated".
 
 Each generator also has a sensor, `sensor.alert_redux_generator_<name>`: the number
 of alerts it has made, with its `targets`, those `alerts`, and any `problems`.

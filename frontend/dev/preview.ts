@@ -178,6 +178,8 @@ const ALERTS: HassEntity[] = [
   }),
   alert("battery_low", "Remote Battery Low", "informational", "ack", {
     icon: "mdi:battery-alert",
+    kind: "threshold",
+    generated_by: "sensor.alert_redux_generator_battery_low",
   }),
   alert("leak_bathroom", "Bathroom Leak", "critical", "no_data", {
     no_data_since: ago(25),
@@ -215,7 +217,14 @@ for (const id of ["empty", "stale"]) {
 function setStates(list: HassEntity[]) {
   states = Object.fromEntries(list.map((entity) => [entity.entity_id, entity]));
 }
-setStates(ALERTS);
+// The generator of the generated alert (spec §12.3); not an alert itself.
+const GENERATOR: HassEntity = {
+  entity_id: "sensor.alert_redux_generator_battery_low",
+  state: "1",
+  last_changed: ago(0),
+  attributes: { friendly_name: "Alert Redux generator Battery Low" },
+} as HassEntity;
+setStates([...ALERTS, GENERATOR]);
 
 function update(entityId: string, changes: Partial<HassEntity>) {
   const old = states[entityId];
@@ -313,7 +322,7 @@ document.querySelector("#empty")?.addEventListener("change", (event) => {
   refresh();
 });
 document.querySelector("#reset")?.addEventListener("click", () => {
-  setStates(ALERTS);
+  setStates([...ALERTS, GENERATOR]);
   refresh();
 });
 document.querySelector("#stale")?.addEventListener("change", (event) => {

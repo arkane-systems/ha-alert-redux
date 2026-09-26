@@ -165,6 +165,9 @@ CONF_ALERT_STATES = "alert_states"
 CONF_SUPERSEDES = "supersedes"
 # Each relationship's propagation (spec §8.2), and the snooze's duration.
 CONF_PROPAGATION = "propagation"
+# A generator's relationship to another generator: each of its alerts supersedes
+# the other generator's alert for the same target (spec §12.3).
+CONF_GENERATOR = "generator"
 CONF_SNOOZE_DURATION = "snooze_duration"
 
 
@@ -310,6 +313,10 @@ ISSUE_DEFAULT_GROUPS_UNSET = "default_groups_unset"
 # One per (referring alert, missing alert): the prefix, then the referring
 # alert's subentry ID and the missing alert's object ID (spec §12.4).
 ISSUE_BROKEN_REFERENCE = "broken_reference"
+# One per (generator, missing generator or alert) (spec §12.3): the prefix, then
+# the generator's subentry ID, and the missing generator's subentry ID or the
+# missing alert's object ID.
+ISSUE_BROKEN_GENERATOR_REFERENCE = "broken_generator_reference"
 
 # Actions (spec §16).
 SERVICE_FIRE = "fire"

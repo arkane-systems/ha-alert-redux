@@ -24,40 +24,45 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-**For the next install restart (11b).**
-*Set up just before the install restart:* check that
-`alert_redux.alert_redux_test_generator_target_test_switch_on` is still `ack`,
-and turn on debug logging for `custom_components.alert_redux.notifier` (for the
-re-armed quiet-hours check below), then set that check up as described.
+**For the next install restart.**
 
-- **A generated alert keeps its state across the restart** (phase 11a). Test
-  Switch On's alert for `input_boolean.alert_redux_test_generator_renamed`
-  (entity ID `alert_redux.alert_redux_test_generator_target_test_switch_on`)
-  was acknowledged, firing since 2026-09-26 22:01:29 UTC. *Expect:* it comes
-  back `ack` with the same `firing_since`, no `_created` or `_deleted` event for
-  it (or for Test Lock Jammed's five alerts), and both generator sensors show the
-  same counts (1 and 5).
-- **Held quiet-hours notifications survive the restart** (phase 10b; failed in
-  the phase 11 install restart, see Done). Set up as in 10b: Office Only's quiet
-  hours follow `input_boolean.alert_redux_test_quiet_hours` (its own threshold
-  Critical); Test Bus Event Alert (Quiet and Office Only) throttles at 3 per 5
-  minutes and lasts 2 minutes. Turn the helper on; fire `alert_redux_test_event`
-  (with `source: test`) four times; request the restart about 4 minutes 25
-  seconds after the third, so that throttling's end falls about 35 seconds
-  after the request. *Expect:* once HA is back, the phones get one
-  "[Throttling ends]" summary and the Echo stays silent; turning the helper off
-  afterwards has the Echo announce one Quiet hours summary listing it. The
-  debug log should show the summary being held, saved, and released.
-- **Throttling whose end falls due while HA is down sends its summary at
-  startup** (phase 10a). Not yet exercised (see Done); shares the set-up above.
+- **Generated supersession across the restart** (phase 11b). Test Switch Still
+  On's alert for `input_boolean.alert_redux_test_generator_renamed`
+  (`alert_redux.alert_redux_test_generator_renamed_test_switch_still_on`) is
+  `ack`, pre-acknowledged by Test Switch On's alert for the same target, which
+  it supersedes. *Expect:* both come back `ack`, Still On with the same
+  `pre_acked_by`, Switch On with `superseded_by` Still On's alert, and no
+  on notifications.
 
 ## Done
+
+- **2026-09-26, 11b install restart. A generated alert keeps its state across
+  the restart** (phase 11a). Test Switch On's alert came back `ack`, firing
+  since 22:01:29 UTC as before; the generator sensors kept their counts (1 and
+  5). Passed.
+- **2026-09-26, 11b install restart. Held quiet-hours notifications survive
+  the restart** (phase 10b). The phase 11 "failure" was the set-up: Office
+  Only's quiet-hours threshold had been Warning, so Test Bus Event Alert
+  (Warning) was never held. With it set back to Critical (by agreement, before
+  this run), throttling's end (22:32:54 UTC, restart requested 22:32:27) sent
+  its summary to the phones and was held for Office Only; turning the helper
+  off at 22:35:38 released one key, and the Echo announced one Quiet hours
+  summary. Passed.
+- **2026-09-26, 11b install restart. Throttling whose end falls due while HA
+  is down** (phase 10a). The new process set Alert Redux up at 22:32:49, five
+  seconds before the end: it ended the restored throttling at startup, the
+  phones got the summary, and `throttled_since` was null. Passed (as closely
+  as this instance's timing allows).
+- **2026-09-26, 11b install restart. Quiet hours hold through startup**
+  (0.10.1). The Echo stayed silent through the restart while the helper was
+  on. Passed again.
 
 - **2026-09-26, phase 11 install restart. Quiet hours hold through startup**
   (0.10.1). The helper was on through the restart; the Echo stayed silent
   during and after it. Passed.
 - **2026-09-26, phase 11 install restart. Held quiet-hours notifications
-  survive the restart** (phase 10b). **Failed:** turning the helper off at
+  survive the restart** (phase 10b). **Failed** (the set-up, not the code; see
+  above): turning the helper off at
   22:01 UTC, after the restart, had the Echo announce nothing. The throttling
   summary it should have listed was produced by the old process (below), 4
   seconds into its shutdown; whether it was held and saved, or lost, isn't

@@ -71,6 +71,7 @@ export function toAlert(entity: HassEntity): Alert {
     supersededBy: Array.isArray(attributes.superseded_by)
       ? attributes.superseded_by.map(String)
       : [],
+    generatedBy: toText(attributes.generated_by),
   };
 }
 

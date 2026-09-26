@@ -1330,6 +1330,25 @@ doesn't allow editing them individually.
   - Generated alerts get the alerts label (§11.5) and restore their state (§15.1)
     like any other. Their stored records say which generator and target they
     belong to, so a restart doesn't take them for deleted alerts.
+  - A generated alert renamed with its target (or whose template variables
+    change) keeps its pending `delay_on` and `delay_off`: only a change to the
+    generator's alert configuration restarts them, as editing an alert does.
+  - **Generated supersession.** A generator's **Supersession** section lists
+    relationships each to **another generator** (its alert for the same target)
+    or to a **fixed alert**, each with its propagation (§8.2). They're resolved
+    live: a relationship to a generator that has no alert for the target is
+    simply absent, not a broken reference. A fixed alert supersedes generated
+    alerts by entity ID, as it does any alert. The generator's sensor lists its
+    relationships in `supersedes` (the other generators' sensors, and the fixed
+    alerts).
+  - **Checks.** A generator can't supersede itself, or list one twice. Cycles
+    are checked with each generator standing for all its alerts, so a cycle
+    through generators is refused even before they share a target. A
+    relationship to a generator that's been deleted, or to a fixed alert that
+    doesn't exist, raises a Repairs issue naming the generator
+    (`broken_generator_reference_<subentry ID>_<generator ID or object ID>`).
+    Renaming a fixed alert rewrites generators' relationships to it. Edit forms
+    list the alerts and generators that refer to them, generators included.
 
 ### 12.4 References to alerts that no longer exist
 
@@ -1469,6 +1488,9 @@ To make sure it gets fixed:
   friendlier front end to the subentry flows.
 - [Decided, F27; late phase] Export/import of alert definitions, to make up for
   losing YAML's version control and text editing. Also available as actions (§16).
+- [Decided, phase 11] Generated alerts are marked "generated" beside their
+  kind, with the generator's name as a tooltip; they're edited through their
+  generator (§12.3).
 - [Deferred, phase 13] Flag alerts that are currently **superseded** (§8.1)
   alongside their state.
 - [Deferred, phase 13] On request (a click, not shown all the time), show a
@@ -1769,6 +1791,9 @@ Decisions with their reasons, in the order they were made.
 | Generated alerts are never targets | Alert state generators can't feed on themselves or each other [§12.3]. |
 | Diagnostic entities can be targets | Battery levels and connectivity are obvious alert targets [§12.3]. |
 | No removals until a grace period after startup | Slow integrations and external sources don't make alerts flap [§12.3]. |
+| Generated supersession resolves live, per target | A partner generator without an alert for a target is normal, not a broken reference [§12.3]. |
+| Cycles are checked with generators standing for all their alerts | A cycle between generators would appear as soon as they shared a target [§12.3]. |
+| A renamed target keeps its alert's pending delays | Restarting them would hold back an alert about to fire, which fails quiet [§12.3]. |
 | Quiet hours live in the notifier, with urgencies | Holding and softening are delivery; the notifier stays free of alerts [§9.1, §9.9]. |
 | The owner says what's sent when quiet hours end | Only Alert Redux knows which alerts are still active and how to summarise them [§9.9]. |
 | An unavailable quiet-hours entity isn't quiet, but doesn't release what's held | New notifications fail loud; a blip in the night doesn't deliver the morning summary [§9.9]. |
@@ -2020,6 +2045,15 @@ per group. Decisions from building it are recorded in §9.1, §9.3, §9.5, §9.8
 - Generated supersession; the `refresh_generator` action.
 
 *Done when* one generator covers every door lock, including a lock added later.
+
+[Phase 11 as built] Built in two parts: 11a (generators) and 11b (generated
+supersession, and the admin card's "generated" marker), released together as
+0.11.0. Generators make condition alerts only, and match targets AND across the
+criteria and OR within each. Alert entities are now built from an
+`AlertDefinition`, which a generator makes per target, adding the `target` and
+`target_name` template variables. Removals wait for a startup grace period, so
+slow integrations don't make alerts flap. Decisions from building it are
+recorded in §9.5, §11.1, §12.1, §12.3, §13.2, and §16.
 
 ### Phase 12 — Voice control (0.12.0)
 
