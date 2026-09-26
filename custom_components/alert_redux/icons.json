@@ -11,6 +11,9 @@
     },
     "unack": {
       "service": "mdi:check-circle-outline"
+    },
+    "snooze": {
+      "service": "mdi:alarm-snooze"
     }
   }
 }

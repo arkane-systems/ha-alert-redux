@@ -17,6 +17,7 @@ from custom_components.alert_redux.model import (
     next_reminder_slot,
     parse_schedule,
     reminder_slots,
+    snooze_end_reminder,
     threshold_holds,
 )
 
@@ -480,3 +481,116 @@ def test_on_off_trigger_with_template_needs_it_to_hold() -> None:
     # The template turning false before the fire (e.g. during delay_on) drops it.
     assert runtime.on_off_condition(sides, False, None) is False
     assert runtime.on_off_condition(sides, True, None) is False
+
+
+def test_snooze_active_acks_it() -> None:
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    runtime.next_reminder = T0 + timedelta(minutes=10)
+    until = T0 + timedelta(minutes=30)
+    changes = runtime.snooze(T0, until, "user")
+    assert [change for change, _ in changes] == [Change.SNOOZED, Change.ACKED]
+    assert all(
+        (t.old_state, t.new_state) == (AlertState.ACTIVE, AlertState.ACK)
+        for _, t in changes
+    )
+    assert runtime.state is AlertState.ACK
+    assert runtime.snoozed_until == until
+    assert runtime.last_snoozed == runtime.last_acked == T0
+    assert runtime.last_snoozed_by == runtime.last_acked_by == "user"
+    assert runtime.next_reminder is None
+
+
+def test_snooze_acked_only_sets_the_deadline() -> None:
+    """Re-snoozing replaces the deadline, even with a sooner one."""
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    runtime.snooze(T0, T0 + timedelta(hours=1), "a")
+    later = T0 + timedelta(minutes=5)
+    changes = runtime.snooze(later, later + timedelta(minutes=10), "b")
+    assert [change for change, _ in changes] == [Change.SNOOZED]
+    assert changes[0][1].old_state == changes[0][1].new_state == AlertState.ACK
+    assert runtime.snoozed_until == later + timedelta(minutes=10)
+    assert runtime.last_snoozed_by == "b"
+    assert runtime.last_acked_by == "a"
+
+
+def test_snooze_not_firing_does_nothing() -> None:
+    runtime = AlertRuntime()
+    assert runtime.snooze(T0, T0 + timedelta(minutes=5), None) == []
+    assert runtime.snoozed_until is None
+
+
+def test_snooze_expire() -> None:
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    until = T0 + timedelta(minutes=30)
+    runtime.snooze(T0, until, "user")
+    assert runtime.snooze_expire(until - timedelta(seconds=1)) == []
+    changes = runtime.snooze_expire(until)
+    assert [change for change, _ in changes] == [
+        Change.SNOOZE_EXPIRED,
+        Change.UNACKED,
+    ]
+    assert runtime.state is AlertState.ACTIVE
+    assert runtime.snoozed_until is None
+    assert runtime.last_unacked == until
+    assert runtime.last_unacked_by is None
+
+
+def test_ack_makes_a_snooze_lasting() -> None:
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    runtime.snooze(T0, T0 + timedelta(minutes=30), "a")
+    transition = runtime.ack(T0 + timedelta(minutes=1), "b")
+    assert transition is not None
+    assert transition.old_state == transition.new_state == AlertState.ACK
+    assert runtime.snoozed_until is None
+    assert runtime.last_acked_by == "b"
+    # A plain acknowledgement can't be acknowledged again.
+    assert runtime.ack(T0 + timedelta(minutes=2), "c") is None
+
+
+def test_unack_and_end_clear_the_snooze() -> None:
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    runtime.snooze(T0, T0 + timedelta(minutes=30), None)
+    runtime.unack(T0, None)
+    assert runtime.snoozed_until is None
+    runtime.snooze(T0, T0 + timedelta(minutes=30), None)
+    runtime.end(T0, EndReason.RESOLVED)
+    assert runtime.snoozed_until is None
+
+
+def test_snooze_round_trip() -> None:
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    runtime.snooze(T0, T0 + timedelta(minutes=30), "user")
+    restored = AlertRuntime.from_dict(runtime.to_dict())
+    assert restored.snoozed_until == T0 + timedelta(minutes=30)
+    assert restored.last_snoozed == T0
+    assert restored.state is AlertState.ACK
+
+
+@pytest.mark.parametrize(
+    ("minutes", "remind", "next_slot"),
+    [
+        # Schedule [10, 20, 30, 60]: slots at 10, 30, 60, 120, 180, …
+        (15, True, 30),  # 15 min to the next slot
+        (26, False, 30),  # 4 min: the slot will do
+        (25, True, 30),  # exactly the window: remind now
+        (119, False, 120),
+        (130, True, 180),  # the repeating part
+    ],
+)
+def test_snooze_end_reminder(minutes: int, remind: bool, next_slot: int) -> None:
+    now = T0 + timedelta(minutes=minutes)
+    assert snooze_end_reminder(T0, (10, 20, 30, 60), now, timedelta(minutes=5)) == (
+        remind,
+        T0 + timedelta(minutes=next_slot),
+    )
+
+
+def test_snooze_end_reminder_without_reminders() -> None:
+    now = T0 + timedelta(minutes=30)
+    assert snooze_end_reminder(T0, (), now, timedelta(minutes=5)) == (False, None)

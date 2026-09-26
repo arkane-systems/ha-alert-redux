@@ -113,6 +113,7 @@ const ALERTS: HassEntity[] = [
     icon: "mdi:fridge-alert",
     message: "Freezer is −4 °C.",
     firing_since: ago(300),
+    snoozed_until: ago(-23),
   }),
   alert("back_door_open", "Back Door Open", "warning", "active", {
     icon: "mdi:door-open",
@@ -203,8 +204,15 @@ function hassFor(dark: boolean): HomeAssistant {
     async callService(_domain, service, data) {
       const entityId = String(data?.entity_id);
       await new Promise((resolve) => setTimeout(resolve, 300));
-      if (service === "ack") update(entityId, { state: "ack" });
-      if (service === "unack") update(entityId, { state: "active" });
+      const attributes = (snoozed_until: string | null) => ({
+        attributes: { ...states[entityId].attributes, snoozed_until },
+      });
+      if (service === "ack") update(entityId, { state: "ack", ...attributes(null) });
+      if (service === "unack") update(entityId, { state: "active", ...attributes(null) });
+      if (service === "snooze") {
+        const minutes = Number((data?.duration as { minutes: number }).minutes);
+        update(entityId, { state: "ack", ...attributes(ago(-minutes)) });
+      }
       if (service === "dismiss") update(entityId, { state: "idle" });
       return undefined;
     },
@@ -224,6 +232,9 @@ function build() {
     cards.push(card);
   }
   refresh();
+  // ?menu=<object ID> opens that alert's snooze menu.
+  const menu = params.get("menu");
+  if (menu) for (const card of cards) Object.assign(card, { _snoozeMenu: `alert_redux.${menu}` });
 }
 
 document.querySelector("#empty")?.addEventListener("change", (event) => {

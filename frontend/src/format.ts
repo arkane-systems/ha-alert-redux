@@ -1,6 +1,6 @@
-/** How long ago something started, e.g. "just now", "12 min", "3 h 5 min", "2 d 4 h". */
-export function elapsed(since: Date, now: number = Date.now()): string {
-  const minutes = Math.floor(Math.max(0, now - since.getTime()) / 60_000);
+/** A length of time, e.g. "less than a minute", "12 min", "3 h 5 min", "2 d 4 h". */
+export function span(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
   if (minutes < 1) return "less than a minute";
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
@@ -8,6 +8,14 @@ export function elapsed(since: Date, now: number = Date.now()): string {
   const days = Math.floor(hours / 24);
   return hours % 24 ? `${days} d ${hours % 24} h` : `${days} d`;
 }
+
+/** How long ago something started. */
+export const elapsed = (since: Date, now: number = Date.now()): string =>
+  span(now - since.getTime());
+
+/** How long until something happens, rounded up to the minute. */
+export const remaining = (until: Date, now: number = Date.now()): string =>
+  span(Math.ceil((until.getTime() - now) / 60_000) * 60_000);
 
 /** A time of day, or a date and time if it isn't today. */
 export function clockTime(date: Date, language?: string): string {

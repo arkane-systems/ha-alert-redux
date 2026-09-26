@@ -66,6 +66,7 @@ export function toAlert(entity: HassEntity): Alert {
     missingInputs: Array.isArray(attributes.missing_inputs)
       ? attributes.missing_inputs.map(String)
       : [],
+    snoozedUntil: toDate(attributes.snoozed_until),
   };
 }
 
@@ -96,6 +97,16 @@ export function compareNoData(a: Alert, b: Alert): number {
     PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority) ||
     a.name.localeCompare(b.name)
   );
+}
+
+/** The snooze menu's durations, in minutes, unless the card sets its own. */
+export const DEFAULT_SNOOZE_DURATIONS: readonly number[] = [15, 30, 60, 120, 240];
+
+/** The card's snooze durations: positive numbers of minutes, or else the defaults. */
+export function snoozeDurations(configured: unknown): readonly number[] {
+  if (!Array.isArray(configured)) return DEFAULT_SNOOZE_DURATIONS;
+  const minutes = configured.map(Number).filter((value) => value > 0);
+  return minutes.length ? minutes : DEFAULT_SNOOZE_DURATIONS;
 }
 
 /** The text the card shows: the display message, or else the on message (F22). */

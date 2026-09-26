@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_DATA,
+    ATTR_DURATION,
     ATTR_KIND,
     ATTR_NAME,
     ATTR_NEW_STATE,
@@ -41,6 +42,7 @@ from .const import (
     SERVICE_ACK,
     SERVICE_DISMISS,
     SERVICE_FIRE,
+    SERVICE_SNOOZE,
     SERVICE_UNACK,
     SUBENTRY_ALERT,
     SUBENTRY_NOTIFIER_GROUP,
@@ -69,6 +71,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     component.async_register_entity_service(SERVICE_DISMISS, None, "async_dismiss")
     component.async_register_entity_service(SERVICE_ACK, None, "async_ack")
     component.async_register_entity_service(SERVICE_UNACK, None, "async_unack")
+    component.async_register_entity_service(
+        SERVICE_SNOOZE,
+        {vol.Required(ATTR_DURATION): cv.positive_time_period},
+        "async_snooze",
+    )
     async_setup_websocket(hass)
     return True
 

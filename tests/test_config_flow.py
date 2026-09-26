@@ -336,6 +336,7 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
         "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
         "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
         "retry_timeout": {"hours": 0, "minutes": 5, "seconds": 0},
+        "snooze_reminder_window": {"hours": 0, "minutes": 5, "seconds": 0},
     }
     assert _suggested(schema) == {"default_reminder_schedule": "10, 20, 30, 60"}
 
@@ -344,6 +345,7 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
         {
             "no_data_grace": {"hours": 0, "minutes": 1, "seconds": 0},
             "startup_delay": {"hours": 0, "minutes": 0, "seconds": 30},
+            "snooze_reminder_window": {"hours": 0, "minutes": 2, "seconds": 0},
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -351,6 +353,11 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
     assert hass.states.get("alert_redux.back_door_open").attributes[
         "no_data_grace"
     ] == 60
+    assert entry.options["snooze_reminder_window"] == {
+        "hours": 0,
+        "minutes": 2,
+        "seconds": 0,
+    }
 
 
 async def test_messages_saved_and_prefilled(

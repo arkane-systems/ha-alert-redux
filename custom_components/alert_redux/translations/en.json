@@ -908,16 +908,26 @@
     },
     "ack": {
       "name": "Acknowledge",
-      "description": "Acknowledges a firing alert, stopping its reminders until it stops firing."
+      "description": "Acknowledges a firing alert, stopping its reminders until it stops firing. Acknowledging a snoozed alert keeps it acknowledged when the snooze would have run out."
     },
     "unack": {
       "name": "Remove acknowledgement",
       "description": "Removes an alert's acknowledgement, so that it is active again."
+    },
+    "snooze": {
+      "name": "Snooze",
+      "description": "Acknowledges a firing alert for a while. If it's still firing when the snooze runs out, it becomes active again and reminders resume. Snoozing an acknowledged alert sets a new end to the snooze.",
+      "fields": {
+        "duration": {
+          "name": "Duration",
+          "description": "How long to snooze the alert for."
+        }
+      }
     }
   },
   "exceptions": {
     "not_acknowledgeable": {
-      "message": "{entity_id} can't be acknowledged."
+      "message": "{entity_id} can't be acknowledged or snoozed."
     },
     "not_manual": {
       "message": "{entity_id} isn't a manual alert, so it can't be fired or dismissed by action."
@@ -933,7 +943,8 @@
           "default_groups": "Default notifier groups",
           "default_reminder_schedule": "Default reminder schedule",
           "fallback_group": "Fallback group",
-          "retry_timeout": "Retry timeout"
+          "retry_timeout": "Retry timeout",
+          "snooze_reminder_window": "Snooze-end reminder window"
         },
         "data_description": {
           "no_data_grace": "How long a firing alert keeps firing while its inputs have no data, unless the alert sets its own.",
@@ -941,7 +952,8 @@
           "default_groups": "The groups alerts send to unless they choose their own. With none set, those alerts send to the fallback instead.",
           "default_reminder_schedule": "Minutes between reminders while an alert is firing and unacknowledged, unless it sets its own, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
           "fallback_group": "Receives a notification when no member of any group it was sent to could be notified. Leave empty to use a persistent notification.",
-          "retry_timeout": "How long a notifier that is missing or failing keeps being retried before it's given up on."
+          "retry_timeout": "How long a notifier that is missing or failing keeps being retried before it's given up on.",
+          "snooze_reminder_window": "When a snooze runs out, a reminder is sent straight away, unless the alert's next scheduled reminder is closer than this."
         },
         "sections": {
           "event_durations": {

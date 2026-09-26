@@ -9,8 +9,9 @@ import {
   isAlertEntity,
   remainingFraction,
   isFiring,
+  snoozeDurations,
 } from "./alerts";
-import { clockTime, elapsed } from "./format";
+import { clockTime, elapsed, remaining, span } from "./format";
 import { cardStyles } from "./styles";
 import type { Alert, AlertReduxCardConfig, HomeAssistant } from "./types";
 
@@ -35,6 +36,7 @@ export class AlertReduxCard extends LitElement {
     _config: { state: true },
     _serverVersion: { state: true },
     _busy: { state: true },
+    _snoozeMenu: { state: true },
   };
 
   declare hass?: HomeAssistant;
@@ -43,6 +45,8 @@ export class AlertReduxCard extends LitElement {
   declare _serverVersion?: string;
   /** Entity IDs with an action in flight, so their buttons can't be pressed twice. */
   declare _busy: Set<string>;
+  /** The entity ID whose snooze menu is open, if any. */
+  declare _snoozeMenu?: string;
 
   private _tick?: number;
   private _progressTick?: number;
@@ -226,6 +230,8 @@ export class AlertReduxCard extends LitElement {
     const busy = this._busy.has(alert.entityId);
     const dismiss = alert.kind === "manual" && alert.userDismissable;
     if (!alert.acknowledgeable && !dismiss) return nothing;
+    const snoozed = alert.state === "ack" && alert.snoozedUntil;
+    const menuOpen = this._snoozeMenu === alert.entityId;
     return html`
       <div class="controls">
         ${dismiss
@@ -237,6 +243,22 @@ export class AlertReduxCard extends LitElement {
             </button>`
           : nothing}
         ${!alert.acknowledgeable
+          ? nothing
+          : html`<button
+              class=${snoozed ? "snoozed" : ""}
+              ?disabled=${busy}
+              aria-expanded=${menuOpen ? "true" : "false"}
+              title=${snoozed ? `Snoozed until ${this._time(alert.snoozedUntil!)}` : "Snooze"}
+              @click=${() => this._toggleSnoozeMenu(alert)}
+            >
+              <ha-icon icon="mdi:alarm-snooze"></ha-icon>${snoozed
+                ? `Snoozed · ${remaining(alert.snoozedUntil!)}`
+                : "Snooze"}<ha-icon
+                class="caret"
+                icon=${menuOpen ? "mdi:menu-up" : "mdi:menu-down"}
+              ></ha-icon>
+            </button>`}
+        ${!alert.acknowledgeable || snoozed
           ? nothing
           : alert.state === "ack"
             ? html`<button
@@ -254,7 +276,68 @@ export class AlertReduxCard extends LitElement {
                 <ha-icon icon="mdi:check"></ha-icon>Acknowledge
               </button>`}
       </div>
+      ${menuOpen ? this._renderSnoozeMenu(alert, busy) : nothing}
     `;
+  }
+
+  /**
+   * The snooze durations, opened below the controls rather than floating over the
+   * card, where the alert's box would clip it. A snoozed alert can also be kept
+   * acknowledged, or unsnoozed.
+   */
+  private _renderSnoozeMenu(alert: Alert, busy: boolean) {
+    const snoozed = alert.state === "ack" && alert.snoozedUntil;
+    return html`
+      <div class="snooze-menu" role="group" aria-label="Snooze for">
+        <span class="label">${snoozed ? "Snooze again for" : "Snooze for"}</span>
+        ${snoozeDurations(this._config?.snooze_durations).map(
+          (minutes) => html`<button
+            class="chip-button"
+            ?disabled=${busy}
+            @click=${() => this._snooze(alert, minutes)}
+          >
+            ${span(minutes * 60_000)}
+          </button>`,
+        )}
+        ${snoozed
+          ? html`<span class="break"></span>
+              <button
+                class="chip-button"
+                ?disabled=${busy}
+                title="Stay acknowledged until the alert stops firing"
+                @click=${() => this._menuCall(alert, "ack")}
+              >
+                <ha-icon icon="mdi:check-circle"></ha-icon>Keep acknowledged
+              </button>
+              <button
+                class="chip-button"
+                ?disabled=${busy}
+                title="Remove the snooze and the acknowledgement"
+                @click=${() => this._menuCall(alert, "unack")}
+              >
+                <ha-icon icon="mdi:alarm-off"></ha-icon>Unsnooze
+              </button>`
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _toggleSnoozeMenu(alert: Alert): void {
+    this._snoozeMenu = this._snoozeMenu === alert.entityId ? undefined : alert.entityId;
+  }
+
+  private _snooze(alert: Alert, minutes: number): void {
+    this._snoozeMenu = undefined;
+    void this._call(alert, "snooze", { duration: { minutes } });
+  }
+
+  private _menuCall(alert: Alert, service: "ack" | "unack"): void {
+    this._snoozeMenu = undefined;
+    void this._call(alert, service);
+  }
+
+  private _time(date: Date): string {
+    return clockTime(date, this.hass?.locale?.language);
   }
 
   private _renderNoData(alerts: Alert[]) {
@@ -284,11 +367,18 @@ export class AlertReduxCard extends LitElement {
     `;
   }
 
-  private async _call(alert: Alert, service: "ack" | "unack" | "dismiss"): Promise<void> {
+  private async _call(
+    alert: Alert,
+    service: "ack" | "unack" | "dismiss" | "snooze",
+    data: Record<string, unknown> = {},
+  ): Promise<void> {
     if (!this.hass) return;
     this._busy = new Set(this._busy).add(alert.entityId);
     try {
-      await this.hass.callService("alert_redux", service, { entity_id: alert.entityId });
+      await this.hass.callService("alert_redux", service, {
+        entity_id: alert.entityId,
+        ...data,
+      });
     } catch (err) {
       this._fire("hass-notification", {
         message: (err as { message?: string } | undefined)?.message ?? String(err),

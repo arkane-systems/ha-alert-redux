@@ -21,11 +21,13 @@ from .const import (
     CONF_FALLBACK_GROUP,
     CONF_NO_DATA_GRACE,
     CONF_RETRY_TIMEOUT,
+    CONF_SNOOZE_REMINDER_WINDOW,
     CONF_STARTUP_DELAY,
     DEFAULT_EVENT_DURATIONS,
     DEFAULT_NO_DATA_GRACE,
     DEFAULT_REMINDER_SCHEDULE,
     DEFAULT_RETRY_TIMEOUT,
+    DEFAULT_SNOOZE_REMINDER_WINDOW,
     DEFAULT_STARTUP_DELAY,
     AlertState,
     EndReason,
@@ -62,6 +64,9 @@ class Settings:
     event_durations: dict[Priority, timedelta] = field(
         default_factory=lambda: dict(DEFAULT_EVENT_DURATIONS)
     )
+    # When a snooze ends, a reminder slot closer than this makes the immediate
+    # reminder unnecessary (spec §6.2).
+    snooze_reminder_window: timedelta = DEFAULT_SNOOZE_REMINDER_WINDOW
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> Settings:
@@ -71,6 +76,7 @@ class Settings:
         schedule = options.get(CONF_DEFAULT_REMINDER_SCHEDULE)
         retry = to_timedelta(options.get(CONF_RETRY_TIMEOUT))
         durations = options.get(CONF_EVENT_DURATIONS) or {}
+        window = to_timedelta(options.get(CONF_SNOOZE_REMINDER_WINDOW))
         return cls(
             no_data_grace=DEFAULT_NO_DATA_GRACE if grace is None else grace,
             startup_delay=DEFAULT_STARTUP_DELAY if startup is None else startup,
@@ -84,6 +90,9 @@ class Settings:
                 priority: to_timedelta(durations.get(priority)) or default
                 for priority, default in DEFAULT_EVENT_DURATIONS.items()
             },
+            snooze_reminder_window=(
+                DEFAULT_SNOOZE_REMINDER_WINDOW if window is None else window
+            ),
         )
 
     def update(self, other: Settings) -> None:
@@ -147,6 +156,24 @@ def next_reminder_slot(
     return next(slot for slot in reminder_slots(start, schedule) if slot > after)
 
 
+def snooze_end_reminder(
+    firing_since: datetime,
+    schedule: Sequence[float],
+    now: datetime,
+    window: timedelta,
+) -> tuple[bool, datetime | None]:
+    """Apply the snooze-end reminder rule (spec §6.2).
+
+    Return whether to send a reminder now, and when the next one is due: the next
+    slot of the original schedule. The immediate reminder is skipped when that
+    slot is less than window away. An alert without reminders gets neither.
+    """
+    slot = next_reminder_slot(firing_since, schedule, now)
+    if slot is None:
+        return False, None
+    return slot - now >= window, slot
+
+
 @dataclass(frozen=True, slots=True)
 class Reading:
     """A threshold alert's value and limits (spec §4.1); a limit may be unset."""
@@ -196,11 +223,15 @@ class Transition:
 
 
 class Change(StrEnum):
-    """A change found by evaluating a condition alert, each announced by an event."""
+    """A change to an alert, each announced by an event (spec §11.3)."""
 
     FIRED = "fired"
     ENDED = "ended"
     NO_DATA = "no_data"
+    ACKED = "acked"
+    UNACKED = "unacked"
+    SNOOZED = "snoozed"
+    SNOOZE_EXPIRED = "snooze_expired"
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,6 +258,10 @@ class AlertRuntime:
     last_acked_by: str | None = None
     last_unacked: datetime | None = None
     last_unacked_by: str | None = None
+    # While snoozed (acknowledged until then; spec §6.2), and the last snooze.
+    snoozed_until: datetime | None = None
+    last_snoozed: datetime | None = None
+    last_snoozed_by: str | None = None
     # Condition alerts: missing data, and the pending delay deadlines.
     no_data_since: datetime | None = None
     missing_inputs: list[str] = field(default_factory=list)
@@ -300,6 +335,7 @@ class AlertRuntime:
         )
         self.firing = False
         self.acked = False
+        self.snoozed_until = None
         self.firing_since = None
         self.fire_count = 0
         self.fire_data = None
@@ -309,23 +345,72 @@ class AlertRuntime:
         return Transition(old, self.state, fire_count, duration, reason, fire_data)
 
     def ack(self, now: datetime, user_id: str | None) -> Transition | None:
-        """Acknowledge an active alert."""
-        if self.state is not AlertState.ACTIVE:
+        """Acknowledge an active alert, or make a snoozed alert's ack permanent.
+
+        A snoozed alert then stays acknowledged until the firing ends.
+        """
+        old = self.state
+        if old is not AlertState.ACTIVE and not (
+            old is AlertState.ACK and self.snoozed_until is not None
+        ):
             return None
+        self.acked = True
+        self.snoozed_until = None
+        self.next_reminder = None
+        self.last_acked = now
+        self.last_acked_by = user_id
+        return Transition(old, self.state, self.fire_count)
+
+    def unack(self, now: datetime, user_id: str | None) -> Transition | None:
+        """Remove the acknowledgement (and any snooze) from an acknowledged alert."""
+        if self.state is not AlertState.ACK:
+            return None
+        self.acked = False
+        self.snoozed_until = None
+        self.last_unacked = now
+        self.last_unacked_by = user_id
+        return Transition(AlertState.ACK, self.state, self.fire_count)
+
+    def snooze(
+        self, now: datetime, until: datetime, user_id: str | None
+    ) -> list[tuple[Change, Transition]]:
+        """Acknowledge a firing alert until a deadline (spec §6.2).
+
+        An active alert is acknowledged as well; an acknowledged one, snoozed or
+        not, just gets the new deadline, even if it's sooner.
+        """
+        old = self.state
+        if old not in (AlertState.ACTIVE, AlertState.ACK):
+            return []
+        self.snoozed_until = until
+        self.last_snoozed = now
+        self.last_snoozed_by = user_id
+        if old is AlertState.ACK:
+            return [(Change.SNOOZED, Transition(old, old, self.fire_count))]
         self.acked = True
         self.next_reminder = None
         self.last_acked = now
         self.last_acked_by = user_id
-        return Transition(AlertState.ACTIVE, self.state, self.fire_count)
+        transition = Transition(old, self.state, self.fire_count)
+        return [(Change.SNOOZED, transition), (Change.ACKED, transition)]
 
-    def unack(self, now: datetime, user_id: str | None) -> Transition | None:
-        """Remove the acknowledgement from an acknowledged alert."""
-        if self.state is not AlertState.ACK:
-            return None
+    def snooze_expire(self, now: datetime) -> list[tuple[Change, Transition]]:
+        """End a snooze whose deadline has passed: the alert is active again.
+
+        The caller plans the reminders by the snooze-end rule.
+        """
+        if (
+            self.state is not AlertState.ACK
+            or self.snoozed_until is None
+            or now < self.snoozed_until
+        ):
+            return []
         self.acked = False
+        self.snoozed_until = None
         self.last_unacked = now
-        self.last_unacked_by = user_id
-        return Transition(AlertState.ACK, self.state, self.fire_count)
+        self.last_unacked_by = None
+        transition = Transition(AlertState.ACK, self.state, self.fire_count)
+        return [(Change.SNOOZE_EXPIRED, transition), (Change.UNACKED, transition)]
 
     def plan_reminder(self, schedule: Sequence[float], now: datetime) -> None:
         """Set the next reminder: the next slot after now (spec §6.2).
@@ -516,6 +601,8 @@ _DATETIME_FIELDS = frozenset(
         "last_ended",
         "last_acked",
         "last_unacked",
+        "snoozed_until",
+        "last_snoozed",
         "no_data_since",
         "delay_on_until",
         "delay_off_until",
