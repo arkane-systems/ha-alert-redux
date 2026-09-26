@@ -1537,8 +1537,10 @@ element for a different alert. Decisions from building it are recorded in §4.1,
 
 [Phase 6 as built] Built in two parts: 6a (snoozing, with the card's snooze
 control) and 6b (disabling and suspending, the card's disabled-alerts line, and the
-admin card), released together as 0.6.0. HA's own `admin_only` flag on entity
-actions makes disable, enable, and suspend admin-only. The entities' one-shot timers
+admin card), released together as 0.6.0. Disable, enable, and suspend are made
+admin-only with HA's `admin_only` flag on entity actions, which arrived in HA
+2026.9; on older versions they're registered as admin actions that dispatch to the
+entities in the same way, so the minimum HA version stays 2025.3. The entities' one-shot timers
 share a `PointTimer` helper, and the runtime's deadlines (reminder, snooze,
 suspension, event expiry) are synced to them in one place. Decisions from building
 it are recorded in §6.1–§6.4, §7.2, §9.5, §11.1, §11.3, §12.1, §13.1, §13.2, §16,

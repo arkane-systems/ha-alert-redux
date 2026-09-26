@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
@@ -291,13 +292,24 @@ async def test_suspend_errors(hass: HomeAssistant, setup_alerts: SetupAlerts) ->
     assert hass.states.get(DOOR).state == "idle"
 
 
+@pytest.mark.parametrize("native", [True, False], ids=["admin_only", "fallback"])
 async def test_admin_only(
-    hass: HomeAssistant, setup_alerts: SetupAlerts, hass_owner_user
+    hass: HomeAssistant, setup_alerts: SetupAlerts, hass_owner_user, native: bool
 ) -> None:
     """Disable, enable, and suspend need an admin; snooze doesn't.
 
-    The owner fixture makes sure the user created here isn't the owner.
+    Both ways of registering them: admin_only (HA 2026.9 on), and the admin
+    action used before that. The owner fixture makes sure the user created here
+    isn't the owner.
     """
+    with patch(
+        "custom_components.alert_redux._entity_services_take_admin_only",
+        return_value=native,
+    ):
+        await _check_admin_only(hass, setup_alerts)
+
+
+async def _check_admin_only(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
     await setup_alerts(alert_subentry("Back Door Open"))
     user = await hass.auth.async_create_user("Someone", group_ids=["system-users"])
     assert not user.is_admin
@@ -324,3 +336,15 @@ async def test_admin_only(
         context=context,
     )
     assert hass.states.get(DOOR).state == "ack"
+
+    # An admin (or an automation, with no user) can.
+    await hass.services.async_call(
+        DOMAIN, "suspend", {"entity_id": DOOR, "duration": {"hours": 1}}, blocking=True
+    )
+    assert hass.states.get(DOOR).state == "disabled"
+    await hass.services.async_call(DOMAIN, "enable", {"entity_id": DOOR}, blocking=True)
+    assert hass.states.get(DOOR).state == "idle"
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN, "suspend", {"entity_id": DOOR}, blocking=True
+        )
