@@ -16,7 +16,8 @@ handling) and 3 (the main card, with messages rendered for it) are implemented, 
 reminder / done, retries and the fallback), phase 5 (on/off and threshold
 condition alerts, trigger and bus event alerts, and the card's progress bar), and
 phase 6 (snoozing, disabling, and suspending, the card's snooze control, and the
-admin card).
+admin card), and phase 7 (supersession, propagation and pre-acknowledgement, the
+alert state kind, dangling references, and the card's superseded alerts).
 
 ## Specification
 
@@ -67,8 +68,10 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     their transitive closure, `find_cycle`) and `Supersession`, the coordinator in
     `hass.data` that the entities share: it builds the graph from the entities'
     own configuration, answers `superseded_by` and the done-window decision, and
-    passes on an alert starting or stopping firing (the entities call it from
-    `async_write_ha_state`).
+    passes on an alert starting or stopping firing, and propagates
+    acknowledgements as pre-acknowledgements (the entities call it from
+    `async_write_ha_state`). Pre-acknowledgements are kept by the source's
+    unique ID. It also reports each alert's `broken_references`.
   - `triggers.py` — `TriggerWatcher`: attaches HA triggers once HA has started and
     after the startup delay, handing on each firing's variables made JSON-safe.
     Used by event alerts and on/off sides.
@@ -86,7 +89,9 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     so it can be extracted later; its owner passes in the store key and issue domain.
     It keeps its own `Store` (the retry queue). Named `notifier`, not `notify`: a
     `notify.py` would be loaded as a notify platform.
-  - `issues.py` — Alert Redux's own Repairs issues (the unset default groups). Not
+  - `issues.py` — Alert Redux's own Repairs issues (the unset default groups, and
+    references to alerts that don't exist). `__init__.py` follows alert renames
+    in the entity registry, rewriting the references to them. Not
     called `repairs.py`, which HA would take for the repairs platform.
   - `store.py` — `AlertStore`, the single persistent `Store` (no `RestoreEntity`);
     also remembers the card version the user was last told to refresh for, and the
