@@ -5,6 +5,9 @@ is an attempt of its own, retried with backoff until it succeeds or the delivery
 deadline passes, so one broken member never holds up the others. The delivery has
 been delivered once any member succeeds; if none has by the time the last attempt
 gives up, the notification goes to the fallback.
+
+A clearing delivery removes a notification rather than sending one (spec §9.10); it
+never goes to the fallback.
 """
 
 from __future__ import annotations
@@ -33,12 +36,13 @@ def backoff(tries: int) -> timedelta:
 
 @dataclass(slots=True)
 class Attempt:
-    """Sending a delivery's notification to one member."""
+    """Sending a delivery's notification to one member, with the tag to use."""
 
     id: str
     group_id: str
     group_name: str
     member: Member
+    tag: str
     tries: int = 0
     next_try: datetime | None = None
 
@@ -49,18 +53,20 @@ class Attempt:
             "group_id": self.group_id,
             "group_name": self.group_name,
             "member": member_to_dict(self.member),
+            "tag": self.tag,
             "tries": self.tries,
             "next_try": self.next_try.isoformat() if self.next_try else None,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Attempt:
-        """Return an attempt from its stored form."""
+    def from_dict(cls, data: dict[str, Any], key: str) -> Attempt:
+        """Return an attempt from its stored form; its tag defaults to the key."""
         return cls(
             data["id"],
             data["group_id"],
             data["group_name"],
             member_from_dict(data["member"]),
+            data.get("tag") or key,
             data.get("tries", 0),
             datetime.fromisoformat(data["next_try"]) if data.get("next_try") else None,
         )
@@ -79,6 +85,7 @@ class Delivery:
     is_fallback: bool = False
     delivered: bool = False
     attempts: dict[str, Attempt] = field(default_factory=dict)
+    clear: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Return the delivery in storable form."""
@@ -89,17 +96,23 @@ class Delivery:
             "is_fallback": self.is_fallback,
             "delivered": self.delivered,
             "attempts": [attempt.to_dict() for attempt in self.attempts.values()],
+            "clear": self.clear,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Delivery:
         """Return a delivery from its stored form."""
-        attempts = [Attempt.from_dict(item) for item in data.get("attempts", [])]
+        notification = notification_from_dict(data["notification"])
+        attempts = [
+            Attempt.from_dict(item, notification.key)
+            for item in data.get("attempts", [])
+        ]
         return cls(
             data["id"],
-            notification_from_dict(data["notification"]),
+            notification,
             datetime.fromisoformat(data["deadline"]),
             data.get("is_fallback", False),
             data.get("delivered", False),
             {attempt.id: attempt for attempt in attempts},
+            data.get("clear", False),
         )

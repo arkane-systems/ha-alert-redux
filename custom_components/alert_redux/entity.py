@@ -161,6 +161,7 @@ from .notifications import (
     REASON_DONE,
     REASON_ON,
     REASON_REMINDER,
+    async_notifications_acknowledged,
     async_send_notification,
     effective_groups,
     group_names,
@@ -482,11 +483,14 @@ class AlertEntity(Entity):
             started = firing and self._was_firing is False
             self._was_firing = firing
             supersession.async_firing_changed(self, started=started)
-        # Acknowledgements propagate (spec §8.2), but not when restored.
+        # Acknowledgements propagate (spec §8.2), and clear the alert's
+        # notifications (§9.10), but not when restored. Snoozing is acknowledging.
         acked = self._runtime.state is AlertState.ACK
         if acked != self._was_acked:
             was_acked, self._was_acked = self._was_acked, acked
             if was_acked is not None:
+                if acked:
+                    async_notifications_acknowledged(self.hass, self.entity_id)
                 supersession.async_ack_changed(self, acked=acked)
 
     @callback

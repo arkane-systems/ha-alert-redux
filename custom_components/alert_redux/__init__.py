@@ -65,6 +65,7 @@ from .entity import AlertEntity, create_alert_entity
 from .frontend import async_register_frontend, async_setup_websocket
 from .labels import async_setup_label
 from .model import AlertRuntime, Settings
+from .notifications import async_clear_notifications, async_notifications_renamed
 from .notifier import GroupConfig, Notifier
 from .issues import async_check_broken_references, async_check_default_groups
 from .store import AlertStore
@@ -176,7 +177,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else None
     )
 
-    _async_forget_deleted_alerts(hass, entry, store)
     data[DATA_LABEL] = async_setup_label(hass, store)
 
     notifier = data[DATA_NOTIFIER] = Notifier(
@@ -188,6 +188,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     notifier.async_set_groups(_group_configs(groups))
     notifier.async_start()
     async_check_default_groups(hass, entry, settings)
+    # Alerts deleted while Home Assistant was down: their notifications are
+    # cleared too, so the notifier comes first.
+    _async_forget_deleted_alerts(hass, entry, store)
 
     # The platform fills in the entities; supersession looks them up there.
     entities: dict[str, AlertEntity] = {}
@@ -314,10 +317,12 @@ def _async_alert_registry_updated(
 def _async_follow_rename(
     hass: HomeAssistant, entry: ConfigEntry, old: str, new: str
 ) -> None:
-    """Rewrite references to a renamed alert in the other alerts' subentries.
+    """Rewrite references to a renamed alert in the other alerts' subentries, and
+    follow its notifications' lifecycle key (spec §9.10).
 
     Pre-acknowledgements are kept by unique ID, so they need no rewriting.
     """
+    async_notifications_renamed(hass, old, new)
     for subentry in list(entry.subentries.values()):
         if subentry.subentry_type != SUBENTRY_ALERT:
             continue
@@ -391,7 +396,8 @@ def _group_configs(
 def _async_forget_deleted_alerts(
     hass: HomeAssistant, entry: ConfigEntry, store: AlertStore
 ) -> None:
-    """Drop stored alerts whose subentry is gone, announcing each deletion."""
+    """Drop stored alerts whose subentry is gone, announcing each deletion and
+    clearing its notifications."""
     current = {
         subentry_id
         for subentry_id, subentry in entry.subentries.items()
@@ -400,6 +406,8 @@ def _async_forget_deleted_alerts(
     for unique_id in store.alert_ids() - current:
         record = store.get_alert(unique_id) or {}
         store.remove_alert(unique_id)
+        if entity_id := record.get("entity_id"):
+            async_clear_notifications(hass, entity_id)
         hass.bus.async_fire(
             EVENT_DELETED,
             {

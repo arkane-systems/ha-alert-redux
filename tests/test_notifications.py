@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -185,7 +185,12 @@ async def test_no_default_uses_fallback_and_raises_issue(
     with patch(PERSISTENT_CREATE) as create:
         entry = await setup_alerts(alert_subentry("Back Door Open"), PHONE)
         await _call(hass, "fire")
-    create.assert_called_once_with(hass, "Back Door Open is firing.", "Back Door Open")
+    create.assert_called_once_with(
+        hass,
+        "Back Door Open is firing.",
+        "Back Door Open",
+        notification_id="alert_redux_back_door_open",
+    )
     assert hass.states.get(DOOR).attributes["notifier_groups"] == ["Fallback"]
     issue = registry.async_get_issue(DOMAIN, ISSUE_DEFAULT_GROUPS_UNSET)
     assert issue is not None
@@ -396,7 +401,12 @@ async def test_unreachable_groups_fall_back(
             freezer.tick(timedelta(seconds=1))
             async_fire_time_changed(hass)
             await hass.async_block_till_done()
-    create.assert_called_once_with(hass, "Back Door Open is firing.", "Back Door Open")
+    create.assert_called_once_with(
+        hass,
+        "Back Door Open is firing.",
+        "Back Door Open",
+        notification_id="alert_redux_back_door_open",
+    )
 
 
 async def test_pending_retry_survives_restart(
@@ -440,3 +450,77 @@ async def test_deleted_group_leaves_the_options(
     assert entry.options["default_groups"] == []
     assert registry.async_get_issue(DOMAIN, ISSUE_DEFAULT_GROUPS_UNSET) is not None
     assert hass.states.get(DOOR).attributes["notifier_groups"] == ["Fallback"]
+
+
+# Replacing and clearing (spec §9.10)
+
+MOBILE = group_subentry(
+    "Phones", "phones", actions=[{"action": "notify.mobile_app_phone"}]
+)
+TAG = "alert_redux_back_door_open"
+
+
+def _mobile(calls: list[ServiceCall]) -> list[tuple[str, Any]]:
+    return [(call.data["message"], call.data.get("data")) for call in calls]
+
+
+async def test_notifications_replace_and_ack_clears(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """On and reminder share a tag; acknowledging clears; the done message
+    replaces what's there."""
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    await setup_alerts(alert_subentry("Back Door Open"), MOBILE, options=DEFAULTS)
+    await _call(hass, "fire")
+    await _tick(hass, freezer, 10)
+    await _call(hass, "ack")
+    await _call(hass, "dismiss")
+    assert _mobile(calls) == [
+        ("Back Door Open is firing.", {"tag": TAG}),
+        ("Back Door Open is still firing (10 minutes).", {"tag": TAG}),
+        ("clear_notification", {"tag": TAG}),
+        ("Back Door Open stopped firing after 10 minutes.", {"tag": TAG}),
+    ]
+
+
+async def test_snooze_clears(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
+    """Snoozing is acknowledging; unacknowledging clears nothing more."""
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    await setup_alerts(alert_subentry("Back Door Open"), MOBILE, options=DEFAULTS)
+    await _call(hass, "fire")
+    await _call(hass, "snooze", duration={"minutes": 30})
+    await _call(hass, "unack")
+    assert _mobile(calls) == [
+        ("Back Door Open is firing.", {"tag": TAG}),
+        ("clear_notification", {"tag": TAG}),
+    ]
+
+
+async def test_deleted_alert_cleared(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open", subentry_id="door"), MOBILE, options=DEFAULTS
+    )
+    await _call(hass, "fire")
+    hass.config_entries.async_remove_subentry(entry, "door")
+    await hass.async_block_till_done()
+    assert _mobile(calls)[-1] == ("clear_notification", {"tag": TAG})
+
+
+async def test_renamed_alert_still_clears(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """After a rename, acknowledging clears what was shown under the old tag."""
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    await setup_alerts(alert_subentry("Back Door Open"), MOBILE, options=DEFAULTS)
+    await _call(hass, "fire")
+    renamed = "alert_redux.side_door_open"
+    er.async_get(hass).async_update_entity(DOOR, new_entity_id=renamed)
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        DOMAIN, "ack", {"entity_id": renamed}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert _mobile(calls)[-1] == ("clear_notification", {"tag": TAG})

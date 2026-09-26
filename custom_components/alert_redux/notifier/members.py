@@ -1,4 +1,9 @@
-"""Delivering a notification to one member, in its kind's way (spec §9.2)."""
+"""Delivering a notification to one member, in its kind's way (spec §9.2).
+
+Members that replace notifications (spec §9.10) are sent a tag with each one: the
+mobile app's `tag`, or the persistent notification's ID. Clearing removes the
+notification with that tag.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +20,8 @@ from .model import ActionMember, EntityMember, Member, Notification, PersistentM
 
 NOTIFY_DOMAIN = "notify"
 SERVICE_SEND_MESSAGE = "send_message"
+# The mobile app's message that removes the notification with the data's tag.
+CLEAR_NOTIFICATION = "clear_notification"
 
 
 class MemberMissing(HomeAssistantError):
@@ -33,14 +40,14 @@ def member_available(hass: HomeAssistant, member: Member) -> bool:
 
 
 async def async_deliver(
-    hass: HomeAssistant, member: Member, notification: Notification
+    hass: HomeAssistant, member: Member, notification: Notification, tag: str
 ) -> None:
     """Send the notification to the member, raising if it's missing or fails."""
     if not member_available(hass, member):
         raise MemberMissing(f"{member} doesn't exist or is unavailable")
     if isinstance(member, PersistentMember):
         persistent_notification.async_create(
-            hass, notification.message, notification.title
+            hass, notification.message, notification.title, notification_id=tag
         )
         return
     if isinstance(member, EntityMember):
@@ -61,8 +68,28 @@ async def async_deliver(
         "message": notification.message,
         "title": notification.title,
     }
+    extra: dict[str, Any] = {}
     if member.data:
-        data["data"] = render_data(hass, member.data, notification.variables)
+        extra = dict(render_data(hass, member.data, notification.variables))
+    # Alert Redux's own keys win over the member's data.
+    if member.replaces:
+        extra["tag"] = tag
+    if extra:
+        data["data"] = extra
+    if member.target:
+        data["target"] = list(member.target)
+    await hass.services.async_call(NOTIFY_DOMAIN, member.action, data, blocking=True)
+
+
+async def async_clear(hass: HomeAssistant, member: Member, tag: str) -> None:
+    """Remove the member's notification with the tag, raising if that fails."""
+    if not member_available(hass, member):
+        raise MemberMissing(f"{member} doesn't exist or is unavailable")
+    if isinstance(member, PersistentMember):
+        persistent_notification.async_dismiss(hass, tag)
+        return
+    assert isinstance(member, ActionMember)
+    data: dict[str, Any] = {"message": CLEAR_NOTIFICATION, "data": {"tag": tag}}
     if member.target:
         data["target"] = list(member.target)
     await hass.services.async_call(NOTIFY_DOMAIN, member.action, data, blocking=True)

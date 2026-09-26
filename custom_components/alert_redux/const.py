@@ -165,6 +165,7 @@ class Propagation(StrEnum):
     ACKNOWLEDGE = "acknowledge"
     SNOOZE = "snooze"
 
+
 CONF_MESSAGE = "message"
 CONF_DISPLAY_MESSAGE = "display_message"
 CONF_REMINDER_MESSAGE = "reminder_message"
@@ -187,6 +188,14 @@ CONF_PERSISTENT = "persistent"
 CONF_ACTION = "action"
 CONF_DATA = "data"
 CONF_TARGET = "target"
+# Replacing and clearing (spec §9.10): a legacy action's mobile features, whether
+# it keeps its notification when acknowledged, and whether it clears it rather
+# than show the done message; and the same for the persistent member.
+CONF_MOBILE = "mobile"
+CONF_KEEP_ON_ACK = "keep_on_ack"
+CONF_CLEAR_WHEN_ENDED = "clear_when_ended"
+CONF_PERSISTENT_CLEAR_ON_ACK = "persistent_clear_on_ack"
+CONF_PERSISTENT_CLEAR_WHEN_ENDED = "persistent_clear_when_ended"
 
 # Messages (spec §9.5).
 DEFAULT_ON_MESSAGE = "{{ name }} is firing."
