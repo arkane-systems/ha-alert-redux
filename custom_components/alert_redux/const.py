@@ -152,6 +152,18 @@ CONF_ALERT_STATES = "alert_states"
 # The alerts this one supersedes (spec §8): a list of relationships, each a
 # mapping with the superseded alert's entity ID under CONF_ALERT.
 CONF_SUPERSEDES = "supersedes"
+# Each relationship's propagation (spec §8.2), and the snooze's duration.
+CONF_PROPAGATION = "propagation"
+CONF_SNOOZE_DURATION = "snooze_duration"
+
+
+class Propagation(StrEnum):
+    """What acknowledging a superseded alert does to its superseder (spec §8.2)."""
+
+    NONE = "none"
+    ACKNOWLEDGE = "acknowledge"
+    SNOOZE = "snooze"
+
 CONF_MESSAGE = "message"
 CONF_DISPLAY_MESSAGE = "display_message"
 CONF_REMINDER_MESSAGE = "reminder_message"
@@ -219,6 +231,9 @@ DEFAULT_EVENT_DURATIONS: dict[Priority, timedelta] = {
 
 # Repairs issues.
 ISSUE_DEFAULT_GROUPS_UNSET = "default_groups_unset"
+# One per (referring alert, missing alert): the prefix, then the referring
+# alert's subentry ID and the missing alert's object ID (spec §12.4).
+ISSUE_BROKEN_REFERENCE = "broken_reference"
 
 # Actions (spec §16).
 SERVICE_FIRE = "fire"
@@ -312,3 +327,6 @@ ATTR_OFF_TRIGGERS = "off_triggers"
 ATTR_TARGET_STATES = "target_states"
 ATTR_SUPERSEDES = "supersedes"
 ATTR_SUPERSEDED_BY = "superseded_by"
+ATTR_PRE_ACKED_BY = "pre_acked_by"
+ATTR_PRE_SNOOZED_UNTIL = "pre_snoozed_until"
+ATTR_BROKEN_REFERENCES = "broken_references"

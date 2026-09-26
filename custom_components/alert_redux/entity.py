@@ -18,6 +18,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     ATTR_ACKNOWLEDGEABLE,
     ATTR_ATTRIBUTE,
+    ATTR_BROKEN_REFERENCES,
     ATTR_CONDITION,
     ATTR_DELAY_OFF,
     ATTR_DELAY_OFF_UNTIL,
@@ -63,6 +64,8 @@ from .const import (
     ATTR_OLD_STATE,
     ATTR_ON_TEMPLATE,
     ATTR_ON_TRIGGERS,
+    ATTR_PRE_ACKED_BY,
+    ATTR_PRE_SNOOZED_UNTIL,
     ATTR_PRIORITY,
     ATTR_REASON,
     ATTR_REMINDER_SCHEDULE,
@@ -273,8 +276,12 @@ class AlertEntity(Entity):
         self._done_timer = PointTimer(self._async_done_due)
         self._held_dones: list[Transition] = []
         self._superseded_by: list[str] = []
-        # Whether the alert was firing at the last write; None before the first.
+        self._broken_references: list[str] = []
+        self._pre_ack_timer = PointTimer(self._async_pre_ack_due)
+        # Whether the alert was firing, and acknowledged, at the last write; None
+        # before the first.
         self._was_firing: bool | None = None
+        self._was_acked: bool | None = None
         self._attr_unique_id = subentry.subentry_id
         self._configure(subentry)
 
@@ -295,6 +302,8 @@ class AlertEntity(Entity):
         self._supersedes: list[dict[str, Any]] = [
             dict(rel) for rel in data.get(CONF_SUPERSEDES) or []
         ]
+        # The alert state kind's watched alert.
+        self._watched_alert: str | None = data.get(CONF_ALERT) or None
         self._attr_name = subentry.title
         self._attr_icon = data.get(CONF_ICON) or DEFAULT_PRIORITY_ICONS[self._priority]
 
@@ -324,6 +333,19 @@ class AlertEntity(Entity):
         return self._supersedes
 
     @property
+    def references(self) -> list[str]:
+        """Return the alerts this one refers to: superseded, or watched (§12.4)."""
+        targets = relationship_targets(self._supersedes)
+        if self._watched_alert:
+            targets.append(self._watched_alert)
+        return targets
+
+    @property
+    def context(self) -> Context | None:
+        """Return the context of the change being handled, if any."""
+        return self._context
+
+    @property
     def _supersession(self) -> Supersession:
         return self.hass.data[DOMAIN][DATA_SUPERSESSION]
 
@@ -343,6 +365,7 @@ class AlertEntity(Entity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the alert's state details and configuration (spec §11.1)."""
         runtime = self._runtime
+        now = dt_util.utcnow()
         attributes: dict[str, Any] = {
             ATTR_KIND: self._kind,
             ATTR_PRIORITY: self._priority,
@@ -375,6 +398,11 @@ class AlertEntity(Entity):
             ATTR_NEXT_REMINDER: runtime.next_reminder,
             ATTR_SUPERSEDES: relationship_targets(self._supersedes),
             ATTR_SUPERSEDED_BY: self._superseded_by,
+            ATTR_PRE_ACKED_BY: self._supersession.entity_ids(
+                runtime.live_pre_acks(now)
+            ),
+            ATTR_PRE_SNOOZED_UNTIL: runtime.pre_ack_deadline(now),
+            ATTR_BROKEN_REFERENCES: self._broken_references,
         }
         if self._kind is AlertKind.MANUAL:
             attributes[ATTR_USER_DISMISSABLE] = self._user_dismissable
@@ -424,14 +452,22 @@ class AlertEntity(Entity):
         A change in whether the alert is firing is passed on to the alerts it
         supersedes.
         """
+        supersession = self._supersession
         self._async_sync_messages()
-        self._superseded_by = self._supersession.superseded_by(self.entity_id)
+        self._superseded_by = supersession.superseded_by(self.entity_id)
+        self._broken_references = supersession.broken_references(self)
         super().async_write_ha_state()
         firing = self._runtime.firing
         if firing != self._was_firing:
             started = firing and self._was_firing is False
             self._was_firing = firing
-            self._supersession.async_firing_changed(self, started=started)
+            supersession.async_firing_changed(self, started=started)
+        # Acknowledgements propagate (spec §8.2), but not when restored.
+        acked = self._runtime.state is AlertState.ACK
+        if acked != self._was_acked:
+            was_acked, self._was_acked = self._was_acked, acked
+            if was_acked is not None:
+                supersession.async_ack_changed(self, acked=acked)
 
     @callback
     def async_superseders_changed(self, *, announce: bool) -> None:
@@ -443,7 +479,11 @@ class AlertEntity(Entity):
         if self.hass is None:
             return
         old = self._superseded_by
-        if self._supersession.superseded_by(self.entity_id) == old:
+        supersession = self._supersession
+        if (
+            supersession.superseded_by(self.entity_id) == old
+            and supersession.broken_references(self) == self._broken_references
+        ):
             return
         self.async_write_ha_state()
         if announce and self._runtime.firing and not old and self._superseded_by:
@@ -453,6 +493,74 @@ class AlertEntity(Entity):
                 self.state,
                 {ATTR_SUPERSEDED_BY: self._superseded_by},
             )
+
+    @callback
+    def async_add_pre_ack(
+        self, source: str, until: datetime | None, context: Context | None
+    ) -> None:
+        """Take a pre-acknowledgement propagated from a superseded alert (§8.3).
+
+        source is that alert's unique ID, which survives renames; until makes
+        it a pre-snooze. An active alert is acknowledged, or
+        snoozed until then, at once; the pre-acknowledgement also covers a
+        later firing while the source stays acknowledged.
+        """
+        if not self._acknowledgeable:
+            return
+        runtime = self._runtime
+        runtime.pre_acks[source] = until
+        self._context = context
+        if runtime.state is not AlertState.ACTIVE:
+            self._async_update_timers()
+            self.async_write_ha_state()
+            self._persist()
+            return
+        now = dt_util.utcnow()
+        pre_acked = {ATTR_PRE_ACKED_BY: self._supersession.entity_ids([source])}
+        if until is None:
+            transition = runtime.ack(now, self._user_id)
+            assert transition is not None
+            self._apply(EVENT_ACKED, transition, pre_acked)
+        else:
+            self._apply_changes(
+                runtime.snooze(now, until, self._user_id),
+                {Change.SNOOZED: {ATTR_SNOOZED_UNTIL: until}, Change.ACKED: pre_acked},
+            )
+
+    @callback
+    def async_remove_pre_ack(self, source: str) -> None:
+        """Cancel a pre-acknowledgement: its source is no longer acknowledged."""
+        if source not in self._runtime.pre_acks:
+            return
+        del self._runtime.pre_acks[source]
+        self._async_update_timers()
+        self.async_write_ha_state()
+        self._persist()
+
+    @callback
+    def async_drop_pre_acks(self, is_stale: Callable[[str], bool]) -> None:
+        """Drop the pre-acknowledgements whose source is stale."""
+        pre_acks = self._runtime.pre_acks
+        if stale := [source for source in pre_acks if is_stale(source)]:
+            for source in stale:
+                del pre_acks[source]
+            self._async_update_timers()
+            self.async_write_ha_state()
+            self._persist()
+
+    @callback
+    def _async_pre_ack_due(self, _now: datetime) -> None:
+        """Forget pre-snoozes that have run out, so the attributes stay right."""
+        if self._runtime.prune_pre_acks(dt_util.utcnow()):
+            self._async_update_timers()
+            self.async_write_ha_state()
+            self._persist()
+
+    def _pre_ack_new_firing(self, now: datetime) -> list[str] | None:
+        """Start a new firing acknowledged, if it's been pre-acknowledged (§8.3)."""
+        if not self._acknowledgeable:
+            return None
+        return self._runtime.apply_pre_ack(now, self._supersession.acknowledged())
 
     @callback
     def async_superseder_ended(self) -> None:
@@ -624,6 +732,7 @@ class AlertEntity(Entity):
         self._reminder_timer.at(self.hass, self._runtime.next_reminder)
         self._snooze_timer.at(self.hass, self._runtime.snoozed_until)
         self._suspension_timer.at(self.hass, self._runtime.disabled_until)
+        self._pre_ack_timer.at(self.hass, self._runtime.next_pre_ack_expiry())
 
     @callback
     def _async_cancel_timers(self) -> None:
@@ -632,6 +741,7 @@ class AlertEntity(Entity):
         self._suspension_timer.cancel()
         self._on_debounce_timer.cancel()
         self._done_timer.cancel()
+        self._pre_ack_timer.cancel()
 
     @callback
     def _async_reminder_due(self, _now: datetime) -> None:
@@ -764,16 +874,20 @@ class AlertEntity(Entity):
             return
         now = dt_util.utcnow()
         transition = self._runtime.fire(now, data)
+        pre_acked = None
         if transition.fire_count == 1:
+            pre_acked = self._pre_ack_new_firing(now)
             self._runtime.plan_reminder(self._reminder_schedule, now)
         self._apply(
             EVENT_FIRED,
             transition,
             {ATTR_FIRE_COUNT: transition.fire_count, ATTR_FIRE_DATA: data},
         )
+        self._announce_pre_ack(pre_acked)
         # Firing again sends the on message again, unless it's been acknowledged:
-        # the acknowledgement is kept so that repeats don't nag (spec §4.2).
-        if transition.new_state is AlertState.ACTIVE:
+        # the acknowledgement is kept so that repeats don't nag (spec §4.2). A
+        # pre-acknowledged firing sends none either (§8.3).
+        if self._runtime.state is AlertState.ACTIVE:
             self._async_notify_on()
 
     async def async_dismiss(self) -> None:
@@ -869,6 +983,15 @@ class AlertEntity(Entity):
             return
         self._apply_changes(changes)
         self._async_inputs_started()
+
+    def _announce_pre_ack(self, pre_acked: list[str] | None) -> None:
+        """Fire _acked for a firing that started pre-acknowledged (spec §11.3)."""
+        if pre_acked:
+            self._fire_event(
+                EVENT_ACKED,
+                AlertState.ACTIVE,
+                {ATTR_PRE_ACKED_BY: self._supersession.entity_ids(pre_acked)},
+            )
 
     @property
     def _user_id(self) -> str | None:
@@ -1301,7 +1424,9 @@ class ConditionAlertEntity(AlertEntity):
         now = dt_util.utcnow()
         condition, missing = self._judge(self._results)
         changes = self._runtime.evaluate(condition, missing, now, timing)
+        pre_acked = None
         if any(change is Change.FIRED for change, _ in changes):
+            pre_acked = self._pre_ack_new_firing(now)
             self._runtime.plan_reminder(self._reminder_schedule, now)
             if self._kind is AlertKind.ON_OFF:
                 self._runtime.on_off_fired()
@@ -1325,7 +1450,9 @@ class ConditionAlertEntity(AlertEntity):
                     transition.old_state,
                     {ATTR_FIRE_COUNT: transition.fire_count},
                 )
-                self._async_notify_on()
+                self._announce_pre_ack(pre_acked)
+                if self._runtime.state is AlertState.ACTIVE:
+                    self._async_notify_on()
             elif change is Change.ENDED:
                 self._fire_event(
                     EVENT_ENDED, transition.old_state, _ended_data(transition)
@@ -1483,15 +1610,18 @@ class EventAlertEntity(AlertEntity):
         self._context = None
         now = dt_util.utcnow()
         transition = self._runtime.fire_event(now, trigger, self._duration)
+        pre_acked = None
         if transition.fire_count == 1:
+            pre_acked = self._pre_ack_new_firing(now)
             self._runtime.plan_reminder(self._reminder_schedule, now)
         self._apply(
             EVENT_FIRED,
             transition,
             {ATTR_FIRE_COUNT: transition.fire_count, ATTR_TRIGGER_DATA: trigger},
         )
+        self._announce_pre_ack(pre_acked)
         # As for manual alerts, firing again only speaks up while unacknowledged.
-        if transition.new_state is AlertState.ACTIVE:
+        if self._runtime.state is AlertState.ACTIVE:
             self._async_notify_on()
 
     def _condition_allows(self, trigger: dict[str, Any]) -> bool:

@@ -80,9 +80,11 @@ from .const import (
     CONF_ON_TRIGGERS,
     CONF_PERSISTENT,
     CONF_PRIORITY,
+    CONF_PROPAGATION,
     CONF_REMINDER_MESSAGE,
     CONF_REMINDER_SCHEDULE,
     CONF_RETRY_TIMEOUT,
+    CONF_SNOOZE_DURATION,
     CONF_SNOOZE_REMINDER_WINDOW,
     CONF_STARTUP_DELAY,
     CONF_SUBJECT_ENTITY,
@@ -105,9 +107,10 @@ from .const import (
     AlertKind,
     AlertState,
     Priority,
+    Propagation,
 )
 from .model import Settings, format_schedule, parse_schedule, to_timedelta
-from .supersession import find_cycle, relationship_targets
+from .supersession import find_cycle, propagation_of, relationship_targets
 from .triggers import async_validate_triggers, is_storable
 
 # notify actions that aren't legacy notifiers: offered through the other member kinds.
@@ -346,6 +349,32 @@ def _supersession_section(defaults: dict[str, Any], own: str | None) -> section:
                                 "label": "Alert",
                                 "required": True,
                                 "selector": _alerts_selector(own),
+                            },
+                            CONF_PROPAGATION: {
+                                "label": "When it's acknowledged",
+                                "selector": SelectSelector(
+                                    SelectSelectorConfig(
+                                        options=[
+                                            SelectOptionDict(
+                                                value=Propagation.NONE,
+                                                label="Do nothing to this alert",
+                                            ),
+                                            SelectOptionDict(
+                                                value=Propagation.ACKNOWLEDGE,
+                                                label="Acknowledge this alert",
+                                            ),
+                                            SelectOptionDict(
+                                                value=Propagation.SNOOZE,
+                                                label="Snooze this alert",
+                                            ),
+                                        ],
+                                        mode=SelectSelectorMode.DROPDOWN,
+                                    )
+                                ),
+                            },
+                            CONF_SNOOZE_DURATION: {
+                                "label": "Snooze for",
+                                "selector": DurationSelector(),
                             },
                         },
                     )
@@ -719,6 +748,15 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
             step_id=f"reconfigure_{kind}" if reconfigure else kind.value,
             data_schema=_alert_schema(kind, defaults, self._get_entry(), own),
             errors=errors,
+            description_placeholders=(
+                {
+                    "referrers": _referrers(
+                        self.hass, self._get_entry(), subentry.subentry_id
+                    )
+                }
+                if subentry
+                else None
+            ),
         )
 
 
@@ -792,7 +830,7 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         if value not in (None, "", {}, []):
             data[key] = value
     if supersedes := [
-        dict(rel)
+        _relationship(rel)
         for rel in user_input.get(CONF_SUPERSEDES) or []
         if isinstance(rel, dict) and rel.get(CONF_ALERT)
     ]:
@@ -830,6 +868,41 @@ async def _async_check_alert(
     return None
 
 
+def _relationship(rel: dict[str, Any]) -> dict[str, Any]:
+    """Return a submitted relationship as stored: no propagation means none.
+
+    A snooze duration is kept only for the snooze propagation.
+    """
+    relationship: dict[str, Any] = {CONF_ALERT: rel[CONF_ALERT]}
+    propagation = rel.get(CONF_PROPAGATION) or Propagation.NONE
+    if propagation != Propagation.NONE:
+        relationship[CONF_PROPAGATION] = propagation
+    if propagation == Propagation.SNOOZE and rel.get(CONF_SNOOZE_DURATION):
+        relationship[CONF_SNOOZE_DURATION] = rel[CONF_SNOOZE_DURATION]
+    return relationship
+
+
+def _referrers(hass: HomeAssistant, entry: ConfigEntry, subentry_id: str) -> str:
+    """Return the names of the alerts that refer to an alert, for its edit form.
+
+    Deleting an alert that others refer to is allowed, but leaves their
+    references dangling (spec §12.4), so the edit form lists them.
+    """
+    own = _alert_entity_id(hass, subentry_id)
+    names = sorted(
+        other.title
+        for other_id, other in entry.subentries.items()
+        if other.subentry_type == SUBENTRY_ALERT
+        and other_id != subentry_id
+        and own is not None
+        and (
+            other.data.get(CONF_ALERT) == own
+            or own in relationship_targets(other.data.get(CONF_SUPERSEDES, []))
+        )
+    )
+    return ", ".join(names) if names else "none"
+
+
 def _alert_entity_id(hass: HomeAssistant, subentry_id: str) -> str | None:
     """Return the entity ID of an alert subentry's entity, if it has one."""
     return er.async_get(hass).async_get_entity_id(DOMAIN, DOMAIN, subentry_id)
@@ -850,11 +923,21 @@ def _check_references(
         return "alert_state_self"
     if CONF_ALERT_STATES in data and not data[CONF_ALERT_STATES]:
         return "alert_states_missing"
-    targets = relationship_targets(data.get(CONF_SUPERSEDES, []))
+    relationships = data.get(CONF_SUPERSEDES, [])
+    targets = relationship_targets(relationships)
     if own in targets:
         return "supersedes_self"
     if len(set(targets)) != len(targets):
         return "supersedes_duplicate"
+    for rel in relationships:
+        propagation = propagation_of(rel)
+        # Propagating to an alert that can't be acknowledged is an error (§8.3).
+        if propagation is not Propagation.NONE and not data[CONF_ACKNOWLEDGEABLE]:
+            return "propagation_unacknowledgeable"
+        if propagation is Propagation.SNOOZE and not to_timedelta(
+            rel.get(CONF_SNOOZE_DURATION)
+        ):
+            return "snooze_duration_missing"
     edges = {own: targets}
     for other_id, other in entry.subentries.items():
         if other.subentry_type != SUBENTRY_ALERT or other_id == subentry_id:

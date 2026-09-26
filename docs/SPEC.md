@@ -399,6 +399,19 @@ supersedes it:
 The default is **None** [Decided]: acknowledgements pass along a supersession only
 when you explicitly set that up.
 
+- [Decided, phase 7] Propagation is set on the superseding alert, per
+  relationship in its Supersession list: nothing, acknowledge, or snooze with a
+  duration. It follows **direct** relationships only. Snoozing the superseded
+  alert counts as acknowledging it.
+- [Decided, phase 7] If the superseding alert is already firing and `active`,
+  propagation acts at once: *Acknowledge* acknowledges it, and *Snooze* snoozes
+  it until the acknowledgement time plus the duration, both with the
+  acknowledging user. The pre-acknowledgement also stays in place for a later
+  firing. An alert that's already acknowledged is left as it is.
+- [Decided, phase 7] A superseding alert that **fires** pre-acknowledged counts
+  as acknowledged, so it propagates onwards along its own relationships. A
+  pre-acknowledgement on an alert that isn't firing doesn't chain.
+
 ### 8.3 Pre-acknowledgement
 
 [Decided, F5, F13] Propagation usually happens before the superseding alert has
@@ -412,6 +425,15 @@ fired. So acknowledging the superseded alert **pre-acknowledges** the supersedin
   (`pre_acked_by`).
 - Propagation to an **unacknowledgeable** alert is a configuration validation error
   [Decided, F6].
+- [Decided, phase 7] `pre_acked_by` is a **list** of entity IDs, since several
+  superseded alerts can pre-acknowledge the same alert. A plain
+  pre-acknowledgement beats a pre-snooze, and among pre-snoozes the latest
+  deadline wins; `pre_snoozed_until` is that deadline, or null while a plain one
+  is in force. They're shown while a pre-acknowledgement is in force, firing or
+  not, and a pre-snooze is forgotten once its deadline passes.
+- [Decided, phase 7] Pre-acknowledgements are kept by the superseded alert's
+  unique ID, so renaming it doesn't affect them, and they're restored across
+  restarts. One whose source has gone, or is no longer acknowledged, is dropped.
 
 **Pre-snoozing** (the *Snooze* setting) works the same way, plus a deadline:
 
@@ -837,6 +859,8 @@ built.
   [Decided, phase 7] `supersedes` and `superseded_by` are lists of entity IDs
   (§8.1). Alert state alerts show `source_entity` (the watched alert) and
   `target_states`.
+  [Decided, phase 7] Also `pre_acked_by` and `pre_snoozed_until` (§8.3), and
+  `broken_references` (§12.4), a list of entity IDs.
 - **Generator provenance:** `generated_by` (§12.3).
 
 Attributes that can grow large, or change constantly, should be kept out of the
@@ -891,7 +915,9 @@ tells the whole story and nothing has to be inferred:
   separate change, so no `_unacked` accompanies it. Otherwise, anything listening
   for `_unacked` as "someone un-acknowledged this" would see false positives.
 - [Decided] A firing that starts pre-acknowledged (§8.3) fires `_fired` and
-  `_acked`, and the `_acked` data carries `pre_acked_by`.
+  `_acked`, and the `_acked` data carries `pre_acked_by`. [Decided, phase 7] So
+  does propagation acknowledging an already active alert (§8.2), which carries
+  the acknowledging user too; snoozing it fires `_snoozed` as well.
 - [Decided, phase 2] `_ended` carries a **`reason`**: `resolved` (the condition
   ended, or an event alert's duration ran out), `dismissed` (a manual alert), or
   `no_data` (the grace period ran out; §4.4). Phase 6 adds `disabled` (F15). The
@@ -1050,6 +1076,19 @@ To make sure it gets fixed:
   HA's standard place for "your configuration needs attention".
 - [Decided] When you delete an alert that other alerts refer to, the delete dialog
   lists them as a warning, but deleting is still allowed.
+  [Decided, phase 7] **Changed:** HA's delete dialog for subentries is the
+  frontend's generic one, and integrations get no hook before a subentry is
+  deleted. Instead, an alert's **edit form** lists the alerts that refer to it
+  ("Alerts that refer to this one: …"), and the Repairs issue raised after a
+  deletion names both alerts.
+- [Decided, phase 7] References are entity IDs. When an alert's entity ID is
+  renamed in the entity registry, the references to it in other alerts are
+  rewritten. A deleted alert recreated under the same name gets the same entity
+  ID back, so references to it work again and its issues clear.
+- [Decided, phase 7] Each issue is one referring alert and one missing alert
+  (`broken_reference_<subentry ID>_<object ID>`). They're checked at setup, on
+  every configuration change, and whenever an alert entity is added, removed,
+  or renamed.
 
 ## 13. Cards
 
@@ -1412,6 +1451,11 @@ Decisions with their reasons, in the order they were made.
 | The debounce applies only to alerts that something supersedes | Nothing else has a reason to wait [§8.1]. |
 | The done window counts a superseding alert ending before or after | Two alerts with different `delay_off`s end in either order [§9.7]. |
 | The alert state kind's time is its `delay_on` | One mechanism, already kept across restarts [§4.1]. |
+| Propagating to an already active superseding alert acts at once | "You're there, you know" applies whether or not it has fired yet [§8.2]. |
+| Propagation follows direct relationships; a pre-acknowledged firing passes it on | Each relationship's setting means what it says; an acknowledged alert is acknowledged, however it got there [§8.2]. |
+| `pre_acked_by` is a list | Several superseded alerts can pre-acknowledge one alert [§8.3]. |
+| Pre-acknowledgements are kept by unique ID | They survive renames without depending on the order of registry events [§8.3]. |
+| The edit form lists an alert's referrers, instead of the delete dialog | HA gives integrations no hook into the subentry delete dialog [§12.4]. |
 | Restart checks ride on install restarts | Development already restarts HA to install each subphase; pytest covers every restore path in its own phase, and a ledger confirms them in real HA one install later [§20]. |
 
 ## 20. Phase plan
@@ -1592,6 +1636,17 @@ and §20.
 
 *Done when* the *Door Open* / *Door Left Open* and workshop examples behave exactly as
 the spec describes.
+
+[Phase 7 as built] Built in two parts: 7a (supersession with its debounce and
+done window, the alert state kind, and the card's superseded alerts) and 7b
+(propagation, pre-acknowledgement and pre-snoozing, and dangling references),
+released together as 0.7.0. Supersession lives in `supersession.py`: a graph of
+the relationships, and a coordinator the alerts share, which each alert tells
+when it starts or stops firing, or gains or loses its acknowledgement. Alerts
+refer to each other by entity ID, following renames; the delete warning became
+a list of referrers in the edit form, since HA offers no hook into the delete
+dialog. Decisions from building it are recorded in §4.1, §8.1–§8.3, §9.7,
+§11.1, §11.3, §12.1, §12.4, and §13.1.
 
 ### Phase 8 — Summary sensors and logbook (0.8.0)
 

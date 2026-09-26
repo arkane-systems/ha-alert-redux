@@ -8,7 +8,7 @@ entity wraps it, adding configuration checks, timers, events, and persistence.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -303,6 +303,9 @@ class AlertRuntime:
     off_armed: bool = True
     on_latched: bool = False
     off_latched: bool = False
+    # Pre-acknowledgements (spec §8.3), by the unique ID of the superseded alert
+    # that propagated them: the pre-snooze deadline, or None for a plain one.
+    pre_acks: dict[str, datetime | None] = field(default_factory=dict)
     # Not persisted: set while a restored alert waits for its first data, so that
     # the inputs still loading don't cancel the delays it was restored with.
     awaiting_data: bool = False
@@ -500,6 +503,67 @@ class AlertRuntime:
             return []
         return self.enable(now, None, awaits_data=awaits_data)
 
+    def live_pre_acks(self, now: datetime) -> dict[str, datetime | None]:
+        """Return the pre-acknowledgements in force: pre-snoozes not yet run out."""
+        return {
+            source: until
+            for source, until in self.pre_acks.items()
+            if until is None or until > now
+        }
+
+    def pre_ack_deadline(self, now: datetime) -> datetime | None:
+        """Return the pre-snooze deadline in force, or None.
+
+        A plain pre-acknowledgement beats a pre-snooze, and among pre-snoozes
+        the latest deadline wins.
+        """
+        live = self.live_pre_acks(now)
+        if not live or None in live.values():
+            return None
+        return max(until for until in live.values() if until is not None)
+
+    def prune_pre_acks(self, now: datetime) -> bool:
+        """Forget pre-snoozes that have run out; return whether any were."""
+        live = self.live_pre_acks(now)
+        if len(live) == len(self.pre_acks):
+            return False
+        self.pre_acks = live
+        return True
+
+    def next_pre_ack_expiry(self) -> datetime | None:
+        """Return when the next pre-snooze runs out, if any will."""
+        return min(
+            (until for until in self.pre_acks.values() if until is not None),
+            default=None,
+        )
+
+    def apply_pre_ack(
+        self, now: datetime, sources: Collection[str]
+    ) -> list[str] | None:
+        """Start a new firing acknowledged, if it has been pre-acknowledged (§8.3).
+
+        Only pre-acknowledgements from sources (the superseded alerts that are
+        still acknowledged) count. A pre-snooze makes the acknowledgement a
+        snooze until its deadline. Return the pre-acknowledging alerts, or None.
+        """
+        live = {
+            source: until
+            for source, until in self.live_pre_acks(now).items()
+            if source in sources
+        }
+        if not live or self.state is not AlertState.ACTIVE:
+            return None
+        self.acked = True
+        self.snoozed_until = (
+            None
+            if None in live.values()
+            else max(until for until in live.values() if until is not None)
+        )
+        self.next_reminder = None
+        self.last_acked = now
+        self.last_acked_by = None
+        return sorted(live)
+
     def plan_reminder(self, schedule: Sequence[float], now: datetime) -> None:
         """Set the next reminder: the next slot after now (spec §6.2).
 
@@ -661,7 +725,7 @@ class AlertRuntime:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for storage."""
-        return {
+        data = {
             name: value.isoformat() if isinstance(value, datetime) else value
             for name, value in (
                 (f, getattr(self, f))
@@ -669,6 +733,11 @@ class AlertRuntime:
                 if f not in _TRANSIENT_FIELDS
             )
         }
+        data["pre_acks"] = {
+            source: until.isoformat() if until else None
+            for source, until in self.pre_acks.items()
+        }
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AlertRuntime:
@@ -680,6 +749,11 @@ class AlertRuntime:
             value = data[name]
             if name in _DATETIME_FIELDS and value is not None:
                 value = datetime.fromisoformat(value)
+            elif name == "pre_acks":
+                value = {
+                    source: datetime.fromisoformat(until) if until else None
+                    for source, until in (value or {}).items()
+                }
             setattr(runtime, name, value)
         return runtime
 

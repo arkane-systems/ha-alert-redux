@@ -82,7 +82,7 @@
                 "supersedes": "Supersedes"
               },
               "data_description": {
-                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too."
+                "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too. For each, choose what acknowledging it does to this alert: nothing; acknowledge this alert, even before it fires; or snooze it, for the duration counted from that acknowledgement."
               }
             }
           }
@@ -219,6 +219,7 @@
         },
         "reconfigure_manual": {
           "title": "Edit alert",
+          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
@@ -274,6 +275,7 @@
         },
         "reconfigure_state": {
           "title": "Edit alert",
+          "description": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::description%]",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
@@ -339,6 +341,7 @@
         },
         "reconfigure_template": {
           "title": "Edit alert",
+          "description": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::description%]",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
@@ -524,6 +527,7 @@
         },
         "reconfigure_trigger": {
           "title": "Edit alert",
+          "description": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::description%]",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
@@ -583,6 +587,7 @@
         },
         "reconfigure_event": {
           "title": "Edit alert",
+          "description": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::description%]",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
@@ -788,6 +793,7 @@
         },
         "reconfigure_on_off": {
           "title": "Edit alert",
+          "description": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::description%]",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
@@ -857,6 +863,7 @@
         },
         "reconfigure_threshold": {
           "title": "Edit alert",
+          "description": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::description%]",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
@@ -996,6 +1003,7 @@
         },
         "reconfigure_alert_state": {
           "title": "Edit alert",
+          "description": "[%key:component::alert_redux::config_subentries::alert::step::reconfigure_manual::description%]",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "priority": "[%key:component::alert_redux::config_subentries::alert::step::alert_state::data::priority%]",
@@ -1075,7 +1083,9 @@
         "alert_states_missing": "Choose at least one state.",
         "supersedes_self": "An alert can't supersede itself.",
         "supersedes_duplicate": "Each alert can be listed only once.",
-        "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself."
+        "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself.",
+        "propagation_unacknowledgeable": "This alert can't be acknowledged, so acknowledgements can't be passed on to it. Set each relationship to do nothing, or make the alert acknowledgeable.",
+        "snooze_duration_missing": "A relationship set to snooze this alert needs a duration to snooze it for."
       },
       "abort": {
         "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
@@ -1330,6 +1340,10 @@
     "notify_action_missing": {
       "title": "Notifier group {group} uses a missing action",
       "description": "The notifier group **{group}** sends to `{action}`, but that action doesn't exist, so it can't be notified. Notifications still reach the group's other members, or the fallback if none of them can be notified.\n\nIntegrations are gradually replacing their legacy notify actions with notify entities. If that has happened here, edit the group to use the notify entity instead. If the action should exist, check the integration that provides it. This issue clears itself once the action exists again or the group no longer uses it."
+    },
+    "broken_reference": {
+      "title": "An alert refers to an alert that doesn't exist",
+      "description": "The alert {alert} refers to {missing}, which doesn't exist: it was deleted or renamed, or its generator no longer makes it.\n\n{alert} keeps working, failing towards more notifications rather than fewer: it no longer suppresses or is suppressed by the missing alert, acknowledgements aren't passed on, and an alert state alert watching it has no data.\n\nTo fix this, edit {alert} to remove or replace the reference, or recreate the missing alert. This issue goes away by itself once the reference is fixed."
     }
   }
 }

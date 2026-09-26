@@ -9,8 +9,12 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import CoreState, HomeAssistant, ServiceCall
-from homeassistant.helpers import config_validation as cv, service
+from homeassistant.core import CoreState, Event, HomeAssistant, ServiceCall, callback
+from homeassistant.helpers import (
+    config_validation as cv,
+    entity_registry as er,
+    service,
+)
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
@@ -25,8 +29,10 @@ from .const import (
     ATTR_PRIORITY,
     ATTR_UNTIL,
     ATTR_USER_ID,
+    CONF_ALERT,
     CONF_DEFAULT_GROUPS,
     CONF_FALLBACK_GROUP,
+    CONF_SUPERSEDES,
     DATA_ADD_ENTITIES,
     DATA_COMPONENT,
     DATA_ENTITIES,
@@ -58,7 +64,7 @@ from .frontend import async_register_frontend, async_setup_websocket
 from .labels import async_setup_label
 from .model import AlertRuntime, Settings
 from .notifier import GroupConfig, Notifier
-from .issues import async_check_default_groups
+from .issues import async_check_broken_references, async_check_default_groups
 from .store import AlertStore
 from .supersession import Supersession
 
@@ -180,11 +186,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # The platform fills in the entities; supersession looks them up there.
     entities: dict[str, AlertEntity] = {}
     data[DATA_ENTITIES] = entities
-    data[DATA_SUPERSESSION] = Supersession(entities, settings)
+    data[DATA_SUPERSESSION] = Supersession(hass, entities, settings)
 
     component: EntityComponent[AlertEntity] = data[DATA_COMPONENT]
     if not await component.async_setup_entry(entry):
         return False
+    # Restored pre-acknowledgements whose source is no longer acknowledged are
+    # stale (spec §8.3); references to missing alerts are raised (§12.4).
+    data[DATA_SUPERSESSION].async_sweep_pre_acks()
+    async_check_broken_references(hass, entry)
+
+    @callback
+    def _async_registry_updated(event: Event[er.EventEntityRegistryUpdatedData]) -> None:
+        _async_alert_registry_updated(hass, entry, event)
+
+    entry.async_on_unload(
+        hass.bus.async_listen(
+            er.EVENT_ENTITY_REGISTRY_UPDATED,
+            _async_registry_updated,
+            event_filter=_is_alert_registry_event,
+        )
+    )
 
     # Subentry and option changes are applied in place, not by reloading the
     # entry, so that other alerts don't go through unavailable and no_data.
@@ -250,7 +272,57 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     # Relationships, or the alerts themselves, may have changed (spec §8).
     data[DATA_SUPERSESSION].async_refresh()
+    async_check_broken_references(hass, entry)
     async_check_default_groups(hass, entry, data[DATA_SETTINGS])
+
+
+@callback
+def _is_alert_registry_event(data: er.EventEntityRegistryUpdatedData) -> bool:
+    """Return whether an entity registry change is to an alert entity."""
+    prefix = f"{DOMAIN}."
+    return data["entity_id"].startswith(prefix) or (
+        data["action"] == "update"
+        and data.get("old_entity_id", "").startswith(prefix)
+    )
+
+
+@callback
+def _async_alert_registry_updated(
+    hass: HomeAssistant, entry: ConfigEntry, event: Event[er.EventEntityRegistryUpdatedData]
+) -> None:
+    """Follow an alert's entity ID being renamed, and recheck references (§12.4).
+
+    An alert being added or removed may fix or break other alerts' references.
+    """
+    data = event.data
+    if data["action"] == "update" and (old := data.get("old_entity_id")):
+        _async_follow_rename(hass, entry, old, data["entity_id"])
+    hass.data[DOMAIN][DATA_SUPERSESSION].async_refresh()
+    async_check_broken_references(hass, entry)
+
+
+@callback
+def _async_follow_rename(
+    hass: HomeAssistant, entry: ConfigEntry, old: str, new: str
+) -> None:
+    """Rewrite references to a renamed alert in the other alerts' subentries.
+
+    Pre-acknowledgements are kept by unique ID, so they need no rewriting.
+    """
+    for subentry in list(entry.subentries.values()):
+        if subentry.subentry_type != SUBENTRY_ALERT:
+            continue
+        data = dict(subentry.data)
+        if data.get(CONF_ALERT) == old:
+            data[CONF_ALERT] = new
+        relationships = data.get(CONF_SUPERSEDES) or []
+        if any(rel.get(CONF_ALERT) == old for rel in relationships):
+            data[CONF_SUPERSEDES] = [
+                {**rel, CONF_ALERT: new} if rel.get(CONF_ALERT) == old else rel
+                for rel in relationships
+            ]
+        if data != subentry.data:
+            hass.config_entries.async_update_subentry(entry, subentry, data=data)
 
 
 def _alert_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]]]:

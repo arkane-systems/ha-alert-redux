@@ -14,13 +14,14 @@ still gets a dedicated restart when it's made.
 
 Test alerts are the ones named "Test …", and send only to the Quiet group.
 
-**Timing on this instance:** Alert Redux has been set up again anywhere from 25
-seconds (6b) to 56 seconds (7a) after a restart is requested, well before the
-"started" event, about two minutes after. The old process keeps running for at
-least 10 seconds after the request: in 7a it still handled deadlines 10 seconds
-after it. So a deadline meant to fall *during* the downtime should be about 20
-seconds after the request: e.g. snooze or suspend for 1 minute, then request the
-restart 40 seconds later.
+**Timing on this instance:** the old process keeps running for at least 20
+seconds after a restart is requested: in 7a and 7b it still handled deadlines 10
+and 20 seconds after the request. In 7b the new process loaded Alert Redux 37
+seconds after the request and set it up at 60 seconds; in 7a, set-up was at 56
+seconds (in 6b, 25). So the real downtime is roughly 25 to 55 seconds after the
+request, and a deadline meant to fall *during* it should be about 45 seconds
+after: e.g. snooze or suspend for 1 minute, then request the restart 15 seconds
+later.
 
 - **Snooze runs out during the restart** (phase 6a). *Set up just before an
   install restart:* snooze a firing, Quiet-only test alert so that the deadline
@@ -35,17 +36,27 @@ restart 40 seconds later.
   *Expect:* enabled once HA is back, with `last_enabled_by` null; a condition
   alert evaluates from scratch (`no_data` until its inputs report).
 
-- **A superseded alert stays suppressed across the restart** (phase 7a). *Set
-  up just before an install restart:* open the test door
-  (`input_boolean.alert_redux_test_value` on) and wait for Test Door Left Open to
-  fire (1 minute), so that Test Door Open is superseded; then restart.
-  *Expect:* both still firing, with the same `firing_since`; no on
-  notifications; Test Door Open's `superseded_by` is `[test_door_left_open]`
-  once HA is back, with no `alert_redux_superseded` event; its reminders are
-  skipped while Left Open fires. Close the door afterwards: only Left Open's
-  (and Test Door Unacknowledged's) done notification.
+- **A pre-acknowledgement survives the restart** (phase 7b). Test Door Left Open
+  supersedes Test Door Open with propagation *Acknowledge*. *Set up just before
+  an install restart:* open the test door, acknowledge Test Door Open at once,
+  and restart within the minute, so that Left Open's `delay_on` runs out during
+  the restart.
+  *Expect:* Left Open's `pre_acked_by` is `[alert_redux.test_door_open]` once
+  HA is back, and Left Open fires at startup (its restored `delay_on`) as `ack`,
+  with no on notification. Close the door afterwards: only Left Open's done
+  notification.
 
 ## Done
+
+- **2026-09-26, 7b install restart. A superseded alert stays suppressed across
+  the restart** (phase 7a). Test Door Open and Left Open came back firing with
+  the same `firing_since`, Open's `superseded_by` restored, and no on
+  notifications; Open's 11:59:54 reminder was skipped ("reminder superseded").
+  Passed.
+- **2026-09-26, 7b install restart. Snooze runs out, and suspension ends, during
+  the restart** (phases 6a, 6b). *Not exercised again:* both fell due 20
+  seconds after the request, and the old process still handled them live
+  (correctly). Still pending, with the timing note revised again.
 
 - **2026-09-26, 7a install restart. Disabled survives the restart** (phase 6b).
   Test Threshold Alert came back `disabled`, `disabled_until` null, ignoring its
