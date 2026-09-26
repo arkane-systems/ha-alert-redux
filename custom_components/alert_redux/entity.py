@@ -69,7 +69,10 @@ from .const import (
     ATTR_SNOOZED_UNTIL,
     ATTR_SOURCE_ENTITY,
     ATTR_SUBJECT_ENTITY,
+    ATTR_SUPERSEDED_BY,
+    ATTR_SUPERSEDES,
     ATTR_TARGET_STATE,
+    ATTR_TARGET_STATES,
     ATTR_TEMPLATE,
     ATTR_TRIGGERS,
     ATTR_TRIGGER_DATA,
@@ -79,6 +82,8 @@ from .const import (
     ATTR_VALUE_TEMPLATE,
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_ALERT,
+    CONF_ALERT_STATES,
     CONF_ATTRIBUTE,
     CONF_CONDITION,
     CONF_DELAY_OFF,
@@ -105,6 +110,7 @@ from .const import (
     CONF_REMINDER_MESSAGE,
     CONF_REMINDER_SCHEDULE,
     CONF_SUBJECT_ENTITY,
+    CONF_SUPERSEDES,
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
     CONF_TRIGGERS,
@@ -112,6 +118,7 @@ from .const import (
     CONF_VALUE_TEMPLATE,
     DATA_LABEL,
     DATA_STARTUP_UNTIL,
+    DATA_SUPERSESSION,
     DEFAULT_PRIORITY_ICONS,
     DOMAIN,
     EVENT_ACKED,
@@ -124,6 +131,7 @@ from .const import (
     EVENT_NO_DATA,
     EVENT_SNOOZE_EXPIRED,
     EVENT_SNOOZED,
+    EVENT_SUPERSEDED,
     EVENT_UNACKED,
     AlertKind,
     AlertState,
@@ -162,6 +170,7 @@ from .sources import (
     value_template,
 )
 from .store import AlertStore
+from .supersession import DoneDecision, Supersession, relationship_targets
 from .triggers import TriggerWatcher, bus_event_trigger
 
 _LOGGER = logging.getLogger(__name__)
@@ -258,6 +267,14 @@ class AlertEntity(Entity):
         self._reminder_timer = PointTimer(self._async_reminder_due)
         self._snooze_timer = PointTimer(self._async_snooze_due)
         self._suspension_timer = PointTimer(self._async_suspension_due)
+        # Supersession (spec §8): the on notification waiting out the debounce,
+        # and done notifications held for the done window (§9.7).
+        self._on_debounce_timer = PointTimer(self._async_on_debounce_due)
+        self._done_timer = PointTimer(self._async_done_due)
+        self._held_dones: list[Transition] = []
+        self._superseded_by: list[str] = []
+        # Whether the alert was firing at the last write; None before the first.
+        self._was_firing: bool | None = None
         self._attr_unique_id = subentry.subentry_id
         self._configure(subentry)
 
@@ -275,6 +292,9 @@ class AlertEntity(Entity):
         # None means the defaults; a list, even an empty one, is the alert's own.
         self._notifier_groups: list[str] | None = data.get(CONF_NOTIFIER_GROUPS)
         self._own_schedule: list[float] | None = data.get(CONF_REMINDER_SCHEDULE)
+        self._supersedes: list[dict[str, Any]] = [
+            dict(rel) for rel in data.get(CONF_SUPERSEDES) or []
+        ]
         self._attr_name = subentry.title
         self._attr_icon = data.get(CONF_ICON) or DEFAULT_PRIORITY_ICONS[self._priority]
 
@@ -282,6 +302,30 @@ class AlertEntity(Entity):
     def subject_entity(self) -> str | None:
         """Return the entity the alert is about, if any (spec §9.5)."""
         return self._explicit_subject
+
+    @property
+    def priority(self) -> Priority:
+        """Return the alert's priority."""
+        return self._priority
+
+    @property
+    def firing(self) -> bool:
+        """Return whether the alert is firing (spec §3)."""
+        return self._runtime.firing
+
+    @property
+    def last_ended(self) -> datetime | None:
+        """Return when the alert last stopped firing."""
+        return self._runtime.last_ended
+
+    @property
+    def supersedes(self) -> list[dict[str, Any]]:
+        """Return the alert's supersession relationships, as configured (§8)."""
+        return self._supersedes
+
+    @property
+    def _supersession(self) -> Supersession:
+        return self.hass.data[DOMAIN][DATA_SUPERSESSION]
 
     @property
     def _reminder_schedule(self) -> tuple[float, ...]:
@@ -329,6 +373,8 @@ class AlertEntity(Entity):
             ),
             ATTR_REMINDER_SCHEDULE: list(self._reminder_schedule),
             ATTR_NEXT_REMINDER: runtime.next_reminder,
+            ATTR_SUPERSEDES: relationship_targets(self._supersedes),
+            ATTR_SUPERSEDED_BY: self._superseded_by,
         }
         if self._kind is AlertKind.MANUAL:
             attributes[ATTR_USER_DISMISSABLE] = self._user_dismissable
@@ -363,15 +409,61 @@ class AlertEntity(Entity):
             self._fire_event(EVENT_CREATED, None)
 
     async def async_will_remove_from_hass(self) -> None:
-        """Stop rendering the messages, and the timers."""
+        """Stop rendering the messages, and the timers.
+
+        Held done notifications are sent rather than lost (fail loud).
+        """
+        self._async_done_due(dt_util.utcnow())
         self._async_stop_messages()
         self._async_cancel_timers()
 
     @callback
     def async_write_ha_state(self) -> None:
-        """Bring the rendered messages up to date, then write the state."""
+        """Bring the rendered messages and supersession up to date, then write.
+
+        A change in whether the alert is firing is passed on to the alerts it
+        supersedes.
+        """
         self._async_sync_messages()
+        self._superseded_by = self._supersession.superseded_by(self.entity_id)
         super().async_write_ha_state()
+        firing = self._runtime.firing
+        if firing != self._was_firing:
+            started = firing and self._was_firing is False
+            self._was_firing = firing
+            self._supersession.async_firing_changed(self, started=started)
+
+    @callback
+    def async_superseders_changed(self, *, announce: bool) -> None:
+        """Show which firing alerts supersede this one, now (spec §8.1).
+
+        With announce, a firing alert that has just become superseded says so
+        with the superseded event (§11.3).
+        """
+        if self.hass is None:
+            return
+        old = self._superseded_by
+        if self._supersession.superseded_by(self.entity_id) == old:
+            return
+        self.async_write_ha_state()
+        if announce and self._runtime.firing and not old and self._superseded_by:
+            self._context = None
+            self._fire_event(
+                EVENT_SUPERSEDED,
+                self.state,
+                {ATTR_SUPERSEDED_BY: self._superseded_by},
+            )
+
+    @callback
+    def async_superseder_ended(self) -> None:
+        """Drop held done notifications: a superseding alert's covers them (§9.7)."""
+        if self._held_dones:
+            _LOGGER.debug(
+                "%s: done notification dropped; a superseding alert ended too",
+                self.entity_id,
+            )
+            self._held_dones = []
+            self._done_timer.cancel()
 
     @callback
     def _async_sync_messages(self) -> None:
@@ -456,12 +548,70 @@ class AlertEntity(Entity):
 
     @callback
     def _async_notify_on(self) -> None:
-        """Send the on notification of a new firing, or of firing again."""
+        """Send the on notification of a new firing, or of firing again.
+
+        An alert that something supersedes waits out the debounce first, to see
+        whether a superseding alert fires too (spec §8.1).
+        """
+        if not self._supersession.has_superseders(self.entity_id):
+            self._async_send_on()
+            return
+        now = dt_util.utcnow()
+        debounce = self._settings.supersession_debounce
+        if debounce <= timedelta(0):
+            self._async_on_debounce_due(now)
+        else:
+            self._on_debounce_timer.at(self.hass, now + debounce)
+
+    @callback
+    def _async_on_debounce_due(self, _now: datetime) -> None:
+        """Send the on notification, unless superseded or no longer active.
+
+        A dropped on notification isn't sent later.
+        """
+        if self._runtime.state is not AlertState.ACTIVE:
+            return
+        if self._supersession.superseded_by(self.entity_id):
+            _LOGGER.debug("%s: on notification superseded", self.entity_id)
+            return
+        self._async_send_on()
+
+    @callback
+    def _async_send_on(self) -> None:
         self._async_notify(REASON_ON, self._message, self._message_context(REASON_ON))
 
     @callback
     def _async_notify_done(self, transition: Transition) -> None:
-        """Send the done notification of an ended firing (spec §9.7)."""
+        """Send the done notification of an ended firing (spec §9.7).
+
+        A superseded alert's is dropped if a superseding alert ends within the
+        done window of it, before or after.
+        """
+        if self._supersession.has_superseders(self.entity_id):
+            now = dt_util.utcnow()
+            decision = self._supersession.done_decision(self.entity_id, now)
+            if decision is DoneDecision.DROP:
+                _LOGGER.debug(
+                    "%s: done notification dropped; a superseding alert ended too",
+                    self.entity_id,
+                )
+                return
+            if decision is DoneDecision.HOLD:
+                self._held_dones.append(transition)
+                self._done_timer.at(self.hass, now + self._settings.done_window)
+                return
+        self._async_send_done(transition)
+
+    @callback
+    def _async_done_due(self, _now: datetime) -> None:
+        """Send the held done notifications: no superseding alert ended in time."""
+        held, self._held_dones = self._held_dones, []
+        self._done_timer.cancel()
+        for transition in held:
+            self._async_send_done(transition)
+
+    @callback
+    def _async_send_done(self, transition: Transition) -> None:
         self._async_notify(
             REASON_DONE,
             self._done_message,
@@ -480,6 +630,8 @@ class AlertEntity(Entity):
         self._reminder_timer.cancel()
         self._snooze_timer.cancel()
         self._suspension_timer.cancel()
+        self._on_debounce_timer.cancel()
+        self._done_timer.cancel()
 
     @callback
     def _async_reminder_due(self, _now: datetime) -> None:
@@ -498,7 +650,13 @@ class AlertEntity(Entity):
 
     @callback
     def _async_send_reminder(self, now: datetime) -> None:
-        """Send a reminder, giving the real firing duration."""
+        """Send a reminder, giving the real firing duration.
+
+        A superseded alert's reminder is skipped; its schedule carries on (§8.1).
+        """
+        if self._superseded_by:
+            _LOGGER.debug("%s: reminder superseded", self.entity_id)
+            return
         runtime = self._runtime
         duration = (
             (now - runtime.firing_since).total_seconds() if runtime.firing_since else 0
@@ -836,9 +994,13 @@ class ConditionAlertEntity(AlertEntity):
     def _configure(self, subentry: ConfigSubentry) -> None:
         super()._configure(subentry)
         data = subentry.data
-        # The state kind's entity, or the threshold kind's value entity.
-        self._source_entity: str | None = data.get(CONF_ENTITY_ID) or None
+        # The state kind's entity, the threshold kind's value entity, or the
+        # alert state kind's alert.
+        self._source_entity: str | None = (
+            data.get(CONF_ENTITY_ID) or data.get(CONF_ALERT) or None
+        )
         self._target_state: str | None = data.get(CONF_TARGET_STATE)
+        self._alert_states: list[str] = list(data.get(CONF_ALERT_STATES) or [])
         self._template: str | None = data.get(CONF_TEMPLATE)
         self._attribute: str | None = data.get(CONF_ATTRIBUTE) or None
         self._value_template: str | None = data.get(CONF_VALUE_TEMPLATE) or None
@@ -864,7 +1026,7 @@ class ConditionAlertEntity(AlertEntity):
 
     @property
     def subject_entity(self) -> str | None:
-        """Return the explicit subject, or else the state or value entity."""
+        """Return the explicit subject, or else the state, value, or alert entity."""
         return self._explicit_subject or self._source_entity
 
     @property
@@ -885,6 +1047,9 @@ class ConditionAlertEntity(AlertEntity):
         if self._kind is AlertKind.STATE:
             attributes[ATTR_SOURCE_ENTITY] = self._source_entity
             attributes[ATTR_TARGET_STATE] = self._target_state
+        elif self._kind is AlertKind.ALERT_STATE:
+            attributes[ATTR_SOURCE_ENTITY] = self._source_entity
+            attributes[ATTR_TARGET_STATES] = self._alert_states
         elif self._kind is AlertKind.THRESHOLD:
             reading = (
                 self._results.get("main", (None, []))[0] if self._results else None
@@ -986,7 +1151,12 @@ class ConditionAlertEntity(AlertEntity):
             assert self._source_entity is not None
             assert self._target_state is not None
             sources["main"] = StateSource(
-                self.hass, self._source_entity, self._target_state
+                self.hass, self._source_entity, [self._target_state]
+            )
+        elif self._kind is AlertKind.ALERT_STATE:
+            assert self._source_entity is not None
+            sources["main"] = StateSource(
+                self.hass, self._source_entity, self._alert_states
             )
         elif self._kind is AlertKind.THRESHOLD:
             value = self._value_template or value_template(

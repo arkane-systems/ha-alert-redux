@@ -26,6 +26,7 @@ DATA_STARTUP_UNTIL = "startup_until"
 DATA_LABEL = "label"
 DATA_NOTIFIER = "notifier"
 DATA_GROUPS = "groups"
+DATA_SUPERSESSION = "supersession"
 
 # The label applied to every alert (spec §11.5).
 ALERTS_LABEL_NAME = "Alert Redux"
@@ -83,13 +84,21 @@ class AlertKind(StrEnum):
     ON_OFF = "on_off"
     THRESHOLD = "threshold"
     TEMPLATE = "template"
+    # Another alert has been in a given state for a while (spec §4.1, F24).
+    ALERT_STATE = "alert_state"
     TRIGGER = "trigger"
     # A bus event alert: a trigger alert with an event trigger (spec §4.2, F23).
     EVENT = "event"
 
 
 CONDITION_KINDS = frozenset(
-    {AlertKind.STATE, AlertKind.ON_OFF, AlertKind.THRESHOLD, AlertKind.TEMPLATE}
+    {
+        AlertKind.STATE,
+        AlertKind.ON_OFF,
+        AlertKind.THRESHOLD,
+        AlertKind.TEMPLATE,
+        AlertKind.ALERT_STATE,
+    }
 )
 EVENT_KINDS = frozenset({AlertKind.TRIGGER, AlertKind.EVENT})
 
@@ -137,6 +146,12 @@ CONF_OFF_TRIGGERS = "off_triggers"
 CONF_EVENT_TYPE = "event_type"
 CONF_EVENT_DATA = "event_data"
 CONF_DURATION = "duration"
+# Alert state alerts: the watched alert's entity ID, and the states that count.
+CONF_ALERT = "alert"
+CONF_ALERT_STATES = "alert_states"
+# The alerts this one supersedes (spec §8): a list of relationships, each a
+# mapping with the superseded alert's entity ID under CONF_ALERT.
+CONF_SUPERSEDES = "supersedes"
 CONF_MESSAGE = "message"
 CONF_DISPLAY_MESSAGE = "display_message"
 CONF_REMINDER_MESSAGE = "reminder_message"
@@ -149,6 +164,7 @@ CONF_REMINDER_SCHEDULE = "reminder_schedule"
 CONF_USE_DEFAULT_GROUPS = "use_default_groups"
 CONF_USE_DEFAULT_REMINDERS = "use_default_reminders"
 SECTION_NOTIFICATIONS = "notifications"
+SECTION_SUPERSESSION = "supersession"
 
 # Notifier group subentry data keys (the notifier module's own keys).
 CONF_LOUD = "loud"
@@ -183,6 +199,13 @@ DEFAULT_RETRY_TIMEOUT = timedelta(minutes=5)
 # The snooze-end reminder rule's window (spec §6.2).
 CONF_SNOOZE_REMINDER_WINDOW = "snooze_reminder_window"
 DEFAULT_SNOOZE_REMINDER_WINDOW = timedelta(minutes=5)
+# Supersession (spec §8.1, §9.7): how long a superseded alert's on notification
+# waits for a superseding alert to fire, and how long its done notification waits
+# for one to end. Stored as seconds.
+CONF_SUPERSESSION_DEBOUNCE = "supersession_debounce"
+DEFAULT_SUPERSESSION_DEBOUNCE = timedelta(seconds=0.5)
+CONF_DONE_WINDOW = "done_window"
+DEFAULT_DONE_WINDOW = timedelta(seconds=5)
 # Event alerts' default durations, by priority (spec §4.2, §5): a mapping of
 # priority to a duration selector's dict. The options form shows it as a section.
 CONF_EVENT_DURATIONS = "event_durations"
@@ -220,6 +243,7 @@ EVENT_SNOOZE_EXPIRED = f"{DOMAIN}_snooze_expired"
 EVENT_DISABLED = f"{DOMAIN}_disabled"
 EVENT_ENABLED = f"{DOMAIN}_enabled"
 EVENT_NO_DATA = f"{DOMAIN}_no_data"
+EVENT_SUPERSEDED = f"{DOMAIN}_superseded"
 EVENT_CREATED = f"{DOMAIN}_created"
 EVENT_DELETED = f"{DOMAIN}_deleted"
 
@@ -285,3 +309,6 @@ ATTR_ON_TEMPLATE = "on_template"
 ATTR_ON_TRIGGERS = "on_triggers"
 ATTR_OFF_TEMPLATE = "off_template"
 ATTR_OFF_TRIGGERS = "off_triggers"
+ATTR_TARGET_STATES = "target_states"
+ATTR_SUPERSEDES = "supersedes"
+ATTR_SUPERSEDED_BY = "superseded_by"

@@ -104,6 +104,21 @@ def event_alert(
     )
 
 
+def alert_state_alert(
+    title: str,
+    alert: str,
+    states: list[str],
+    subentry_id: str | None = None,
+    **data: Any,
+) -> dict[str, Any]:
+    """Return subentry data for an alert state alert."""
+    return _subentry(
+        title,
+        subentry_id,
+        {"kind": "alert_state", "alert": alert, "alert_states": states, **data},
+    )
+
+
 def _subentry(
     title: str, subentry_id: str | None, data: dict[str, Any]
 ) -> dict[str, Any]:

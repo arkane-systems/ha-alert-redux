@@ -9,7 +9,7 @@ parse); otherwise it's True or False, or for a threshold alert, a Reading.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 import logging
 import math
 from typing import Any
@@ -109,17 +109,26 @@ class Source(ABC):
 
 
 class StateSource(Source):
-    """True while an entity is in a target state (the state kind).
+    """True while an entity is in a target state (the state and alert state kinds).
 
-    The entity being unavailable or unknown means no data, unless that is the
+    The entity being unavailable or unknown means no data, unless that is a
     target state; the entity not existing always means no data.
     """
 
-    def __init__(self, hass: HomeAssistant, entity_id: str, target_state: str) -> None:
-        """Initialize the source."""
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entity_id: str,
+        target_states: str | Collection[str],
+    ) -> None:
+        """Initialize the source with one target state, or several."""
         super().__init__(hass)
         self._entity_id = entity_id
-        self._target_state = target_state
+        self._target_states = (
+            frozenset({target_states})
+            if isinstance(target_states, str)
+            else frozenset(target_states)
+        )
         self._unsub: CALLBACK_TYPE | None = None
 
     def _async_start(self) -> None:
@@ -141,11 +150,11 @@ class StateSource(Source):
     def _async_evaluate(self) -> None:
         state = self.hass.states.get(self._entity_id)
         if state is None or (
-            state.state in _NO_DATA_STATES and state.state != self._target_state
+            state.state in _NO_DATA_STATES and state.state not in self._target_states
         ):
             self._report(None, [self._entity_id])
         else:
-            self._report(state.state == self._target_state, [])
+            self._report(state.state in self._target_states, [])
 
 
 class TemplateSource(Source):

@@ -19,6 +19,7 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import section
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     BooleanSelector,
     DurationSelector,
@@ -38,12 +39,15 @@ from homeassistant.helpers.selector import (
     TextSelector,
     TriggerSelector,
 )
+from homeassistant.util import slugify
 
 from .const import (
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
     CONF_ACTION,
     CONF_ACTIONS,
+    CONF_ALERT,
+    CONF_ALERT_STATES,
     CONF_ATTRIBUTE,
     CONF_CONDITION,
     CONF_DATA,
@@ -53,6 +57,7 @@ from .const import (
     CONF_DELAY_ON,
     CONF_DISPLAY_MESSAGE,
     CONF_DONE_MESSAGE,
+    CONF_DONE_WINDOW,
     CONF_DURATION,
     CONF_ENTITIES,
     CONF_ENTITY_ID,
@@ -81,6 +86,8 @@ from .const import (
     CONF_SNOOZE_REMINDER_WINDOW,
     CONF_STARTUP_DELAY,
     CONF_SUBJECT_ENTITY,
+    CONF_SUPERSEDES,
+    CONF_SUPERSESSION_DEBOUNCE,
     CONF_TARGET,
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
@@ -92,12 +99,15 @@ from .const import (
     DOMAIN,
     EVENT_KINDS,
     SECTION_NOTIFICATIONS,
+    SECTION_SUPERSESSION,
     SUBENTRY_ALERT,
     SUBENTRY_NOTIFIER_GROUP,
     AlertKind,
+    AlertState,
     Priority,
 )
 from .model import Settings, format_schedule, parse_schedule, to_timedelta
+from .supersession import find_cycle, relationship_targets
 from .triggers import async_validate_triggers, is_storable
 
 # notify actions that aren't legacy notifiers: offered through the other member kinds.
@@ -167,6 +177,10 @@ class AlertReduxOptionsFlow(OptionsFlow):
                         ],
                         CONF_EVENT_DURATIONS: user_input.get(CONF_EVENT_DURATIONS)
                         or _event_durations(settings),
+                        **(
+                            user_input.get(SECTION_SUPERSESSION)
+                            or _supersession_options(settings)
+                        ),
                     }
                 )
 
@@ -228,10 +242,38 @@ class AlertReduxOptionsFlow(OptionsFlow):
                         ),
                         {"collapsed": True},
                     ),
+                    vol.Optional(SECTION_SUPERSESSION): section(
+                        vol.Schema(
+                            {
+                                vol.Required(key, default=value): NumberSelector(
+                                    NumberSelectorConfig(
+                                        min=0,
+                                        max=300,
+                                        step=0.1,
+                                        unit_of_measurement="s",
+                                        mode=NumberSelectorMode.BOX,
+                                    )
+                                )
+                                for key, value in (
+                                    defaults.get(SECTION_SUPERSESSION)
+                                    or _supersession_options(settings)
+                                ).items()
+                            }
+                        ),
+                        {"collapsed": True},
+                    ),
                 }
             ),
             errors=errors,
         )
+
+
+def _supersession_options(settings: Settings) -> dict[str, float]:
+    """Return the supersession timings in the options' form: seconds."""
+    return {
+        CONF_SUPERSESSION_DEBOUNCE: settings.supersession_debounce.total_seconds(),
+        CONF_DONE_WINDOW: settings.done_window.total_seconds(),
+    }
 
 
 def _event_durations(settings: Settings) -> dict[str, dict[str, int]]:
@@ -272,10 +314,46 @@ def _groups_selector(entry: ConfigEntry, multiple: bool = True) -> SelectSelecto
 
 
 def _flatten(user_input: dict[str, Any]) -> dict[str, Any]:
-    """Return a submitted form with its section's fields brought to the top level."""
+    """Return a submitted form with its sections' fields brought to the top level."""
     flat = dict(user_input)
     notifications = flat.pop(SECTION_NOTIFICATIONS, {})
-    return flat | notifications
+    supersession = flat.pop(SECTION_SUPERSESSION, {})
+    return flat | notifications | supersession
+
+
+def _alerts_selector(exclude: str | None) -> EntitySelector:
+    """Return a selector of the other alerts."""
+    return EntitySelector(
+        EntitySelectorConfig(
+            domain=DOMAIN, exclude_entities=[exclude] if exclude else []
+        )
+    )
+
+
+def _supersession_section(defaults: dict[str, Any], own: str | None) -> section:
+    """Return the alert form's supersession section (spec §8)."""
+    return section(
+        vol.Schema(
+            {
+                vol.Optional(
+                    CONF_SUPERSEDES, description=_suggested(defaults, CONF_SUPERSEDES)
+                ): ObjectSelector(
+                    ObjectSelectorConfig(
+                        multiple=True,
+                        label_field=CONF_ALERT,
+                        fields={
+                            CONF_ALERT: {
+                                "label": "Alert",
+                                "required": True,
+                                "selector": _alerts_selector(own),
+                            },
+                        },
+                    )
+                ),
+            }
+        ),
+        {"collapsed": True},
+    )
 
 
 def _notifications_section(entry: ConfigEntry, defaults: dict[str, Any]) -> section:
@@ -324,9 +402,15 @@ def _alert_form_defaults(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _alert_schema(
-    kind: AlertKind, defaults: dict[str, Any], entry: ConfigEntry
+    kind: AlertKind,
+    defaults: dict[str, Any],
+    entry: ConfigEntry,
+    own: str | None = None,
 ) -> vol.Schema:
-    """Return the form for an alert of the given kind, pre-filled from defaults."""
+    """Return the form for an alert of the given kind, pre-filled from defaults.
+
+    own is the alert's own entity ID, when editing, so that it can't pick itself.
+    """
     schema: dict[Any, Any] = {
         vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, vol.UNDEFINED)): (
             TextSelector()
@@ -362,6 +446,23 @@ def _alert_schema(
                 CONF_TEMPLATE, default=defaults.get(CONF_TEMPLATE, vol.UNDEFINED)
             )
         ] = TemplateSelector()
+    elif kind is AlertKind.ALERT_STATE:
+        schema[
+            vol.Required(CONF_ALERT, default=defaults.get(CONF_ALERT, vol.UNDEFINED))
+        ] = _alerts_selector(own)
+        schema[
+            vol.Required(
+                CONF_ALERT_STATES,
+                default=defaults.get(CONF_ALERT_STATES, [AlertState.ACTIVE.value]),
+            )
+        ] = SelectSelector(
+            SelectSelectorConfig(
+                options=[state.value for state in AlertState],
+                multiple=True,
+                translation_key=CONF_ALERT_STATES,
+                mode=SelectSelectorMode.LIST,
+            )
+        )
     elif kind is AlertKind.THRESHOLD:
         for key, selector in (
             (CONF_ENTITY_ID, EntitySelector()),
@@ -443,6 +544,7 @@ def _alert_schema(
     schema[vol.Required(SECTION_NOTIFICATIONS)] = _notifications_section(
         entry, defaults
     )
+    schema[vol.Required(SECTION_SUPERSESSION)] = _supersession_section(defaults, own)
     return vol.Schema(schema)
 
 
@@ -499,6 +601,12 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
         """Create a bus event alert."""
         return await self._async_step_alert(AlertKind.EVENT, user_input)
 
+    async def async_step_alert_state(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Create an alert state alert."""
+        return await self._async_step_alert(AlertKind.ALERT_STATE, user_input)
+
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
@@ -548,6 +656,12 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
         """Edit a bus event alert."""
         return await self._async_step_alert(AlertKind.EVENT, user_input, True)
 
+    async def async_step_reconfigure_alert_state(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit an alert state alert."""
+        return await self._async_step_alert(AlertKind.ALERT_STATE, user_input, True)
+
     async def _async_step_alert(
         self,
         kind: AlertKind,
@@ -556,6 +670,9 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
     ) -> SubentryFlowResult:
         """Show a kind's form, and create or update the alert from it."""
         subentry = self._get_reconfigure_subentry() if reconfigure else None
+        own = (
+            _alert_entity_id(self.hass, subentry.subentry_id) if subentry else None
+        )
         errors: dict[str, str] = {}
         if user_input is not None:
             user_input = _flatten(user_input)
@@ -572,7 +689,15 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
             except ValueError:
                 errors["base"] = "invalid_schedule"
             else:
-                if error := await _async_check_alert(self.hass, kind, data):
+                if error := await _async_check_alert(
+                    self.hass, kind, data
+                ) or _check_references(
+                    self.hass,
+                    self._get_entry(),
+                    own or f"{DOMAIN}.{slugify(name)}",
+                    subentry.subentry_id if subentry else None,
+                    data,
+                ):
                     errors["base"] = error
             if not errors:
                 if subentry is None:
@@ -592,7 +717,7 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
             defaults = {}
         return self.async_show_form(
             step_id=f"reconfigure_{kind}" if reconfigure else kind.value,
-            data_schema=_alert_schema(kind, defaults, self._get_entry()),
+            data_schema=_alert_schema(kind, defaults, self._get_entry(), own),
             errors=errors,
         )
 
@@ -622,6 +747,9 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         data[CONF_TARGET_STATE] = user_input[CONF_TARGET_STATE].strip()
     elif kind is AlertKind.TEMPLATE:
         data[CONF_TEMPLATE] = user_input[CONF_TEMPLATE]
+    elif kind is AlertKind.ALERT_STATE:
+        data[CONF_ALERT] = user_input[CONF_ALERT]
+        data[CONF_ALERT_STATES] = list(user_input.get(CONF_ALERT_STATES) or [])
     elif kind is AlertKind.THRESHOLD:
         data[CONF_HYSTERESIS] = user_input.get(CONF_HYSTERESIS) or 0
     elif kind is AlertKind.TRIGGER:
@@ -663,6 +791,12 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
             value = value.strip()
         if value not in (None, "", {}, []):
             data[key] = value
+    if supersedes := [
+        dict(rel)
+        for rel in user_input.get(CONF_SUPERSEDES) or []
+        if isinstance(rel, dict) and rel.get(CONF_ALERT)
+    ]:
+        data[CONF_SUPERSEDES] = supersedes
     if not user_input.get(CONF_USE_DEFAULT_GROUPS, True):
         data[CONF_NOTIFIER_GROUPS] = list(user_input.get(CONF_NOTIFIER_GROUPS, []))
     if not user_input.get(CONF_USE_DEFAULT_REMINDERS, True):
@@ -693,6 +827,42 @@ async def _async_check_alert(
     elif kind is AlertKind.TRIGGER:
         if not await _async_triggers_valid(hass, data[CONF_TRIGGERS]):
             return "invalid_trigger"
+    return None
+
+
+def _alert_entity_id(hass: HomeAssistant, subentry_id: str) -> str | None:
+    """Return the entity ID of an alert subentry's entity, if it has one."""
+    return er.async_get(hass).async_get_entity_id(DOMAIN, DOMAIN, subentry_id)
+
+
+def _check_references(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    own: str,
+    subentry_id: str | None,
+    data: dict[str, Any],
+) -> str | None:
+    """Return an error key for references to other alerts that don't make sense.
+
+    own is the alert's entity ID, or the one it will get if it's new.
+    """
+    if data.get(CONF_ALERT) == own:
+        return "alert_state_self"
+    if CONF_ALERT_STATES in data and not data[CONF_ALERT_STATES]:
+        return "alert_states_missing"
+    targets = relationship_targets(data.get(CONF_SUPERSEDES, []))
+    if own in targets:
+        return "supersedes_self"
+    if len(set(targets)) != len(targets):
+        return "supersedes_duplicate"
+    edges = {own: targets}
+    for other_id, other in entry.subentries.items():
+        if other.subentry_type != SUBENTRY_ALERT or other_id == subentry_id:
+            continue
+        if other_eid := _alert_entity_id(hass, other_id):
+            edges[other_eid] = relationship_targets(other.data.get(CONF_SUPERSEDES, []))
+    if find_cycle(edges):
+        return "supersedes_cycle"
     return None
 
 

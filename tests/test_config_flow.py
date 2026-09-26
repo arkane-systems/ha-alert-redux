@@ -22,7 +22,13 @@ from custom_components.alert_redux.const import (
     SUBENTRY_NOTIFIER_GROUP,
 )
 
-from .conftest import SetupAlerts, alert_subentry, group_subentry, state_alert
+from .conftest import (
+    SetupAlerts,
+    alert_state_alert,
+    alert_subentry,
+    group_subentry,
+    state_alert,
+)
 
 def _suggested(schema: dict) -> dict[str, Any]:
     """Return the suggested values of a form's fields."""
@@ -57,6 +63,7 @@ FORM = {
     "priority": "critical",
     "acknowledgeable": True,
     "user_dismissable": True,
+    "supersession": {},
     "notifications": {},
 }
 
@@ -77,6 +84,7 @@ async def test_create_alert(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
         "on_off",
         "threshold",
         "template",
+        "alert_state",
         "trigger",
         "event",
     ]
@@ -212,6 +220,7 @@ async def test_create_state_alert(
             "delay_on": {"hours": 0, "minutes": 5, "seconds": 0},
             "condition": "",
             "acknowledgeable": True,
+            "supersession": {},
             "notifications": {},
         },
     )
@@ -247,6 +256,7 @@ async def test_create_template_alert(
         "acknowledgeable": False,
         "subject_entity": "sensor.server_room",
         "no_data_grace": {"hours": 0, "minutes": 2, "seconds": 0},
+        "supersession": {},
         "notifications": {},
     }
 
@@ -309,6 +319,7 @@ async def test_reconfigure_state_alert(
             "entity_id": "binary_sensor.back_door",
             "target_state": "on",
             "acknowledgeable": True,
+            "supersession": {},
             "notifications": {},
         },
     )
@@ -370,6 +381,7 @@ async def test_messages_saved_and_prefilled(
         result["flow_id"],
         {
             **FORM,
+            "supersession": {},
             "notifications": {
                 "message": "{{ name }} opened",
                 "display_message": "Close it",
@@ -511,6 +523,7 @@ async def test_alert_notification_settings_round_trip(
         result["flow_id"],
         {
             **FORM,
+            "supersession": {},
             "notifications": {
                 "use_default_groups": False,
                 "use_default_reminders": False,
@@ -546,6 +559,7 @@ async def test_alert_notification_settings_round_trip(
         result["flow_id"],
         {
             **FORM,
+            "supersession": {},
             "notifications": {
                 "use_default_groups": True,
                 "use_default_reminders": True,
@@ -567,6 +581,7 @@ async def test_alert_invalid_schedule(
         result["flow_id"],
         {
             **FORM,
+            "supersession": {},
             "notifications": {"use_default_reminders": False, "reminder_schedule": "0"},
         },
     )
@@ -630,6 +645,7 @@ EVENT_FORM = {
     "name": "Doorbell",
     "priority": "notice",
     "acknowledgeable": True,
+    "supersession": {},
     "notifications": {},
 }
 
@@ -754,6 +770,7 @@ CONDITION_FORM = {
     "name": "Server Room Hot",
     "priority": "critical",
     "acknowledgeable": True,
+    "supersession": {},
     "notifications": {},
 }
 
@@ -876,3 +893,191 @@ async def test_create_on_off_alert(
     assert data["off_template"] == "{{ false }}"
     assert data["on_triggers"][0]["event_type"] == "garage_alarm"
     assert "on_template" not in data
+
+
+async def test_create_alert_state_alert(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """The alert state form watches another alert; it can't watch itself."""
+    entry = await setup_alerts(alert_subentry("Back Door Open"))
+    result = await _start(hass, entry, "alert_state")
+    assert result["step_id"] == "alert_state"
+    schema = result["data_schema"].schema
+    (states_key,) = [key for key in schema if str(key) == "alert_states"]
+    assert states_key.default() == ["active"]
+    form = {
+        "name": "Back Door Unacknowledged",
+        "priority": "critical",
+        "alert": "alert_redux.back_door_open",
+        "alert_states": ["active"],
+        "delay_on": {"hours": 0, "minutes": 30, "seconds": 0},
+        "acknowledgeable": True,
+        "supersession": {},
+        "notifications": {},
+    }
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**form, "alert_states": []}
+    )
+    assert result["errors"] == {"base": "alert_states_missing"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**form, "alert": "alert_redux.back_door_unacknowledged"}
+    )
+    assert result["errors"] == {"base": "alert_state_self"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], form
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    subentry = next(
+        sub for sub in entry.subentries.values() if sub.title == form["name"]
+    )
+    assert dict(subentry.data) == {
+        "kind": "alert_state",
+        "priority": "critical",
+        "acknowledgeable": True,
+        "alert": "alert_redux.back_door_open",
+        "alert_states": ["active"],
+        "delay_on": {"hours": 0, "minutes": 30, "seconds": 0},
+    }
+    assert hass.states.get("alert_redux.back_door_unacknowledged").state == "idle"
+
+
+async def test_reconfigure_alert_state_alert(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Editing excludes the alert itself from its alert selectors."""
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open"),
+        alert_state_alert(
+            "Back Door Unacknowledged", "alert_redux.back_door_open", ["active"], "u"
+        ),
+    )
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": "u"},
+    )
+    assert result["step_id"] == "reconfigure_alert_state"
+    schema = result["data_schema"].schema
+    (alert_key,) = [key for key in schema if str(key) == "alert"]
+    assert alert_key.default() == "alert_redux.back_door_open"
+    assert schema[alert_key].config["exclude_entities"] == [
+        "alert_redux.back_door_unacknowledged"
+    ]
+
+
+async def test_supersession_section(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Supersedes is stored as relationships; self, repeats, and cycles are refused."""
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open", "open"),
+        alert_subentry(
+            "Back Door Left Open",
+            "left",
+            supersedes=[{"alert": "alert_redux.back_door_open"}],
+        ),
+    )
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": "left"},
+    )
+    section_schema = result["data_schema"].schema["supersession"].schema.schema
+    assert _suggested(section_schema) == {
+        "supersedes": [{"alert": "alert_redux.back_door_open"}]
+    }
+
+    form = {**FORM, "name": "Back Door Left Open"}
+    # The selector leaves the alert itself out.
+    with pytest.raises(InvalidData):
+        await hass.config_entries.subentries.async_configure(
+            result["flow_id"],
+            {
+                **form,
+                "supersession": {
+                    "supersedes": [{"alert": "alert_redux.back_door_left_open"}]
+                },
+            },
+        )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **form,
+            "supersession": {
+                "supersedes": [{"alert": "alert_redux.back_door_open"}] * 2
+            },
+        },
+    )
+    assert result["errors"] == {"base": "supersedes_duplicate"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**form, "supersession": {"supersedes": []}}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert "supersedes" not in entry.subentries["left"].data
+
+    # Left Open supersedes Open again, so Open can't supersede Left Open.
+    hass.config_entries.async_update_subentry(
+        entry,
+        entry.subentries["left"],
+        data={
+            **entry.subentries["left"].data,
+            "supersedes": [{"alert": "alert_redux.back_door_open"}],
+        },
+    )
+    await hass.async_block_till_done()
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": "open"},
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "supersession": {
+                "supersedes": [{"alert": "alert_redux.back_door_left_open"}]
+            },
+        },
+    )
+    assert result["errors"] == {"base": "supersedes_cycle"}
+
+
+async def test_options_supersession_section(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    entry = await setup_alerts()
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    schema = result["data_schema"].schema
+    (key,) = [key for key in schema if str(key) == "supersession"]
+    fields = {str(k): k.default() for k in schema[key].schema.schema}
+    assert fields == {"supersession_debounce": 0.5, "done_window": 5.0}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
+            "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
+            "supersession": {"supersession_debounce": 1, "done_window": 8},
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["supersession_debounce"] == 1
+    assert entry.options["done_window"] == 8
+
+
+async def test_new_alert_cant_supersede_itself(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A new alert's own entity ID is the one its name will give it."""
+    entry = await setup_alerts(alert_subentry("Back Door Open"))
+    result = await _start(hass, entry, "manual")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "name": "Back Door Left Open",
+            "supersession": {
+                "supersedes": [{"alert": "alert_redux.back_door_left_open"}]
+            },
+        },
+    )
+    assert result["errors"] == {"base": "supersedes_self"}
