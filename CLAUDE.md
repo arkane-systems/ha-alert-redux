@@ -20,8 +20,8 @@ admin card), phase 7 (supersession, propagation and pre-acknowledgement, the
 alert state kind, dangling references, and the card's superseded alerts), and
 phase 8 (the summary sensors, the logbook platform, and the `_data_restored`
 event), and phase 9 (replacing and clearing notifications, and notification
-buttons), and phase 10 (throttling and quiet hours), and generators (phase 11a;
-generated supersession is 11b).
+buttons), and phase 10 (throttling and quiet hours), and phase 11 (generators,
+including generated supersession).
 
 ## Specification
 
@@ -62,7 +62,10 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     definitions it has made, by target key), and `GeneratorManager` in
     `hass.data`, which adds, updates, and removes generated alerts as the
     registries and states change (debounced), holding back removals until the
-    startup grace has passed. Generated alerts are added with the generator's
+    startup grace has passed. It also resolves generated alerts' relationships
+    to other generators into their alerts for the same target
+    (`resolve_relationships`, set on each generated alert as its
+    `relationship_resolver`). Generated alerts are added with the generator's
     `config_subentry_id`, and kept in `DATA_ENTITIES` by unique ID like the
     fixed ones. Also `async_forget_alert`, which drops a deleted alert's record
     and announces it.

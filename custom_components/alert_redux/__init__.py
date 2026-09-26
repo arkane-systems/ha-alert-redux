@@ -410,7 +410,8 @@ def _async_follow_rename(
     """
     async_notifications_renamed(hass, old, new)
     for subentry in list(entry.subentries.values()):
-        if subentry.subentry_type != SUBENTRY_ALERT:
+        # Generators' relationships refer to fixed alerts too (spec §12.3).
+        if subentry.subentry_type not in (SUBENTRY_ALERT, SUBENTRY_GENERATOR):
             continue
         data = dict(subentry.data)
         if data.get(CONF_ALERT) == old:

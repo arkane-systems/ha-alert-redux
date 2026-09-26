@@ -31,6 +31,7 @@ from homeassistant.util import slugify
 from .const import (
     ATTR_ALERTS,
     ATTR_PROBLEMS,
+    ATTR_SUPERSEDES,
     ATTR_TARGETS,
     DATA_ADD_SENSORS,
     DATA_GENERATORS,
@@ -221,6 +222,7 @@ class GeneratorSensor(SensorEntity):
                 for entity in generator.entities.values()
                 if entity.entity_id is not None
             ),
+            ATTR_SUPERSEDES: self._manager.supersedes(self._subentry_id),
             ATTR_PROBLEMS: list(generator.problems),
         }
 

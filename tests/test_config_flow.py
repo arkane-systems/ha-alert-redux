@@ -1447,6 +1447,7 @@ GENERATOR_FORM = {
     "target_state": "unlocked",
     "targets": {"domains": ["lock", " "], "pattern": " lock.*_door "},
     "notifications": {},
+    "supersession": {},
 }
 
 
@@ -1460,7 +1461,6 @@ async def test_create_generator(hass: HomeAssistant, setup_alerts: SetupAlerts) 
     # The target is the kind's entity, and the subject.
     assert "entity_id" not in fields
     assert "subject_entity" not in fields
-    assert "supersession" not in fields
     assert {"name_template", "targets"} <= fields
 
     result = await hass.config_entries.subentries.async_configure(
@@ -1502,7 +1502,10 @@ async def test_reconfigure_generator(
         context={"source": SOURCE_RECONFIGURE, "subentry_id": "gen"},
     )
     assert result["step_id"] == "reconfigure_state"
-    assert result["description_placeholders"] == {"targets": "lock.front_door"}
+    assert result["description_placeholders"] == {
+        "targets": "lock.front_door",
+        "referrers": "none",
+    }
     targets = result["data_schema"].schema["targets"].schema.schema
     assert _suggested(targets) == {"domains": ["lock"]}
 
@@ -1554,6 +1557,7 @@ async def test_threshold_generator_value(
         "hysteresis": 0,
         "targets": {"device_classes": ["battery"]},
         "notifications": {},
+        "supersession": {},
     }
     result = await _start_generator(hass, entry, "threshold")
     result = await hass.config_entries.subentries.async_configure(
@@ -1574,3 +1578,116 @@ async def test_threshold_generator_value(
         result["flow_id"], {**base, "minimum": "20"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_generator_supersession(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A generator's relationships are to generators or fixed alerts, and are
+    checked like an alert's (spec §12.3)."""
+    entry = await setup_alerts(
+        alert_subentry("Insecure", subentry_id="insecure"),
+        generator_subentry(
+            "Open", subentry_id="open", targets={"domains": ["lock"]}, target_state="x"
+        ),
+    )
+    result = await _start_generator(hass, entry, "state")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **GENERATOR_FORM,
+            "name": "Left Open",
+            "supersession": {
+                "supersedes": [
+                    {"generator": "open", "propagation": "acknowledge"},
+                    {"alert": "alert_redux.insecure"},
+                ]
+            },
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (left,) = [s for s in entry.subentries.values() if s.title == "Left Open"]
+    assert left.data["supersedes"] == [
+        {"generator": "open", "propagation": "acknowledge"},
+        {"alert": "alert_redux.insecure"},
+    ]
+
+    # Open can't supersede Left Open back: that's a cycle for every target.
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_GENERATOR),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": "open"},
+    )
+    assert result["description_placeholders"]["referrers"] == "Left Open"
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **GENERATOR_FORM,
+            "name": "Open",
+            "supersession": {"supersedes": [{"generator": left.subentry_id}]},
+        },
+    )
+    assert result["errors"] == {"base": "supersedes_cycle"}
+
+
+@pytest.mark.parametrize(
+    ("supersedes", "error"),
+    [
+        (
+            [{"generator": "open", "alert": "alert_redux.insecure"}],
+            "relationship_target",
+        ),
+        ([{"propagation": "acknowledge"}], "relationship_target"),
+        ([{"generator": "open"}, {"generator": "open"}], "supersedes_duplicate"),
+        ([{"generator": "open", "propagation": "snooze"}], "snooze_duration_missing"),
+    ],
+)
+async def test_generator_supersession_errors(
+    hass: HomeAssistant,
+    setup_alerts: SetupAlerts,
+    supersedes: list[dict[str, Any]],
+    error: str,
+) -> None:
+    entry = await setup_alerts(
+        alert_subentry("Insecure", subentry_id="insecure"),
+        generator_subentry(
+            "Open", subentry_id="open", targets={"domains": ["lock"]}, target_state="x"
+        ),
+    )
+    result = await _start_generator(hass, entry, "state")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**GENERATOR_FORM, "name": "Left", "supersession": {"supersedes": supersedes}},
+    )
+    assert result["errors"] == {"base": error}
+
+
+async def test_fixed_alert_cycle_through_generator(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A fixed alert can't supersede a generated alert whose generator
+    supersedes that fixed alert."""
+    hass.states.async_set("lock.front_door", "x")
+    entry = await setup_alerts(
+        alert_subentry("Insecure", subentry_id="insecure"),
+        generator_subentry(
+            "Open",
+            subentry_id="open",
+            targets={"domains": ["lock"]},
+            target_state="x",
+            supersedes=[{"alert": "alert_redux.insecure"}],
+        ),
+    )
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": "insecure"},
+    )
+    assert result["description_placeholders"] == {"referrers": "Open"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "name": "Insecure",
+            "supersession": {"supersedes": [{"alert": "alert_redux.front_door_open"}]},
+        },
+    )
+    assert result["errors"] == {"base": "supersedes_cycle"}

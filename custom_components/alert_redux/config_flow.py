@@ -56,6 +56,7 @@ from .const import (
     CONF_DEVICE_CLASSES,
     CONF_DOMAINS,
     CONF_EXCLUDE,
+    CONF_GENERATOR,
     CONF_LABELS,
     CONF_NAME_TEMPLATE,
     CONF_PATTERN,
@@ -499,8 +500,36 @@ def _alerts_selector(exclude: str | None) -> EntitySelector:
     )
 
 
-def _supersession_section(defaults: dict[str, Any], own: str | None) -> section:
-    """Return the alert form's supersession section (spec §8)."""
+def _supersession_section(
+    defaults: dict[str, Any],
+    own: str | None,
+    generators: list[SelectOptionDict] | None = None,
+) -> section:
+    """Return the alert form's supersession section (spec §8).
+
+    A generator's (spec §12.3) also offers the other generators, given as
+    generators: each of its alerts then supersedes that generator's alert for
+    the same target.
+    """
+    targets: dict[str, Any] = {
+        CONF_ALERT: {
+            "label": "Alert",
+            "required": generators is None,
+            "selector": _alerts_selector(own),
+        }
+    }
+    if generators is not None:
+        targets = {
+            CONF_GENERATOR: {
+                "label": "Generator (its alert for the same target)",
+                "selector": SelectSelector(
+                    SelectSelectorConfig(
+                        options=generators, mode=SelectSelectorMode.DROPDOWN
+                    )
+                ),
+            },
+            CONF_ALERT: {**targets[CONF_ALERT], "label": "Or a fixed alert"},
+        }
     return section(
         vol.Schema(
             {
@@ -509,13 +538,11 @@ def _supersession_section(defaults: dict[str, Any], own: str | None) -> section:
                 ): ObjectSelector(
                     ObjectSelectorConfig(
                         multiple=True,
-                        label_field=CONF_ALERT,
+                        label_field=(
+                            CONF_ALERT if generators is None else CONF_GENERATOR
+                        ),
                         fields={
-                            CONF_ALERT: {
-                                "label": "Alert",
-                                "required": True,
-                                "selector": _alerts_selector(own),
-                            },
+                            **targets,
                             CONF_PROPAGATION: {
                                 "label": "When it's acknowledged",
                                 "selector": SelectSelector(
@@ -641,11 +668,12 @@ def _alert_schema(
     own: str | None = None,
     *,
     generator: bool = False,
+    own_generator: str | None = None,
 ) -> vol.Schema:
     """Return the form for an alert of the given kind, pre-filled from defaults.
 
-    own is the alert's own entity ID, when editing, so that it can't pick itself.
-    A generator's form (spec §12.3) has a name template and the target criteria
+    own is the alert's own entity ID, when editing, so that it can't pick itself;
+    own_generator is a generator's own subentry ID. A generator's form (spec §12.3) has a name template and the target criteria
     instead of the kind's entity and the subject entity, which are the target.
     """
     schema: dict[Any, Any] = {
@@ -798,11 +826,21 @@ def _alert_schema(
     schema[vol.Required(SECTION_NOTIFICATIONS)] = _notifications_section(
         entry, defaults
     )
-    if not generator:
-        schema[vol.Required(SECTION_SUPERSESSION)] = _supersession_section(
-            defaults, own
-        )
+    schema[vol.Required(SECTION_SUPERSESSION)] = _supersession_section(
+        defaults,
+        own,
+        _other_generators(entry, own_generator) if generator else None,
+    )
     return vol.Schema(schema)
+
+
+def _other_generators(entry: ConfigEntry, own: str | None) -> list[SelectOptionDict]:
+    """Return the generators a generator's alerts can supersede: the others."""
+    return [
+        SelectOptionDict(value=subentry_id, label=subentry.title)
+        for subentry_id, subentry in entry.subentries.items()
+        if subentry.subentry_type == SUBENTRY_GENERATOR and subentry_id != own
+    ]
 
 
 def _targets_section(defaults: dict[str, Any]) -> section:
@@ -1188,7 +1226,7 @@ def _referrers(hass: HomeAssistant, entry: ConfigEntry, subentry_id: str) -> str
     names = sorted(
         other.title
         for other_id, other in entry.subentries.items()
-        if other.subentry_type == SUBENTRY_ALERT
+        if other.subentry_type in (SUBENTRY_ALERT, SUBENTRY_GENERATOR)
         and other_id != subentry_id
         and own is not None
         and (
@@ -1225,21 +1263,10 @@ def _check_references(
         return "supersedes_self"
     if len(set(targets)) != len(targets):
         return "supersedes_duplicate"
-    for rel in relationships:
-        propagation = propagation_of(rel)
-        # Propagating to an alert that can't be acknowledged is an error (§8.3).
-        if propagation is not Propagation.NONE and not data[CONF_ACKNOWLEDGEABLE]:
-            return "propagation_unacknowledgeable"
-        if propagation is Propagation.SNOOZE and not to_timedelta(
-            rel.get(CONF_SNOOZE_DURATION)
-        ):
-            return "snooze_duration_missing"
-    edges = {own: targets}
-    for other_id, other in entry.subentries.items():
-        if other.subentry_type != SUBENTRY_ALERT or other_id == subentry_id:
-            continue
-        if other_eid := _alert_entity_id(hass, other_id):
-            edges[other_eid] = relationship_targets(other.data.get(CONF_SUPERSEDES, []))
+    if error := _check_propagation(relationships, data):
+        return error
+    edges = _supersession_edges(hass, entry, exclude=subentry_id)
+    edges[own] = [_node(hass, entry, target) for target in targets]
     if find_cycle(edges):
         return "supersedes_cycle"
     return None
@@ -1566,12 +1593,21 @@ class GeneratorSubentryFlowHandler(ConfigSubentryFlow):
                 errors[CONF_NAME] = "name_exists"
             try:
                 data = _generator_data(kind, user_input)
+            except _InvalidRelationship:
+                errors["base"] = "relationship_target"
             except _InvalidThrottle:
                 errors["base"] = "invalid_throttle"
             except ValueError:
                 errors["base"] = "invalid_schedule"
             else:
-                if error := await _async_check_generator(self.hass, kind, data):
+                if error := await _async_check_generator(
+                    self.hass, kind, data
+                ) or _check_generator_references(
+                    self.hass,
+                    self._get_entry(),
+                    subentry.subentry_id if subentry else None,
+                    data,
+                ):
                     errors["base"] = error
             if not errors:
                 if subentry is None:
@@ -1592,11 +1628,20 @@ class GeneratorSubentryFlowHandler(ConfigSubentryFlow):
         return self.async_show_form(
             step_id=f"reconfigure_{kind}" if reconfigure else kind.value,
             data_schema=_alert_schema(
-                kind, defaults, self._get_entry(), generator=True
+                kind,
+                defaults,
+                self._get_entry(),
+                generator=True,
+                own_generator=subentry.subentry_id if subentry else None,
             ),
             errors=errors,
             description_placeholders=(
-                {"targets": _generator_targets(self.hass, subentry.subentry_id)}
+                {
+                    "targets": _generator_targets(self.hass, subentry.subentry_id),
+                    "referrers": _generator_referrers(
+                        self.hass, self._get_entry(), subentry.subentry_id
+                    ),
+                }
                 if subentry
                 else None
             ),
@@ -1619,6 +1664,13 @@ def _generator_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, An
     data: dict[str, Any] = {CONF_KIND: kind, **_alert_data(kind, alert_input)}
     for key in (CONF_ENTITY_ID, CONF_ALERT, CONF_SUBJECT_ENTITY, CONF_SUPERSEDES):
         data.pop(key, None)
+    if supersedes := [
+        _generator_relationship(rel)
+        for rel in user_input.get(CONF_SUPERSEDES) or []
+        if isinstance(rel, dict)
+        and (rel.get(CONF_GENERATOR) or rel.get(CONF_ALERT) or rel.get(CONF_PROPAGATION))
+    ]:
+        data[CONF_SUPERSEDES] = supersedes
     if name_template := (user_input.get(CONF_NAME_TEMPLATE) or "").strip():
         data[CONF_NAME_TEMPLATE] = name_template
     targets: dict[str, Any] = {}
@@ -1653,6 +1705,141 @@ async def _async_check_generator(
         # The value is the target's, as the generated alerts have it.
         alert[CONF_ENTITY_ID] = _PLACEHOLDER_TARGET
     return await _async_check_alert(hass, kind, alert)
+
+
+class _InvalidRelationship(ValueError):
+    """A generator's relationship names neither, or both, a generator and an
+    alert."""
+
+
+def _generator_relationship(rel: dict[str, Any]) -> dict[str, Any]:
+    """Return a generator's submitted relationship as stored: to a generator
+    or to a fixed alert, with its propagation."""
+    other = rel.get(CONF_GENERATOR) or None
+    alert = rel.get(CONF_ALERT) or None
+    if (other is None) == (alert is None):
+        raise _InvalidRelationship
+    if alert is not None:
+        return _relationship(rel)
+    relationship = _relationship({**rel, CONF_ALERT: other})
+    del relationship[CONF_ALERT]
+    return {CONF_GENERATOR: other, **relationship}
+
+
+def _check_generator_references(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    subentry_id: str | None,
+    data: dict[str, Any],
+) -> str | None:
+    """Return an error key for a generator's relationships that don't make
+    sense (spec §12.3), as _check_references does for an alert's."""
+    relationships = data.get(CONF_SUPERSEDES, [])
+    own = _generator_node(subentry_id or "new")
+    targets = [
+        _generator_node(rel[CONF_GENERATOR]) if CONF_GENERATOR in rel else rel[CONF_ALERT]
+        for rel in relationships
+    ]
+    if subentry_id is not None and own in targets:
+        return "supersedes_self"
+    if len(set(targets)) != len(targets):
+        return "supersedes_duplicate"
+    if error := _check_propagation(relationships, data):
+        return error
+    edges = _supersession_edges(hass, entry)
+    edges[own] = [_node(hass, entry, target) for target in targets]
+    if find_cycle(edges):
+        return "supersedes_cycle"
+    return None
+
+
+def _check_propagation(
+    relationships: list[dict[str, Any]], data: dict[str, Any]
+) -> str | None:
+    for rel in relationships:
+        propagation = propagation_of(rel)
+        # Propagating to an alert that can't be acknowledged is an error (§8.3).
+        if propagation is not Propagation.NONE and not data[CONF_ACKNOWLEDGEABLE]:
+            return "propagation_unacknowledgeable"
+        if propagation is Propagation.SNOOZE and not to_timedelta(
+            rel.get(CONF_SNOOZE_DURATION)
+        ):
+            return "snooze_duration_missing"
+    return None
+
+
+def _generator_node(subentry_id: str) -> str:
+    """Return a generator's node in the supersession graph checked for cycles."""
+    return f"{SUBENTRY_GENERATOR}:{subentry_id}"
+
+
+def _node(hass: HomeAssistant, entry: ConfigEntry, target: str) -> str:
+    """Return an alert's node in the graph checked for cycles: a generated
+    alert counts as its generator."""
+    if target.startswith(f"{SUBENTRY_GENERATOR}:"):
+        return target
+    registry_entry = er.async_get(hass).async_get(target)
+    if (
+        registry_entry is not None
+        and (subentry_id := registry_entry.config_subentry_id) is not None
+        and (subentry := entry.subentries.get(subentry_id)) is not None
+        and subentry.subentry_type == SUBENTRY_GENERATOR
+    ):
+        return _generator_node(subentry_id)
+    return target
+
+
+def _supersession_edges(
+    hass: HomeAssistant, entry: ConfigEntry, exclude: str | None = None
+) -> dict[str, list[str]]:
+    """Return who supersedes whom among the alerts and generators, leaving out
+    one subentry (the one being edited).
+
+    Generators stand for all their alerts, so a cycle through them is refused
+    even if no target is shared yet: it would be one as soon as one is.
+    """
+    edges: dict[str, list[str]] = {}
+    for subentry_id, subentry in entry.subentries.items():
+        if subentry_id == exclude:
+            continue
+        relationships = subentry.data.get(CONF_SUPERSEDES, [])
+        if subentry.subentry_type == SUBENTRY_ALERT:
+            if node := _alert_entity_id(hass, subentry_id):
+                edges[node] = [
+                    _node(hass, entry, target)
+                    for target in relationship_targets(relationships)
+                ]
+        elif subentry.subentry_type == SUBENTRY_GENERATOR:
+            edges[_generator_node(subentry_id)] = [
+                _generator_node(rel[CONF_GENERATOR])
+                if CONF_GENERATOR in rel
+                else _node(hass, entry, rel[CONF_ALERT])
+                for rel in relationships
+                if rel.get(CONF_GENERATOR) or rel.get(CONF_ALERT)
+            ]
+    return edges
+
+
+def _generator_referrers(
+    hass: HomeAssistant, entry: ConfigEntry, subentry_id: str
+) -> str:
+    """Return the names of the generators and alerts whose relationships refer
+    to a generator or its alerts, for its edit form."""
+    own = _generator_node(subentry_id)
+    edges = _supersession_edges(hass, entry)
+    names = sorted(
+        other.title
+        for other_id, other in entry.subentries.items()
+        if other_id != subentry_id
+        and own
+        in edges.get(
+            _generator_node(other_id)
+            if other.subentry_type == SUBENTRY_GENERATOR
+            else _alert_entity_id(hass, other_id) or "",
+            [],
+        )
+    )
+    return ", ".join(names) if names else "none"
 
 
 def _generator_targets(hass: HomeAssistant, subentry_id: str) -> str:

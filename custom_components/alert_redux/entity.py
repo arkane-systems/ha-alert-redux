@@ -161,7 +161,7 @@ from .const import (
     EndReason,
     Priority,
 )
-from .definitions import AlertDefinition, generator_unique_id
+from .definitions import AlertDefinition, RelationshipResolver, generator_unique_id
 from .labels import async_apply_label
 from .messages import Messages, MessageTracker, message_context
 from .buttons import BUTTON_ACK, BUTTON_SNOOZE, alert_buttons, custom_button_key
@@ -308,6 +308,9 @@ class AlertEntity(Entity):
         self._held_dones: list[Transition] = []
         self._superseded_by: list[str] = []
         self._broken_references: list[str] = []
+        # The superseded alerts last shown: a generated alert's change as other
+        # generators' alerts come and go (spec §12.3).
+        self._shown_supersedes: list[str] = []
         self._pre_ack_timer = PointTimer(self._async_pre_ack_due)
         # When throttling ends (spec §9.8).
         self._throttle_timer = PointTimer(self._async_throttle_due)
@@ -316,6 +319,8 @@ class AlertEntity(Entity):
         self._was_firing: bool | None = None
         self._was_acked: bool | None = None
         self._attr_unique_id = definition.unique_id
+        # Set by the generator that made the alert (spec §12.3).
+        self.relationship_resolver: RelationshipResolver | None = None
         self._configure(definition)
 
     def _configure(self, definition: AlertDefinition) -> None:
@@ -390,12 +395,22 @@ class AlertEntity(Entity):
 
     @property
     def supersedes(self) -> list[dict[str, Any]]:
-        """Return the alert's supersession relationships, as configured (§8)."""
-        return self._supersedes
+        """Return the alert's supersession relationships (§8), by entity ID.
+
+        A generated alert's relationships to another generator are to that
+        generator's alert for the same target, if it has one (spec §12.3).
+        """
+        if self.relationship_resolver is None:
+            return self._supersedes
+        return self.relationship_resolver(self._definition, self._supersedes)
 
     @property
     def references(self) -> list[str]:
-        """Return the alerts this one refers to: superseded, or watched (§12.4)."""
+        """Return the alerts this one refers to: superseded, or watched (§12.4).
+
+        A generator's alert for the same target isn't one: its absence is
+        normal, not a broken reference.
+        """
         targets = relationship_targets(self._supersedes)
         if self._watched_alert:
             targets.append(self._watched_alert)
@@ -476,7 +491,7 @@ class AlertEntity(Entity):
             ATTR_NEXT_REMINDER: runtime.next_reminder,
             ATTR_THROTTLE: throttle.to_stored() if (throttle := self._throttle) else None,
             ATTR_THROTTLED_SINCE: runtime.throttled_since,
-            ATTR_SUPERSEDES: relationship_targets(self._supersedes),
+            ATTR_SUPERSEDES: self._shown_supersedes,
             ATTR_SUPERSEDED_BY: self._superseded_by,
             ATTR_PRE_ACKED_BY: self._supersession.entity_ids(
                 runtime.live_pre_acks(now)
@@ -540,6 +555,7 @@ class AlertEntity(Entity):
         self._async_sync_messages()
         self._superseded_by = supersession.superseded_by(self.entity_id)
         self._broken_references = supersession.broken_references(self)
+        self._shown_supersedes = relationship_targets(self.supersedes)
         super().async_write_ha_state()
         assert self.unique_id is not None
         self._summary.async_report(
@@ -580,6 +596,7 @@ class AlertEntity(Entity):
         if (
             supersession.superseded_by(self.entity_id) == old
             and supersession.broken_references(self) == self._broken_references
+            and relationship_targets(self.supersedes) == self._shown_supersedes
         ):
             return
         self.async_write_ha_state()
@@ -1511,15 +1528,20 @@ class ConditionAlertEntity(AlertEntity):
 
     @callback
     def async_update_config(self, definition: AlertDefinition) -> None:
-        """Apply an edited definition: re-subscribe, and restart pending delays.
+        """Apply an edited definition: re-subscribe, and restart pending delays
+        unless only the name or template variables changed.
 
         The firing (if any) carries on if the new condition holds; otherwise
         delay_off runs from now.
         """
+        # A generated alert renamed with its target keeps its pending delays:
+        # restarting them would hold back an alert about to fire (spec §12.3).
+        same_condition = definition.data == self._definition.data
         self._async_stop_source()
         self._configure(definition)
-        self._runtime.delay_on_until = None
-        self._runtime.delay_off_until = None
+        if not same_condition:
+            self._runtime.delay_on_until = None
+            self._runtime.delay_off_until = None
         super().async_update_config(definition)
         self._async_inputs_started()
 

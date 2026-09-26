@@ -1352,6 +1352,16 @@
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "What this generator's alerts take precedence over. While one of its alerts is firing, the alerts it supersedes don't send on or reminder notifications, and if they stop firing together with it, only its done notification is sent.",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
+              }
             }
           }
         },
@@ -1441,6 +1451,16 @@
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
             }
           }
@@ -1534,6 +1554,16 @@
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
@@ -1617,6 +1647,16 @@
                 "done_message": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::done_message%]",
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
+              }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
             }
           }
@@ -1702,12 +1742,22 @@
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
         "reconfigure_state": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::state::data::name_template%]",
@@ -1786,12 +1836,22 @@
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
         "reconfigure_on_off": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::on_off::data::name_template%]",
@@ -1876,12 +1936,22 @@
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
         "reconfigure_threshold": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::threshold::data::name_template%]",
@@ -1968,12 +2038,22 @@
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
         "reconfigure_template": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::template::data::name_template%]",
@@ -2052,12 +2132,22 @@
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         },
         "reconfigure_alert_state": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::state::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::alert_state::data::name_template%]",
@@ -2136,6 +2226,16 @@
                 "buttons": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::buttons%]",
                 "button_snooze_duration": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::notifications::data_description::button_snooze_duration%]"
               }
+            },
+            "supersession": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::description%]",
+              "data": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data::supersedes%]"
+              },
+              "data_description": {
+                "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
             }
           }
         }
@@ -2153,7 +2253,13 @@
         "alert_states_missing": "[%key:component::alert_redux::config_subentries::alert::error::alert_states_missing%]",
         "button_incomplete": "[%key:component::alert_redux::config_subentries::alert::error::button_incomplete%]",
         "invalid_button_action": "[%key:component::alert_redux::config_subentries::alert::error::invalid_button_action%]",
-        "targets_required": "Set at least one target criterion: labels, areas, domains, device classes, or a pattern."
+        "targets_required": "Set at least one target criterion: labels, areas, domains, device classes, or a pattern.",
+        "supersedes_self": "A generator can't supersede itself.",
+        "supersedes_duplicate": "Each generator or alert can be listed only once.",
+        "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself, for some target.",
+        "propagation_unacknowledgeable": "[%key:component::alert_redux::config_subentries::alert::error::propagation_unacknowledgeable%]",
+        "snooze_duration_missing": "[%key:component::alert_redux::config_subentries::alert::error::snooze_duration_missing%]",
+        "relationship_target": "Each relationship needs either a generator or a fixed alert, not both."
       },
       "abort": {
         "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
@@ -2525,6 +2631,10 @@
     "quiet_entity_missing": {
       "title": "Quiet-hours entity not found",
       "description": "The quiet-hours entity `{entity}` doesn't exist, so quiet hours don't apply where it's used: {used_by}. Choose an existing entity in the integration's options or the notifier group, or create it."
+    },
+    "broken_generator_reference": {
+      "title": "A generator refers to something that doesn't exist",
+      "description": "The generator {generator} supersedes {missing}, which doesn't exist: it was deleted or renamed.\n\nThe generator's alerts keep working, failing towards more notifications rather than fewer: they no longer suppress the missing alerts, and acknowledgements aren't passed on.\n\nTo fix this, edit {generator} to remove or replace the relationship. This issue goes away by itself once it's fixed."
     }
   }
 }

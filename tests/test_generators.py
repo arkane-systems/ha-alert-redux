@@ -17,6 +17,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
+    issue_registry as ir,
     label_registry as lr,
     area_registry as ar,
 )
@@ -537,3 +538,196 @@ async def test_startup_grace_target_returns(
     freezer.tick(timedelta(minutes=6))
     await _settle(hass)
     assert hass.states.get("alert_redux.shed_unlocked").state == "active"
+
+
+# Generated supersession (spec §12.3).
+
+WORKSHOP = "binary_sensor.workshop_door"
+BACKDOOR = "binary_sensor.back_door"
+
+
+def _doors(hass: HomeAssistant, state: str = "on") -> None:
+    for door in (WORKSHOP, BACKDOOR):
+        _lock(hass, door, state)
+
+
+def _door_generators(**left: Any) -> list[dict[str, Any]]:
+    """Open, and Left Open superseding it for each door."""
+    return [
+        generator_subentry(
+            "Open",
+            subentry_id="open",
+            targets={"domains": ["binary_sensor"]},
+            target_state="on",
+        ),
+        generator_subentry(
+            "Left Open",
+            subentry_id="left",
+            targets={"domains": ["binary_sensor"]},
+            target_state="on",
+            supersedes=[{"generator": "open", **left}],
+        ),
+    ]
+
+
+def _attrs(hass: HomeAssistant, entity_id: str) -> dict[str, Any]:
+    return dict(hass.states.get(entity_id).attributes)
+
+
+async def test_generated_supersession(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Each door's Left Open supersedes that door's Open, not another's."""
+    _doors(hass)
+    await setup_alerts(*_door_generators())
+
+    for door in ("workshop_door", "back_door"):
+        assert _attrs(hass, f"alert_redux.{door}_left_open")["supersedes"] == [
+            f"alert_redux.{door}_open"
+        ]
+        assert _attrs(hass, f"alert_redux.{door}_open")["superseded_by"] == [
+            f"alert_redux.{door}_left_open"
+        ]
+    sensor = _attrs(hass, "sensor.alert_redux_generator_left_open")
+    assert sensor["supersedes"] == ["sensor.alert_redux_generator_open"]
+
+
+async def test_generated_supersession_target_added_later(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A door added later gets both alerts, linked."""
+    _lock(hass, WORKSHOP)
+    await setup_alerts(*_door_generators())
+    _lock(hass, "binary_sensor.shed_door", "on")
+    await _settle(hass)
+    assert _attrs(hass, "alert_redux.shed_door_left_open")["supersedes"] == [
+        "alert_redux.shed_door_open"
+    ]
+    assert _attrs(hass, "alert_redux.shed_door_open")["superseded_by"] == [
+        "alert_redux.shed_door_left_open"
+    ]
+
+
+async def test_generated_propagation(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """Acknowledging a door's Open pre-acknowledges that door's Left Open."""
+    _doors(hass, "off")
+    entries = _door_generators(propagation="acknowledge")
+    entries[1]["data"]["delay_on"] = {"minutes": 5}
+    await setup_alerts(*entries)
+    # Without friendly names, the targets' names change too: the alerts are
+    # renamed, but their pending delays carry on.
+    hass.states.async_set(WORKSHOP, "on")
+    hass.states.async_set(BACKDOOR, "on")
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        DOMAIN, "ack", {"entity_id": "alert_redux.workshop_door_open"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert _attrs(hass, "alert_redux.workshop_door_left_open")["pre_acked_by"] == [
+        "alert_redux.workshop_door_open"
+    ]
+    assert _attrs(hass, "alert_redux.back_door_left_open")["pre_acked_by"] == []
+
+    freezer.tick(timedelta(minutes=6))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert hass.states.get("alert_redux.workshop_door_left_open").state == "ack"
+    assert hass.states.get("alert_redux.back_door_left_open").state == "active"
+    assert hass.states.get("alert_redux.back_door_left_open").name == (
+        "back door Left Open"
+    )
+
+
+async def test_generator_over_fixed_alert(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A generator's alerts can supersede a fixed alert, and a fixed alert can
+    supersede a generated one."""
+    _lock(hass, WORKSHOP, "on")
+    await setup_alerts(
+        alert_subentry("Insecure", subentry_id="insecure"),
+        alert_subentry(
+            "Intruder",
+            subentry_id="intruder",
+            supersedes=[{"alert": "alert_redux.workshop_door_open"}],
+        ),
+        generator_subentry(
+            "Open",
+            subentry_id="open",
+            targets={"domains": ["binary_sensor"]},
+            target_state="on",
+            supersedes=[{"alert": "alert_redux.insecure"}],
+        ),
+    )
+    for alert in ("insecure", "intruder"):
+        await hass.services.async_call(
+            DOMAIN, "fire", {"entity_id": f"alert_redux.{alert}"}, blocking=True
+        )
+    await hass.async_block_till_done()
+    assert _attrs(hass, "alert_redux.insecure")["superseded_by"] == [
+        "alert_redux.intruder",
+        "alert_redux.workshop_door_open",
+    ]
+    assert _attrs(hass, "alert_redux.workshop_door_open")["superseded_by"] == [
+        "alert_redux.intruder"
+    ]
+
+
+async def test_deleted_partner_generator(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A relationship to a deleted generator raises a Repairs issue, which
+    clears once the relationship is edited away."""
+    _lock(hass, WORKSHOP)
+    entry = await setup_alerts(*_door_generators())
+    hass.config_entries.async_remove_subentry(entry, "open")
+    await hass.async_block_till_done()
+
+    assert _reference_issues(hass) == ["broken_generator_reference_left_open"]
+    left = hass.states.get("alert_redux.workshop_door_left_open")
+    assert left.attributes["supersedes"] == []
+    assert left.attributes["broken_references"] == []
+
+    subentry = entry.subentries["left"]
+    data = {key: value for key, value in subentry.data.items() if key != "supersedes"}
+    hass.config_entries.async_update_subentry(entry, subentry, data=data)
+    await hass.async_block_till_done()
+    assert _reference_issues(hass) == []
+
+
+def _reference_issues(hass: HomeAssistant) -> list[str]:
+    return sorted(
+        issue_id
+        for (domain, issue_id) in ir.async_get(hass).issues
+        if domain == DOMAIN and "reference" in issue_id
+    )
+
+
+async def test_fixed_alert_rename_followed(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Renaming a fixed alert rewrites generators' relationships to it."""
+    _lock(hass, WORKSHOP, "on")
+    entry = await setup_alerts(
+        alert_subentry("Insecure", subentry_id="insecure"),
+        generator_subentry(
+            "Open",
+            subentry_id="open",
+            targets={"domains": ["binary_sensor"]},
+            target_state="on",
+            supersedes=[{"alert": "alert_redux.insecure", "propagation": "acknowledge"}],
+        ),
+    )
+    er.async_get(hass).async_update_entity(
+        "alert_redux.insecure", new_entity_id="alert_redux.house_insecure"
+    )
+    await hass.async_block_till_done()
+    assert entry.subentries["open"].data["supersedes"] == [
+        {"alert": "alert_redux.house_insecure", "propagation": "acknowledge"}
+    ]
+    assert _attrs(hass, "alert_redux.workshop_door_open")["supersedes"] == [
+        "alert_redux.house_insecure"
+    ]
+    assert _reference_issues(hass) == []
