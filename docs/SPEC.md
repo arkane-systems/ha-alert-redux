@@ -726,6 +726,33 @@ doesn't repeat it automatically. It can include the name deliberately through th
   of the feature [Decided, R14].
 - Done notifications are held while throttled, and covered by the summary (§9.7)
   [Decided].
+- [Decided, phase 10] As built, following Alert2 (P9):
+  - **What counts:** every on notification the alert would otherwise send, a new
+    firing or firing again while `active`, after the supersession debounce (§8.1)
+    has had its say. Held ones count too. Firing again while acknowledged sends
+    nothing, so it doesn't count.
+  - **Starting:** the on notification that brings the count in the last
+    *minutes* up to *count* is still sent, prefixed "[Throttling starts]", and
+    throttling starts with it.
+  - **While throttled**, on and done notifications are held. What's kept is a
+    tally: how many were held, when the latest was, and when the latest firing
+    ended, after how long, and why.
+  - **Ending:** once fewer than *count* on notifications are left in the window.
+    If anything was held, one summary is sent then, e.g. "[Throttling ends] Fired
+    7× while throttled, most recently 12 minutes ago; stopped firing 3 minutes
+    ago after 40 seconds." (or "…; still firing."). Its wording is fixed, not a
+    template. A summary of a firing that has ended is final, like the done
+    notification (§9.10, §9.11); one of a firing that goes on is like a reminder,
+    with buttons.
+  - Since held notifications count, a firing soon after throttling ends can
+    start it again at once: the rate hasn't dropped far.
+  - Turning an alert's throttling off, or raising its count above what it has
+    seen, ends throttling at once. The throttle state is stored with the alert
+    (§15.1), and an end that fell due while HA was down is dealt with when it's
+    back.
+  - Each alert uses the **default throttle** (an option; none by default), its
+    own `[count, minutes]`, or none: a "use the default" checkbox, then the two
+    numbers, both left empty for none.
 
 ### 9.9 Quiet hours
 
@@ -910,6 +937,8 @@ built.
   [Decided, phase 7] Also `pre_acked_by` and `pre_snoozed_until` (§8.3), and
   `broken_references` (§12.4), a list of entity IDs.
   [Decided, phase 9] `buttons` lists the labels of the alert's custom buttons.
+  [Decided, phase 10] `throttle` is the effective throttle, `[count, minutes]`,
+  or null; `throttled_since` is when throttling started, or null (§9.8).
 - **Generator provenance:** `generated_by` (§12.3).
 
 Attributes that can grow large, or change constantly, should be kept out of the
@@ -1134,6 +1163,8 @@ was meant to solve.
   (§8.1, §9.7), in seconds, in a collapsed **Supersession** section.
   [Decided, phase 9] The snooze duration for notification buttons is the
   **Snooze button duration** (§9.11).
+  [Decided, phase 10] The default throttle is two numbers, a count and minutes,
+  both empty for none (§9.8).
 - Each **alert** is a **config subentry** of that entry, created and edited in the
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
@@ -1604,6 +1635,8 @@ Decisions with their reasons, in the order they were made.
 | Button action IDs use the unique ID and a hash of the button | Taps survive renames, and an edited button's old taps can't run a different action [§9.11]. |
 | At most three buttons on every mobile member | Android's limit, and the platform isn't known for notify groups [§9.11]. |
 | Snooze button duration: 1 hour by default | Long enough to deal with most things, short enough not to forget [§9.11]. |
+| Throttling counts held notifications, and ends when the rate drops | Follows Alert2: a flapping alert stays quiet until it calms down, then says once what happened [§9.8]. |
+| The throttling summary's wording is fixed | It reports what Alert Redux did, not what the alert is about [§9.8]. |
 
 ## 20. Phase plan
 

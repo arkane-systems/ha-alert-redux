@@ -86,6 +86,8 @@ from .const import (
     ATTR_TARGET_STATE,
     ATTR_TARGET_STATES,
     ATTR_TEMPLATE,
+    ATTR_THROTTLE,
+    ATTR_THROTTLED_SINCE,
     ATTR_TRIGGERS,
     ATTR_TRIGGER_DATA,
     ATTR_USER_DISMISSABLE,
@@ -129,6 +131,7 @@ from .const import (
     CONF_SUPERSEDES,
     CONF_TARGET_STATE,
     CONF_TEMPLATE,
+    CONF_THROTTLE,
     CONF_TRIGGERS,
     CONF_USER_DISMISSABLE,
     CONF_VALUE_TEMPLATE,
@@ -151,6 +154,7 @@ from .const import (
     EVENT_SNOOZED,
     EVENT_SUPERSEDED,
     EVENT_UNACKED,
+    THROTTLE_STARTS_MARKER,
     AlertKind,
     AlertState,
     EndReason,
@@ -165,6 +169,8 @@ from .model import (
     OnOffSides,
     Reading,
     Settings,
+    Throttle,
+    ThrottleDecision,
     Timing,
     Transition,
     snooze_end_reminder,
@@ -175,10 +181,12 @@ from .notifications import (
     REASON_DONE,
     REASON_ON,
     REASON_REMINDER,
+    REASON_THROTTLE_SUMMARY,
     async_notifications_acknowledged,
     async_send_notification,
     effective_groups,
     group_names,
+    throttle_summary_message,
 )
 from .sources import (
     Source,
@@ -297,6 +305,8 @@ class AlertEntity(Entity):
         self._superseded_by: list[str] = []
         self._broken_references: list[str] = []
         self._pre_ack_timer = PointTimer(self._async_pre_ack_due)
+        # When throttling ends (spec §9.8).
+        self._throttle_timer = PointTimer(self._async_throttle_due)
         # Whether the alert was firing, and acknowledged, at the last write; None
         # before the first.
         self._was_firing: bool | None = None
@@ -318,6 +328,9 @@ class AlertEntity(Entity):
         # None means the defaults; a list, even an empty one, is the alert's own.
         self._notifier_groups: list[str] | None = data.get(CONF_NOTIFIER_GROUPS)
         self._own_schedule: list[float] | None = data.get(CONF_REMINDER_SCHEDULE)
+        # Absent means the default throttle; empty means none (spec §9.8).
+        self._has_own_throttle = CONF_THROTTLE in data
+        self._own_throttle = Throttle.from_stored(data.get(CONF_THROTTLE))
         # Notification buttons (spec §9.11).
         self._custom_buttons: list[dict[str, Any]] = [
             dict(button) for button in data.get(CONF_BUTTONS) or []
@@ -385,6 +398,13 @@ class AlertEntity(Entity):
         return self._settings.reminder_schedule
 
     @property
+    def _throttle(self) -> Throttle | None:
+        """Return the throttle: the alert's own, or else the default (§9.8)."""
+        if self._has_own_throttle:
+            return self._own_throttle
+        return self._settings.throttle
+
+    @property
     def _button_snooze(self) -> timedelta:
         """Return how long the Snooze button snoozes: the alert's own, or else the
         default."""
@@ -430,6 +450,8 @@ class AlertEntity(Entity):
             ),
             ATTR_REMINDER_SCHEDULE: list(self._reminder_schedule),
             ATTR_NEXT_REMINDER: runtime.next_reminder,
+            ATTR_THROTTLE: throttle.to_stored() if (throttle := self._throttle) else None,
+            ATTR_THROTTLED_SINCE: runtime.throttled_since,
             ATTR_SUPERSEDES: relationship_targets(self._supersedes),
             ATTR_SUPERSEDED_BY: self._superseded_by,
             ATTR_PRE_ACKED_BY: self._supersession.entity_ids(
@@ -693,8 +715,13 @@ class AlertEntity(Entity):
 
     @callback
     def _async_notify(
-        self, reason: str, template: str | None, variables: dict[str, Any]
+        self,
+        reason: str,
+        template: str | None,
+        variables: dict[str, Any],
+        **options: Any,
     ) -> None:
+        """Send a notification; options go to async_send_notification."""
         assert self.unique_id is not None
         async_send_notification(
             self.hass,
@@ -709,6 +736,7 @@ class AlertEntity(Entity):
                 acknowledgeable=self._acknowledgeable,
                 snooze=self._button_snooze,
             ),
+            **options,
         )
 
     @callback
@@ -743,7 +771,25 @@ class AlertEntity(Entity):
 
     @callback
     def _async_send_on(self) -> None:
-        self._async_notify(REASON_ON, self._message, self._message_context(REASON_ON))
+        """Send the on notification, unless throttled (spec §9.8).
+
+        The one that starts throttling is marked; while throttled, it's held.
+        """
+        decision = self._runtime.throttle_note(dt_util.utcnow(), self._throttle)
+        self._async_throttle_changed()
+        if decision is ThrottleDecision.HOLD:
+            _LOGGER.debug("%s: on notification held; throttled", self.entity_id)
+            return
+        self._async_notify(
+            REASON_ON,
+            self._message,
+            self._message_context(REASON_ON),
+            prefix=(
+                THROTTLE_STARTS_MARKER
+                if decision is ThrottleDecision.START
+                else None
+            ),
+        )
 
     @callback
     def _async_notify_done(self, transition: Transition) -> None:
@@ -777,6 +823,12 @@ class AlertEntity(Entity):
 
     @callback
     def _async_send_done(self, transition: Transition) -> None:
+        """Send the done notification, unless throttled: then it's held, and the
+        throttling summary covers it (spec §9.7, §9.8)."""
+        if self._runtime.throttle_hold_done(dt_util.utcnow(), transition):
+            _LOGGER.debug("%s: done notification held; throttled", self.entity_id)
+            self._async_throttle_changed()
+            return
         self._async_notify(
             REASON_DONE,
             self._done_message,
@@ -790,6 +842,9 @@ class AlertEntity(Entity):
         self._snooze_timer.at(self.hass, self._runtime.snoozed_until)
         self._suspension_timer.at(self.hass, self._runtime.disabled_until)
         self._pre_ack_timer.at(self.hass, self._runtime.next_pre_ack_expiry())
+        self._throttle_timer.at(
+            self.hass, self._runtime.throttle_end_due(self._throttle)
+        )
 
     @callback
     def _async_cancel_timers(self) -> None:
@@ -799,6 +854,49 @@ class AlertEntity(Entity):
         self._on_debounce_timer.cancel()
         self._done_timer.cancel()
         self._pre_ack_timer.cancel()
+        self._throttle_timer.cancel()
+
+    @callback
+    def _async_throttle_changed(self) -> None:
+        """Publish a change to the throttle state: its timer, state, and storage."""
+        self._async_update_timers()
+        self.async_write_ha_state()
+        self._persist()
+
+    @callback
+    def _async_throttle_due(self, _now: datetime) -> None:
+        """End throttling, and send the summary of what was held (spec §9.8).
+
+        The summary of a firing that has ended is final, like a done
+        notification; one of a firing that goes on is like a reminder.
+        """
+        runtime = self._runtime
+        throttle = self._throttle
+        if (due := runtime.throttle_end_due(throttle)) is None:
+            return
+        # The timer may run a moment early; throttling ends at its time.
+        now = max(dt_util.utcnow(), due)
+        if (summary := runtime.throttle_expire(now, throttle)) is None:
+            return
+        self._context = None
+        self._async_update_timers()
+        self.async_write_ha_state()
+        self._persist()
+        if not summary.anything_held:
+            return
+        firing = runtime.firing
+        duration = (
+            (now - runtime.firing_since).total_seconds()
+            if firing and runtime.firing_since
+            else summary.duration_seconds or 0
+        )
+        self._async_notify(
+            REASON_THROTTLE_SUMMARY,
+            None,
+            self._message_context(REASON_THROTTLE_SUMMARY, duration_seconds=duration),
+            message=throttle_summary_message(summary, now, firing=firing),
+            final=not firing,
+        )
 
     @callback
     def _async_reminder_due(self, _now: datetime) -> None:

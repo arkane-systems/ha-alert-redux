@@ -12,10 +12,13 @@ from custom_components.alert_redux.model import (
     Change,
     OnOffSides,
     Reading,
+    Throttle,
+    ThrottleDecision,
     Timing,
     format_schedule,
     next_reminder_slot,
     parse_schedule,
+    parse_throttle,
     reminder_slots,
     snooze_end_reminder,
     threshold_holds,
@@ -697,3 +700,135 @@ def test_disabled_round_trip() -> None:
     assert restored.state is AlertState.DISABLED
     assert restored.disabled_until == T0 + timedelta(hours=1)
     assert restored.last_disabled == T0
+
+
+# Throttling (spec §9.8).
+
+THROTTLE = Throttle(3, 10)
+
+
+def _note(runtime: AlertRuntime, minutes: float) -> ThrottleDecision:
+    return runtime.throttle_note(T0 + timedelta(minutes=minutes), THROTTLE)
+
+
+def test_throttle_marks_the_notification_that_reaches_the_limit() -> None:
+    runtime = AlertRuntime()
+    assert [_note(runtime, m) for m in (0, 1, 2, 3, 4)] == [
+        ThrottleDecision.SEND,
+        ThrottleDecision.SEND,
+        ThrottleDecision.START,
+        ThrottleDecision.HOLD,
+        ThrottleDecision.HOLD,
+    ]
+    assert runtime.throttled_since == T0 + timedelta(minutes=2)
+    assert runtime.throttle_held == 2
+    assert runtime.throttle_last_held == T0 + timedelta(minutes=4)
+    # Only the last count notifications are kept.
+    assert len(runtime.throttle_fires) == 3
+
+
+def test_throttle_counts_only_within_the_window() -> None:
+    runtime = AlertRuntime()
+    assert [_note(runtime, m) for m in (0, 6, 12, 18)] == [ThrottleDecision.SEND] * 4
+
+
+def test_throttle_ends_when_the_rate_drops() -> None:
+    """Held notifications keep throttling going; it ends once fewer than count
+    are left in the window."""
+    runtime = AlertRuntime()
+    for minutes in (0, 1, 2, 5):
+        _note(runtime, minutes)
+    # The last three were at 1, 2, and 5: the one at 1 leaves the window at 11.
+    due = runtime.throttle_end_due(THROTTLE)
+    assert due == T0 + timedelta(minutes=11)
+    assert runtime.throttle_expire(due - timedelta(seconds=1), THROTTLE) is None
+    summary = runtime.throttle_expire(due, THROTTLE)
+    assert summary is not None
+    assert summary.anything_held
+    assert (summary.held_fires, summary.last_held) == (1, T0 + timedelta(minutes=5))
+    assert runtime.throttled_since is None
+    assert runtime.throttle_held == 0
+    assert runtime.throttle_end_due(THROTTLE) is None
+
+
+def test_throttle_holds_done_notifications() -> None:
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    ended = runtime.end(T0 + timedelta(seconds=40), EndReason.RESOLVED)
+    assert ended is not None
+    assert not runtime.throttle_hold_done(T0, ended)
+    for minutes in (0, 1, 2):
+        _note(runtime, minutes)
+    assert runtime.throttle_hold_done(T0 + timedelta(minutes=3), ended)
+    summary = runtime.throttle_expire(T0 + timedelta(hours=1), THROTTLE)
+    assert summary is not None
+    assert summary.held_fires == 0
+    assert summary.anything_held
+    assert summary.ended == T0 + timedelta(minutes=3)
+    assert summary.duration_seconds == 40
+    assert summary.end_reason == EndReason.RESOLVED
+
+
+def test_throttle_turned_off_or_loosened_ends_at_once() -> None:
+    runtime = AlertRuntime()
+    for minutes in (0, 1, 2):
+        _note(runtime, minutes)
+    since = runtime.throttled_since
+    assert runtime.throttle_end_due(None) == since
+    assert runtime.throttle_end_due(Throttle(5, 10)) == since
+    summary = runtime.throttle_expire(T0 + timedelta(minutes=3), None)
+    assert summary is not None
+    assert not summary.anything_held
+
+
+def test_no_throttle_sends_everything() -> None:
+    runtime = AlertRuntime()
+    for minutes in range(10):
+        assert runtime.throttle_note(T0 + timedelta(minutes=minutes), None) is (
+            ThrottleDecision.SEND
+        )
+    assert runtime.throttle_fires == []
+
+
+def test_throttle_state_round_trips() -> None:
+    runtime = AlertRuntime()
+    for minutes in (0, 1, 2, 3):
+        _note(runtime, minutes)
+    restored = AlertRuntime.from_dict(runtime.to_dict())
+    assert restored.throttle_fires == runtime.throttle_fires
+    assert restored.throttled_since == runtime.throttled_since
+    assert restored.throttle_held == 1
+    assert restored.throttle_last_held == runtime.throttle_last_held
+    # Records from before throttling existed have none of it.
+    old = runtime.to_dict()
+    for key in [key for key in old if key.startswith("throttl")]:
+        del old[key]
+    assert AlertRuntime.from_dict(old).throttle_fires == []
+
+
+@pytest.mark.parametrize(
+    ("count", "minutes", "expected"),
+    [
+        (None, None, None),
+        ("", "", None),
+        (3, 10, Throttle(3, 10)),
+        (3.0, 2.5, Throttle(3, 2.5)),
+    ],
+)
+def test_parse_throttle(count, minutes, expected) -> None:
+    assert parse_throttle(count, minutes) == expected
+
+
+@pytest.mark.parametrize(
+    ("count", "minutes"), [(3, None), (None, 5), (0, 5), (1.5, 5), (3, 0), (3, -1)]
+)
+def test_parse_throttle_invalid(count, minutes) -> None:
+    with pytest.raises(ValueError):
+        parse_throttle(count, minutes)
+
+
+def test_throttle_stored_form() -> None:
+    assert Throttle.from_stored([3, 10]) == Throttle(3, 10)
+    assert Throttle.from_stored([]) is None
+    assert Throttle.from_stored(None) is None
+    assert Throttle(3, 10).to_stored() == [3, 10]

@@ -177,6 +177,12 @@ CONF_REMINDER_SCHEDULE = "reminder_schedule"
 # Form-only fields: the "use the default" checkboxes, and the notifications section.
 CONF_USE_DEFAULT_GROUPS = "use_default_groups"
 CONF_USE_DEFAULT_REMINDERS = "use_default_reminders"
+# Absent: use the default throttle; [count, minutes]: the alert's own; []: none
+# (spec §9.8). The form has a checkbox and the two numbers.
+CONF_THROTTLE = "throttle"
+CONF_USE_DEFAULT_THROTTLE = "use_default_throttle"
+CONF_THROTTLE_COUNT = "throttle_count"
+CONF_THROTTLE_MINUTES = "throttle_minutes"
 SECTION_NOTIFICATIONS = "notifications"
 SECTION_SUPERSESSION = "supersession"
 
@@ -207,6 +213,10 @@ DEFAULT_DONE_NO_DATA_MESSAGE = (
 DEFAULT_DONE_DISABLED_MESSAGE = (
     "{{ name }} was disabled; stopped firing after {{ duration }}."
 )
+# Throttling (spec §9.8): the marker on the on notification that starts it, and
+# the summary sent when it ends. Fixed text, not templates.
+THROTTLE_STARTS_MARKER = "[Throttling starts]"
+THROTTLE_ENDS_MARKER = "[Throttling ends]"
 
 # Config entry options: the global defaults (spec §12.1).
 CONF_STARTUP_DELAY = "startup_delay"
@@ -217,6 +227,8 @@ CONF_DEFAULT_REMINDER_SCHEDULE = "default_reminder_schedule"
 DEFAULT_REMINDER_SCHEDULE: tuple[float, ...] = (10, 20, 30, 60)
 CONF_FALLBACK_GROUP = "fallback_group"
 CONF_RETRY_TIMEOUT = "retry_timeout"
+# The default throttle (spec §9.8): [count, minutes], or absent or [] for none.
+CONF_DEFAULT_THROTTLE = "default_throttle"
 DEFAULT_RETRY_TIMEOUT = timedelta(minutes=5)
 # How long a notification's Snooze button snoozes for (spec §9.11); also an
 # alert's own setting.
@@ -344,6 +356,8 @@ ATTR_DISPLAY_MESSAGE = "display_message"
 ATTR_NOTIFIER_GROUPS = "notifier_groups"
 ATTR_REMINDER_SCHEDULE = "reminder_schedule"
 ATTR_NEXT_REMINDER = "next_reminder"
+ATTR_THROTTLE = "throttle"
+ATTR_THROTTLED_SINCE = "throttled_since"
 ATTR_DURATION = "duration"
 ATTR_EVENT_EXPIRES = "event_expires"
 ATTR_TRIGGER_DATA = "trigger_data"

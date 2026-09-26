@@ -18,6 +18,7 @@ from .const import (
     CONF_BUTTON_SNOOZE_DURATION,
     CONF_DEFAULT_GROUPS,
     CONF_DEFAULT_REMINDER_SCHEDULE,
+    CONF_DEFAULT_THROTTLE,
     CONF_DONE_WINDOW,
     CONF_EVENT_DURATIONS,
     CONF_FALLBACK_GROUP,
@@ -52,6 +53,47 @@ def to_timedelta(value: Any) -> timedelta | None:
     return timedelta(seconds=float(value))
 
 
+@dataclass(frozen=True, slots=True)
+class Throttle:
+    """At most count on notifications in any window of minutes (spec §9.8)."""
+
+    count: int
+    minutes: float
+
+    @property
+    def window(self) -> timedelta:
+        """Return the window as a timedelta."""
+        return timedelta(minutes=self.minutes)
+
+    @classmethod
+    def from_stored(cls, value: Any) -> Throttle | None:
+        """Return a throttle from its stored form, [count, minutes]; empty is none."""
+        if not value:
+            return None
+        count, minutes = value
+        return cls(int(count), minutes)
+
+    def to_stored(self) -> list[float]:
+        """Return the throttle in its stored form."""
+        return [self.count, self.minutes]
+
+
+def parse_throttle(count: Any, minutes: Any) -> Throttle | None:
+    """Return a throttle from a form's two numbers; neither set means none.
+
+    Raises ValueError unless both are set, the count is a whole number of at least
+    one, and the minutes are positive.
+    """
+    if count in (None, "") and minutes in (None, ""):
+        return None
+    if count in (None, "") or minutes in (None, ""):
+        raise ValueError("a throttle needs both a count and minutes")
+    count, minutes = float(count), float(minutes)
+    if count < 1 or not count.is_integer() or minutes <= 0:
+        raise ValueError("invalid throttle")
+    return Throttle(int(count), int(minutes) if minutes.is_integer() else minutes)
+
+
 @dataclass(slots=True)
 class Settings:
     """The global defaults, from the config entry's options (spec §12.1)."""
@@ -80,6 +122,8 @@ class Settings:
     done_window: timedelta = DEFAULT_DONE_WINDOW
     # How long a notification's Snooze button snoozes for (spec §9.11).
     button_snooze_duration: timedelta = DEFAULT_BUTTON_SNOOZE_DURATION
+    # The default throttle; None means none (spec §9.8).
+    throttle: Throttle | None = None
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> Settings:
@@ -115,6 +159,7 @@ class Settings:
             done_window=DEFAULT_DONE_WINDOW if done_window is None else done_window,
             # A zero snooze would do nothing, so it means the default too.
             button_snooze_duration=button_snooze or DEFAULT_BUTTON_SNOOZE_DURATION,
+            throttle=Throttle.from_stored(options.get(CONF_DEFAULT_THROTTLE)),
         )
 
     def update(self, other: Settings) -> None:
@@ -194,6 +239,35 @@ def snooze_end_reminder(
     if slot is None:
         return False, None
     return slot - now >= window, slot
+
+
+class ThrottleDecision(StrEnum):
+    """What to do with an on notification, by the throttle (spec §9.8)."""
+
+    SEND = "send"
+    # Send it, marked: it starts throttling.
+    START = "start"
+    HOLD = "hold"
+
+
+@dataclass(frozen=True, slots=True)
+class ThrottleSummary:
+    """What was held while an alert was throttled, for the summary (spec §9.8).
+
+    held_fires counts the on notifications held, the latest at last_held; ended,
+    duration_seconds, and end_reason describe the latest held done notification.
+    """
+
+    held_fires: int = 0
+    last_held: datetime | None = None
+    ended: datetime | None = None
+    duration_seconds: float | None = None
+    end_reason: str | None = None
+
+    @property
+    def anything_held(self) -> bool:
+        """Return whether anything was held, so that a summary is due."""
+        return self.held_fires > 0 or self.ended is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,6 +390,15 @@ class AlertRuntime:
     # Pre-acknowledgements (spec §8.3), by the unique ID of the superseded alert
     # that propagated them: the pre-snooze deadline, or None for a plain one.
     pre_acks: dict[str, datetime | None] = field(default_factory=dict)
+    # Throttling (spec §9.8): the latest on notifications (sent or held), as many
+    # as the throttle's count; while throttled, since when, and what was held.
+    throttle_fires: list[datetime] = field(default_factory=list)
+    throttled_since: datetime | None = None
+    throttle_held: int = 0
+    throttle_last_held: datetime | None = None
+    throttle_ended: datetime | None = None
+    throttle_ended_seconds: float | None = None
+    throttle_end_reason: str | None = None
     # Not persisted: set while a restored alert waits for its first data, so that
     # the inputs still loading don't cancel the delays it was restored with.
     awaiting_data: bool = False
@@ -575,6 +658,72 @@ class AlertRuntime:
         self.last_acked_by = None
         return sorted(live)
 
+    def throttle_note(
+        self, now: datetime, throttle: Throttle | None
+    ) -> ThrottleDecision:
+        """Count an on notification, and decide whether to send it (spec §9.8).
+
+        Held ones count too. The one that brings the count in the window up to the
+        throttle's count is sent, marked, and starts throttling; while throttled,
+        they're held.
+        """
+        if throttle is None:
+            self.throttle_fires = []
+            return ThrottleDecision.SEND
+        self.throttle_fires = [*self.throttle_fires, now][-throttle.count :]
+        if self.throttled_since is not None:
+            self.throttle_held += 1
+            self.throttle_last_held = now
+            return ThrottleDecision.HOLD
+        if (
+            len(self.throttle_fires) >= throttle.count
+            and self.throttle_fires[0] > now - throttle.window
+        ):
+            self.throttled_since = now
+            return ThrottleDecision.START
+        return ThrottleDecision.SEND
+
+    def throttle_hold_done(self, now: datetime, transition: Transition) -> bool:
+        """Hold a done notification while throttled; return whether it was."""
+        if self.throttled_since is None:
+            return False
+        self.throttle_ended = now
+        self.throttle_ended_seconds = transition.duration_seconds
+        self.throttle_end_reason = transition.reason
+        return True
+
+    def throttle_end_due(self, throttle: Throttle | None) -> datetime | None:
+        """Return when throttling ends: when fewer than count on notifications
+        are left in the window. Without a throttle, or with a smaller count
+        than it has seen, it's due at once."""
+        if self.throttled_since is None:
+            return None
+        if throttle is None or len(self.throttle_fires) < throttle.count:
+            return self.throttled_since
+        return self.throttle_fires[-throttle.count] + throttle.window
+
+    def throttle_expire(
+        self, now: datetime, throttle: Throttle | None
+    ) -> ThrottleSummary | None:
+        """End throttling if it's due, returning what was held; else None."""
+        due = self.throttle_end_due(throttle)
+        if due is None or now < due:
+            return None
+        summary = ThrottleSummary(
+            self.throttle_held,
+            self.throttle_last_held,
+            self.throttle_ended,
+            self.throttle_ended_seconds,
+            self.throttle_end_reason,
+        )
+        self.throttled_since = None
+        self.throttle_held = 0
+        self.throttle_last_held = None
+        self.throttle_ended = None
+        self.throttle_ended_seconds = None
+        self.throttle_end_reason = None
+        return summary
+
     def plan_reminder(self, schedule: Sequence[float], now: datetime) -> None:
         """Set the next reminder: the next slot after now (spec §6.2).
 
@@ -756,6 +905,7 @@ class AlertRuntime:
             source: until.isoformat() if until else None
             for source, until in self.pre_acks.items()
         }
+        data["throttle_fires"] = [fired.isoformat() for fired in self.throttle_fires]
         return data
 
     @classmethod
@@ -773,6 +923,8 @@ class AlertRuntime:
                     source: datetime.fromisoformat(until) if until else None
                     for source, until in (value or {}).items()
                 }
+            elif name == "throttle_fires":
+                value = [datetime.fromisoformat(fired) for fired in value or []]
             setattr(runtime, name, value)
         return runtime
 
@@ -794,6 +946,9 @@ _DATETIME_FIELDS = frozenset(
         "delay_off_until",
         "next_reminder",
         "event_expires",
+        "throttled_since",
+        "throttle_last_held",
+        "throttle_ended",
     }
 )
 _TRANSIENT_FIELDS = frozenset({"awaiting_data"})
