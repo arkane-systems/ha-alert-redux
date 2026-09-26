@@ -19,11 +19,23 @@ from enum import StrEnum
 import logging
 from typing import TYPE_CHECKING, Any
 
-from .const import CONF_ALERT, Priority
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    CONF_ALERT,
+    CONF_PROPAGATION,
+    CONF_SNOOZE_DURATION,
+    DOMAIN,
+    AlertState,
+    Priority,
+    Propagation,
+)
+from .model import Settings, to_timedelta
 
 if TYPE_CHECKING:
     from .entity import AlertEntity
-    from .model import Settings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +43,14 @@ _LOGGER = logging.getLogger(__name__)
 def relationship_targets(relationships: Iterable[Mapping[str, Any]]) -> list[str]:
     """Return the entity IDs of the alerts that relationships supersede."""
     return [target for rel in relationships if (target := rel.get(CONF_ALERT))]
+
+
+def propagation_of(relationship: Mapping[str, Any]) -> Propagation:
+    """Return a relationship's propagation setting; None unless it's valid."""
+    try:
+        return Propagation(relationship.get(CONF_PROPAGATION, Propagation.NONE))
+    except ValueError:
+        return Propagation.NONE
 
 
 def find_cycle(edges: Mapping[str, Iterable[str]]) -> list[str] | None:
@@ -133,8 +153,14 @@ class Supersession:
     relationships, change.
     """
 
-    def __init__(self, entities: Mapping[str, AlertEntity], settings: Settings) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entities: Mapping[str, AlertEntity],
+        settings: Settings,
+    ) -> None:
         """Initialize from the alert entities, by subentry ID, and the settings."""
+        self._hass = hass
         self._entities = entities
         self._settings = settings
         self._graph_key: tuple[Any, ...] | None = None
@@ -214,6 +240,89 @@ class Supersession:
             superseded.async_superseders_changed(announce=started)
 
     def async_refresh(self) -> None:
-        """Bring every alert's superseded_by up to date, e.g. after a config change."""
+        """Bring every alert's supersession and references up to date.
+
+        For example after a configuration change, or an alert being added,
+        removed, or renamed.
+        """
         for entity in self._by_entity_id().values():
             entity.async_superseders_changed(announce=False)
+        self.async_sweep_pre_acks()
+
+    def acknowledged(self) -> set[str]:
+        """Return the unique IDs of the alerts acknowledged now: the pre-ack
+        sources that count."""
+        return {
+            unique_id
+            for unique_id, entity in self._entities.items()
+            if entity.hass is not None and entity.state == AlertState.ACK
+        }
+
+    def entity_ids(self, unique_ids: Iterable[str]) -> list[str]:
+        """Return the current entity IDs of alerts, by unique ID, for display."""
+        return sorted(
+            entity.entity_id
+            if (entity := self._entities.get(unique_id)) is not None and entity.entity_id
+            else unique_id
+            for unique_id in unique_ids
+        )
+
+    def async_ack_changed(self, entity: AlertEntity, *, acked: bool) -> None:
+        """Propagate an alert becoming acknowledged, or losing it (spec §8.2).
+
+        Becoming acknowledged pre-acknowledges (or pre-snoozes) each alert that
+        directly supersedes it with propagation set; losing it, by an unack, a
+        snooze running out, or the firing ending, cancels those.
+        """
+        entities = self._by_entity_id()
+        now = dt_util.utcnow()
+        for eid in self.graph.direct_superseders(entity.entity_id):
+            if (superseder := entities.get(eid)) is None:
+                continue
+            assert entity.unique_id is not None
+            if not acked:
+                superseder.async_remove_pre_ack(entity.unique_id)
+                continue
+            relationship = next(
+                (
+                    rel
+                    for rel in superseder.supersedes
+                    if rel.get(CONF_ALERT) == entity.entity_id
+                ),
+                {},
+            )
+            propagation = propagation_of(relationship)
+            if propagation is Propagation.NONE:
+                continue
+            until = None
+            if propagation is Propagation.SNOOZE:
+                if not (duration := to_timedelta(relationship.get(CONF_SNOOZE_DURATION))):
+                    continue
+                until = now + duration
+            superseder.async_add_pre_ack(entity.unique_id, until, entity.context)
+
+    def async_sweep_pre_acks(self) -> None:
+        """Drop stale pre-acknowledgements: from an alert that's gone, or one
+        that isn't acknowledged, e.g. after a restart.
+
+        Pre-acknowledgements are kept by the source's unique ID, so renames
+        don't affect them. An alert that hasn't been added yet (while starting
+        up) is left alone.
+        """
+
+        def stale(source: str) -> bool:
+            if (entity := self._entities.get(source)) is None:
+                return True
+            return entity.hass is not None and entity.state != AlertState.ACK
+
+        for entity in self._by_entity_id().values():
+            entity.async_drop_pre_acks(stale)
+
+    def broken_references(self, entity: AlertEntity) -> list[str]:
+        """Return the alerts this one refers to that don't exist (spec §12.4)."""
+        registry = er.async_get(self._hass)
+        return [
+            target
+            for target in entity.references
+            if (entry := registry.async_get(target)) is None or entry.platform != DOMAIN
+        ]

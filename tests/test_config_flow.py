@@ -1081,3 +1081,63 @@ async def test_new_alert_cant_supersede_itself(
         },
     )
     assert result["errors"] == {"base": "supersedes_self"}
+
+
+async def test_supersession_propagation_fields(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Propagation is stored per relationship; none is left out (spec §8.2)."""
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open"), alert_subentry("Garage Door Open")
+    )
+    form = {**FORM, "name": "Doors Left Open"}
+
+    async def submit(relationships: list[dict[str, Any]], **extra: Any):
+        result = await _start(hass, entry, "manual")
+        return await hass.config_entries.subentries.async_configure(
+            result["flow_id"],
+            {**form, **extra, "supersession": {"supersedes": relationships}},
+        )
+
+    snooze = {"alert": "alert_redux.back_door_open", "propagation": "snooze"}
+    result = await submit([snooze])
+    assert result["errors"] == {"base": "snooze_duration_missing"}
+    result = await submit(
+        [{**snooze, "snooze_duration": {"hours": 0, "minutes": 0, "seconds": 0}}]
+    )
+    assert result["errors"] == {"base": "snooze_duration_missing"}
+    result = await submit(
+        [{"alert": "alert_redux.back_door_open", "propagation": "acknowledge"}],
+        acknowledgeable=False,
+    )
+    assert result["errors"] == {"base": "propagation_unacknowledgeable"}
+    # With no propagation, an unacknowledgeable alert can supersede.
+    result = await submit(
+        [{"alert": "alert_redux.back_door_open", "propagation": "none"}],
+        acknowledgeable=False,
+        name="Doors Left Open Unacknowledgeable",
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    result = await submit(
+        [
+            {**snooze, "snooze_duration": {"hours": 1, "minutes": 0, "seconds": 0}},
+            {
+                "alert": "alert_redux.garage_door_open",
+                "propagation": "none",
+                "snooze_duration": {"hours": 1, "minutes": 0, "seconds": 0},
+            },
+        ]
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    subentry = next(
+        sub for sub in entry.subentries.values() if sub.title == "Doors Left Open"
+    )
+    assert subentry.data["supersedes"] == [
+        {
+            "alert": "alert_redux.back_door_open",
+            "propagation": "snooze",
+            "snooze_duration": {"hours": 1, "minutes": 0, "seconds": 0},
+        },
+        {"alert": "alert_redux.garage_door_open"},
+    ]
