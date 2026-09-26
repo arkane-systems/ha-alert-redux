@@ -841,3 +841,26 @@ async def test_held_survive_restart(
     await _quiet_notifier(hass, group)
     await hass.async_block_till_done()
     assert len(calls) == 1
+
+
+async def test_holds_until_started_when_quiet_hours_cant_be_told(
+    hass: HomeAssistant,
+) -> None:
+    """While Home Assistant starts, a loud group whose quiet-hours entity has
+    no state yet holds; once started, a missing entity releases it."""
+    calls = async_mock_service(hass, "notify", "speaker")
+    notifier = Notifier(hass, store_key=STORE_KEY, issue_domain=ISSUE_DOMAIN)
+    _RUNNING.append(notifier)
+    await notifier.async_load()
+    notifier.async_configure(
+        fallback_group=None, retry_timeout=timedelta(minutes=5), quiet_entity=QUIET
+    )
+    notifier.async_set_groups(
+        [GroupConfig("g", "G", (ActionMember("speaker"),), loud=True)]
+    )
+    await _send(notifier, ["g"])
+    assert calls == []
+    # Starting: Home Assistant is already running here, so it counts as started.
+    notifier.async_start()
+    await hass.async_block_till_done()
+    assert len(calls) == 1
