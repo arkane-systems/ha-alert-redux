@@ -571,6 +571,10 @@ A group has:
 
   A group holding both kinds of destination should be split into two groups, and an
   alert can use both.
+- [Deferred, phase 13] Mobile members send higher-priority alerts with iOS
+  **interruption levels** matching their priority: `critical` for Emergency and
+  `time-sensitive` for Critical (proposed mapping), so they get through Focus and
+  silent modes.
 - [Decided] Groups are **not** exposed for use outside Alert Redux. General-purpose
   notification belongs in the possible future notifier integration (§9.1), not
   halfway here.
@@ -936,6 +940,11 @@ keyboards could be added later. Other members leave the buttons out.
 - [Decided, phase 9] The Snooze button's duration is the alert's own setting, or
   the **Snooze button duration** option, 1 hour by default. Its title gives the
   duration ("Snooze 1 hour").
+- [Deferred, phase 13] **The app's own snooze options.** By default the HA app
+  offers its own *Snooze 5 min*, *Snooze 15 min*, and *Snooze 1 hour* on
+  notifications. These aren't Alert Redux's snooze (§6.2), which is confusing next
+  to our Snooze button. Investigate whether they can be suppressed, or at least
+  told apart from ours.
 
 ## 10. Acknowledgement queue
 
@@ -1221,6 +1230,8 @@ was meant to solve.
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
 - Each **notifier group** is also a subentry (§9.3).
+- [Deferred, phase 13] Review the layout and grouping of the configuration forms
+  for each kind of alert.
 - The forms use HA's own selectors: entity, template, trigger, duration, and so on.
   The form fields shown depend on the kind of alert.
 
@@ -1403,6 +1414,11 @@ To make sure it gets fixed:
   friendlier front end to the subentry flows.
 - [Decided, F27; late phase] Export/import of alert definitions, to make up for
   losing YAML's version control and text editing. Also available as actions (§16).
+- [Deferred, phase 13] Flag alerts that are currently **superseded** (§8.1)
+  alongside their state.
+- [Deferred, phase 13] On request (a click, not shown all the time), show a
+  **copyable text summary** of an alert's settings. That's useful when setting up a
+  matching alert.
 
 ## 14. Voice control
 
@@ -1560,7 +1576,8 @@ all" action.
   be extracted later). Groups aren't exposed for outside use in the meantime.
 - Migration code for the built-in `alert` inside the integration [F28]. Instead, a
   separate converter utility in this repository (not shipped in the integration)
-  reads an `alert:` YAML section and writes a file for `alert_redux.import`.
+  reads an `alert:` YAML section and writes a file for `alert_redux.import`. A
+  similar standalone converter does the same for Alert2 alerts (phase 14).
 
 ## 18. Open questions
 
@@ -1954,11 +1971,24 @@ per group. Decisions from building it are recorded in §9.1, §9.3, §9.5, §9.8
 - Card filters (§13.1).
 - Creating and editing alerts from the admin card (§13.2).
 - The export and import actions and admin-card controls (§13.2, §16).
+- The admin card flags superseded alerts, and shows a copyable summary of an
+  alert's settings on request (§13.2).
+- Investigate the HA app's own snooze options on notifications, and suppress or
+  distinguish them (§9.11).
+- iOS interruption levels for Emergency and Critical alerts (§9.3).
+- Review the layout and grouping of the configuration forms for each kind of
+  alert (§12.1).
+- A section in the README thanking the authors of
+  [Alert2](https://github.com/redstone99/hass-alert2) and
+  [weather_alerts_card](https://github.com/seevee/weather_alerts_card) for their
+  inspiration.
 
-### Phase 14 — Converter utility
+### Phase 14 — Converter utilities
 
-- A standalone tool in this repository, not shipped in the integration, that
-  converts an `alert:` YAML section into an import file (§17).
+- Standalone tools in this repository, not shipped in the integration, that
+  convert into an import file (§17):
+  - an `alert:` YAML section from the built-in `alert` integration;
+  - Alert2 alerts.
 
 **1.0.0** comes after phase 11, once the core feature set is proven in daily use,
 with phases 12–14 as 1.x releases [Decided, provisionally].
