@@ -184,10 +184,12 @@ from .notifications import (
     REASON_THROTTLE_SUMMARY,
     async_notifications_acknowledged,
     async_send_notification,
+    build_notification,
     effective_groups,
     group_names,
     throttle_summary_message,
 )
+from .notifier import Notification
 from .sources import (
     Source,
     SourceSet,
@@ -711,6 +713,8 @@ class AlertEntity(Entity):
                 transition.duration_seconds or 0 if transition else duration_seconds
             ),
             end_reason=transition.reason if transition else None,
+            started=transition.started if transition else None,
+            ended=transition.ended if transition else None,
         )
 
     @callback
@@ -722,21 +726,49 @@ class AlertEntity(Entity):
         **options: Any,
     ) -> None:
         """Send a notification; options go to async_send_notification."""
-        assert self.unique_id is not None
         async_send_notification(
             self.hass,
-            entity_id=self.entity_id,
-            title=str(self.name),
             groups=effective_groups(self._settings, self._notifier_groups),
-            template=template,
-            variables=variables,
-            buttons=alert_buttons(
+            **self._notification_details(reason, template, variables),
+            **options,
+        )
+
+    def _notification_details(
+        self, reason: str, template: str | None, variables: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Return what every notification of the alert's is built from."""
+        assert self.unique_id is not None
+        return {
+            "entity_id": self.entity_id,
+            "title": str(self.name),
+            "template": template,
+            "variables": variables,
+            "buttons": alert_buttons(
                 self.unique_id,
                 self._custom_buttons,
                 acknowledgeable=self._acknowledgeable,
                 snooze=self._button_snooze,
             ),
-            **options,
+            "urgency": self._priority.urgency,
+        }
+
+    def quiet_hours_reminder(self) -> Notification | None:
+        """Return the reminder sent when quiet hours end, with the real firing
+        duration; None unless the alert is active and not superseded (§9.9)."""
+        runtime = self._runtime
+        if runtime.state is not AlertState.ACTIVE or self._superseded_by:
+            return None
+        now = dt_util.utcnow()
+        duration = (
+            (now - runtime.firing_since).total_seconds() if runtime.firing_since else 0
+        )
+        return build_notification(
+            self.hass,
+            **self._notification_details(
+                REASON_REMINDER,
+                self._reminder_message,
+                self._message_context(REASON_REMINDER, duration_seconds=duration),
+            ),
         )
 
     @callback

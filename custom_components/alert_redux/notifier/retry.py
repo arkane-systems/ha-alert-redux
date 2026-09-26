@@ -45,6 +45,8 @@ class Attempt:
     tag: str
     tries: int = 0
     next_try: datetime | None = None
+    # Softened for quiet hours: sent with the member's quiet-hours data (§9.9).
+    soft: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Return the attempt in storable form."""
@@ -56,6 +58,7 @@ class Attempt:
             "tag": self.tag,
             "tries": self.tries,
             "next_try": self.next_try.isoformat() if self.next_try else None,
+            "soft": self.soft,
         }
 
     @classmethod
@@ -69,6 +72,7 @@ class Attempt:
             data.get("tag") or key,
             data.get("tries", 0),
             datetime.fromisoformat(data["next_try"]) if data.get("next_try") else None,
+            data.get("soft", False),
         )
 
 

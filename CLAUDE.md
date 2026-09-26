@@ -20,7 +20,7 @@ admin card), phase 7 (supersession, propagation and pre-acknowledgement, the
 alert state kind, dangling references, and the card's superseded alerts), and
 phase 8 (the summary sensors, the logbook platform, and the `_data_restored`
 event), and phase 9 (replacing and clearing notifications, and notification
-buttons).
+buttons), and phase 10 (throttling and quiet hours).
 
 ## Specification
 
@@ -98,16 +98,21 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     to (its own, the defaults, or the fallback), rendering the on / reminder / done
     messages, and handing them to the notifier with the alert's lifecycle key;
     telling the notifier when an alert is acknowledged, deleted, or renamed; the
-    throttling summary's text. Reminder timing lives in `model.py`
+    throttling summary's text; and `async_quiet_hours_ended`, the notifier's
+    owner callback when a group's quiet hours end (one reminder per active
+    alert, one summary of the firings that ended). Reminder timing lives in `model.py`
     (`AlertRuntime.next_reminder`, `next_reminder_slot`) and `entity.py`.
   - `notifier/` — the **self-contained notifier module** (spec §9.1): groups and
     members (`model.py`), delivery per member kind (`members.py`), the retry queue's
     records (`retry.py`), missing-action Repairs issues (`repairs.py`), and the
     `Notifier` (`__init__.py`). **It must not import anything Alert-Redux-specific**,
     so it can be extracted later; its owner passes in the store key and issue domain.
-    It keeps its own `Store` (the retry queue, and the *live records* of which
-    members are showing each key's notification, so clears reach exactly those;
-    spec §9.10). Named `notifier`, not `notify`: a `notify.py` would be loaded as
+    It keeps its own `Store` (the retry queue, the *live records* of which
+    members are showing each key's notification, so clears reach exactly those,
+    spec §9.10, and notifications held for quiet hours). Quiet hours (§9.9) are
+    the notifier's: notifications carry an `urgency` (Alert Redux maps it from
+    the priority), loud groups hold or soften, and when their quiet-hours entity
+    turns off, the owner's `on_quiet_ended` callback says what to send. Named `notifier`, not `notify`: a `notify.py` would be loaded as
     a notify platform.
   - `buttons.py` — notification buttons (spec §9.11): building an alert's
     (custom, then Acknowledge and Snooze), their action IDs

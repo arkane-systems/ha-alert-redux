@@ -23,6 +23,8 @@ from .const import (
     CONF_EVENT_DURATIONS,
     CONF_FALLBACK_GROUP,
     CONF_NO_DATA_GRACE,
+    CONF_QUIET_ENTITY,
+    CONF_QUIET_THRESHOLD,
     CONF_RETRY_TIMEOUT,
     CONF_SNOOZE_REMINDER_WINDOW,
     CONF_STARTUP_DELAY,
@@ -31,6 +33,7 @@ from .const import (
     DEFAULT_DONE_WINDOW,
     DEFAULT_EVENT_DURATIONS,
     DEFAULT_NO_DATA_GRACE,
+    DEFAULT_QUIET_THRESHOLD,
     DEFAULT_REMINDER_SCHEDULE,
     DEFAULT_RETRY_TIMEOUT,
     DEFAULT_SNOOZE_REMINDER_WINDOW,
@@ -124,6 +127,10 @@ class Settings:
     button_snooze_duration: timedelta = DEFAULT_BUTTON_SNOOZE_DURATION
     # The default throttle; None means none (spec §9.8).
     throttle: Throttle | None = None
+    # Quiet hours (spec §9.9): the entity (None: no quiet hours, except for
+    # groups with their own), and the priority from which they don't apply.
+    quiet_entity: str | None = None
+    quiet_threshold: Priority = Priority(DEFAULT_QUIET_THRESHOLD)
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> Settings:
@@ -160,6 +167,10 @@ class Settings:
             # A zero snooze would do nothing, so it means the default too.
             button_snooze_duration=button_snooze or DEFAULT_BUTTON_SNOOZE_DURATION,
             throttle=Throttle.from_stored(options.get(CONF_DEFAULT_THROTTLE)),
+            quiet_entity=options.get(CONF_QUIET_ENTITY) or None,
+            quiet_threshold=Priority(
+                options.get(CONF_QUIET_THRESHOLD) or DEFAULT_QUIET_THRESHOLD
+            ),
         )
 
     def update(self, other: Settings) -> None:
@@ -316,6 +327,9 @@ class Transition:
     reason: EndReason | None = None
     # The fire data of the firing that ended, for the done message.
     fire_data: dict[str, Any] | None = None
+    # When the firing that ended started, and when it ended.
+    started: datetime | None = None
+    ended: datetime | None = None
 
 
 class Change(StrEnum):
@@ -452,6 +466,7 @@ class AlertRuntime:
         old = self.state
         fire_count = self.fire_count
         fire_data = self.fire_data
+        started = self.firing_since
         duration = (
             (now - self.firing_since).total_seconds() if self.firing_since else None
         )
@@ -464,7 +479,9 @@ class AlertRuntime:
         self.next_reminder = None
         self.event_expires = None
         self.last_ended = now
-        return Transition(old, self.state, fire_count, duration, reason, fire_data)
+        return Transition(
+            old, self.state, fire_count, duration, reason, fire_data, started, now
+        )
 
     def ack(self, now: datetime, user_id: str | None) -> Transition | None:
         """Acknowledge an active alert, or make a snoozed alert's ack permanent.

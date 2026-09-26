@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from dataclasses import replace
 from datetime import timedelta
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -25,6 +26,7 @@ from custom_components.alert_redux.notifier import (
     Notification,
     Notifier,
     PersistentMember,
+    QuietBehaviour,
 )
 from custom_components.alert_redux.notifier.model import parse_target
 from custom_components.alert_redux.notifier.retry import backoff
@@ -716,3 +718,126 @@ async def test_old_store_format_loads(
     await _new_notifier(hass, GroupConfig("g", "G", (ActionMember("mobile_app_phone"),)))
     await _tick(hass, freezer, 1)
     assert _messages(calls) == [("The back door is open.", {"tag": KEY})]
+
+
+# Quiet hours (spec §9.9)
+
+QUIET = "input_boolean.quiet"
+
+
+async def _quiet_notifier(hass: HomeAssistant, *groups: GroupConfig) -> Notifier:
+    notifier = await _new_notifier(hass, *groups)
+    notifier.async_configure(
+        fallback_group=None,
+        retry_timeout=timedelta(minutes=5),
+        quiet_entity=QUIET,
+        quiet_threshold=2,
+    )
+    return notifier
+
+
+def test_group_quiet_settings_from_dict() -> None:
+    group = GroupConfig.from_dict(
+        "g",
+        "Speaker",
+        {
+            "loud": True,
+            "actions": [{"action": "speaker", "quiet_data": {"volume": 0.2}}],
+            "quiet_entity": "input_boolean.bedroom",
+            "quiet_threshold": "critical",
+            "quiet_behaviour": "soften",
+        },
+        {"critical": 3}.__getitem__,
+    )
+    assert (group.quiet_entity, group.quiet_threshold) == ("input_boolean.bedroom", 3)
+    assert group.quiet_behaviour is QuietBehaviour.SOFTEN
+    assert group.members == (ActionMember("speaker", quiet_data={"volume": 0.2}),)
+    # Members that can soften don't hold.
+    assert group.holding_members() == ()
+
+
+async def test_held_never_goes_to_the_fallback(
+    hass: HomeAssistant, persistent: MagicMock, freezer: FrozenDateTimeFactory
+) -> None:
+    hass.states.async_set(QUIET, "on")
+    calls = async_mock_service(hass, "notify", "speaker")
+    notifier = await _quiet_notifier(
+        hass, GroupConfig("g", "G", (ActionMember("speaker"),), loud=True)
+    )
+    assert notifier.is_quiet("g")
+    await _send(notifier, ["g"])
+    await _tick(hass, freezer, 600)
+    assert calls == []
+    persistent.assert_not_called()
+
+
+async def test_urgent_notifications_get_through(hass: HomeAssistant) -> None:
+    hass.states.async_set(QUIET, "on")
+    calls = async_mock_service(hass, "notify", "speaker")
+    notifier = await _quiet_notifier(
+        hass, GroupConfig("g", "G", (ActionMember("speaker"),), loud=True)
+    )
+    notifier.async_send(["g"], replace(NOTIFICATION, urgency=2))
+    await hass.async_block_till_done()
+    assert len(calls) == 1
+
+
+async def test_without_owner_the_latest_of_each_key_is_sent(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set(QUIET, "on")
+    calls = async_mock_service(hass, "notify", "speaker")
+    notifier = await _quiet_notifier(
+        hass, GroupConfig("g", "G", (ActionMember("speaker"),), loud=True)
+    )
+    await _send(notifier, ["g"])
+    notifier.async_send(["g"], DONE)
+    notifier.async_rekey(KEY, "alert_redux_side_door_open")
+    hass.states.async_set(QUIET, "off")
+    await hass.async_block_till_done()
+    assert [(call.data["message"]) for call in calls] == ["Closed."]
+
+
+async def test_folded_final_clears_what_was_shown(hass: HomeAssistant) -> None:
+    """A key that ended while held, and gets nothing sent, has its earlier
+    notification cleared from the members that held, as its final notification
+    would have done."""
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    notifier = Notifier(
+        hass,
+        store_key=STORE_KEY,
+        issue_domain=ISSUE_DOMAIN,
+        on_quiet_ended=lambda _group_id, _held: [],
+    )
+    _RUNNING.append(notifier)
+    await notifier.async_load()
+    notifier.async_configure(
+        fallback_group=None, retry_timeout=timedelta(minutes=5), quiet_entity=QUIET
+    )
+    notifier.async_set_groups([GroupConfig("g", "G", (PHONE,), loud=True)])
+    notifier.async_start()
+    await _send(notifier, ["g"])
+    hass.states.async_set(QUIET, "on")
+    notifier.async_send(["g"], DONE)
+    await hass.async_block_till_done()
+    assert len(calls) == 1
+    hass.states.async_set(QUIET, "off")
+    await hass.async_block_till_done()
+    assert _messages(calls)[-1] == ("clear_notification", {"tag": KEY})
+
+
+async def test_held_survive_restart(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    hass.states.async_set(QUIET, "on")
+    calls = async_mock_service(hass, "notify", "speaker")
+    group = GroupConfig("g", "G", (ActionMember("speaker"),), loud=True)
+    notifier = await _quiet_notifier(hass, group)
+    await _send(notifier, ["g"])
+    await notifier.async_stop()
+    assert list(hass_storage[STORE_KEY]["data"]["held"]["g"]) == [KEY]
+
+    hass.states.async_set(QUIET, "off")
+    await _quiet_notifier(hass, group)
+    await hass.async_block_till_done()
+    assert len(calls) == 1

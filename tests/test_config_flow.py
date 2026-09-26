@@ -496,6 +496,93 @@ async def _start_group(
 GROUP_FORM = {"name": "Phones", "loud": False, "persistent": False}
 
 
+async def test_group_quiet_hours_settings(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A loud group's quiet-hours overrides are stored when they aren't the
+    defaults, and pre-filled when editing (spec §9.9)."""
+    entry = await setup_alerts()
+    result = await _start_group(hass, entry)
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **GROUP_FORM,
+            "name": "Speaker",
+            "loud": True,
+            "quiet_entity": "input_boolean.bedroom",
+            "quiet_threshold": "critical",
+            "quiet_behaviour": "soften",
+            "actions": [
+                {"action": "notify.speaker", "quiet_data": {"volume": 0.2}},
+            ],
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (subentry,) = entry.subentries.values()
+    assert subentry.data["quiet_entity"] == "input_boolean.bedroom"
+    assert subentry.data["quiet_threshold"] == "critical"
+    assert subentry.data["quiet_behaviour"] == "soften"
+    assert subentry.data["actions"] == [
+        {"action": "notify.speaker", "quiet_data": {"volume": 0.2}}
+    ]
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_NOTIFIER_GROUP),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
+    )
+    schema = result["data_schema"].schema
+    defaults = {str(key): key.default() for key in schema if key.default is not vol.UNDEFINED}
+    assert defaults["quiet_threshold"] == "critical"
+    assert defaults["quiet_behaviour"] == "soften"
+    assert _suggested(schema)["quiet_entity"] == "input_boolean.bedroom"
+
+    # Back to the defaults: nothing is stored.
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **GROUP_FORM,
+            "name": "Speaker",
+            "loud": True,
+            "quiet_threshold": "default",
+            "quiet_behaviour": "hold",
+            "actions": [{"action": "notify.speaker"}],
+        },
+    )
+    subentry = entry.subentries[subentry.subentry_id]
+    for key in ("quiet_entity", "quiet_threshold", "quiet_behaviour"):
+        assert key not in subentry.data
+
+
+async def test_options_quiet_hours(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    entry = await setup_alerts()
+    form = {
+        "no_data_grace": {"hours": 0, "minutes": 10, "seconds": 0},
+        "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
+    }
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], form)
+    # Unsent, the section keeps the settings: no entity, Warning.
+    assert entry.options["quiet_entity"] is None
+    assert entry.options["quiet_threshold"] == "warning"
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **form,
+            "quiet_hours": {
+                "quiet_entity": "schedule.night",
+                "quiet_threshold": "critical",
+            },
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["quiet_entity"] == "schedule.night"
+    assert entry.options["quiet_threshold"] == "critical"
+
+
 async def test_create_and_edit_group(
     hass: HomeAssistant, setup_alerts: SetupAlerts
 ) -> None:
