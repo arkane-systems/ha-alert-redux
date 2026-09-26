@@ -332,12 +332,16 @@ class Notifier:
 
     def _quiet_state(self, group: GroupConfig) -> bool | None:
         """Return whether a group is in quiet hours: True, False, or None when
-        its entity is unavailable, or unknown, so that can't be told."""
+        its entity is unavailable, or unknown, so that can't be told.
+
+        While Home Assistant is starting, an entity may not have its state yet,
+        so one that's missing can't be told either.
+        """
         if (entity_id := self._quiet_entity_of(group)) is None:
             return False
         if (state := self.hass.states.get(entity_id)) is None:
             # Missing altogether: quiet hours don't apply (and it's raised).
-            return False
+            return None if not self._started else False
         if state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return None
         return state.state == STATE_ON
@@ -345,8 +349,15 @@ class Notifier:
     def _affected(self, group: GroupConfig, notification: Notification) -> bool:
         """Return whether quiet hours hold back or soften a notification to a
         group: it's in quiet hours, and the notification is less urgent than
-        the threshold."""
-        if not self.is_quiet(group.id):
+        the threshold.
+
+        Until Home Assistant has started, a group whose quiet hours can't be
+        told yet holds too, so that a restart in the night doesn't wake anyone;
+        what's held is released once it has started, if they turn out not to
+        be on. After that, not knowing means not quiet (fail loud).
+        """
+        state = self._quiet_state(group)
+        if not (state is True or (state is None and not self._started)):
             return False
         threshold = (
             group.quiet_threshold

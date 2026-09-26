@@ -826,6 +826,10 @@ For each loud group, when its quiet-hours entity turns off:
   is off. An entity that **doesn't exist** once integrations have had the retry
   timeout to set up is a Repairs issue (`quiet_entity_missing`), which clears
   when it appears or is no longer used; meanwhile quiet hours don't apply.
+- [Decided, 0.10.1] **While HA is starting**, a quiet-hours entity may not
+  have its state yet. Until HA has started, a loud group whose quiet hours
+  can't be told holds, so a restart in the night doesn't wake anyone; what's
+  held is released once HA has started if they turn out not to be on.
 - Holding is per member: in a softening group, members with quiet-hours `data`
   get softened notifications, and the rest hold. What's sent when quiet hours
   end goes to the members that held. A held notification never goes to the
