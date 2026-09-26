@@ -348,6 +348,7 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
         "startup_delay": {"hours": 0, "minutes": 0, "seconds": 0},
         "retry_timeout": {"hours": 0, "minutes": 5, "seconds": 0},
         "snooze_reminder_window": {"hours": 0, "minutes": 5, "seconds": 0},
+        "button_snooze_duration": {"hours": 1, "minutes": 0, "seconds": 0},
     }
     assert _suggested(schema) == {"default_reminder_schedule": "10, 20, 30, 60"}
 
@@ -402,6 +403,83 @@ async def test_messages_saved_and_prefilled(
     suggested = _suggested(result["data_schema"].schema["notifications"].schema.schema)
     assert suggested["message"] == "{{ name }} opened"
     assert suggested["display_message"] == "Close it"
+
+
+async def test_buttons_saved_and_prefilled(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Notification buttons and the Snooze duration are saved, and pre-filled."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    close = [{"action": "cover.close_cover", "target": {"entity_id": "cover.garage"}}]
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "supersession": {},
+            "notifications": {
+                "buttons": [
+                    {"label": " Close door ", "action": close, "require_unlock": False},
+                    {"label": "Unlock", "action": close, "require_unlock": True},
+                ],
+                "button_snooze_duration": {"hours": 0, "minutes": 30, "seconds": 0},
+            },
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    (subentry,) = entry.subentries.values()
+    assert subentry.data["buttons"] == [
+        {"label": "Close door", "action": close},
+        {"label": "Unlock", "action": close, "require_unlock": True},
+    ]
+    assert subentry.data["button_snooze_duration"] == {
+        "hours": 0,
+        "minutes": 30,
+        "seconds": 0,
+    }
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
+    )
+    suggested = _suggested(result["data_schema"].schema["notifications"].schema.schema)
+    assert suggested["buttons"] == subentry.data["buttons"]
+    # A zero duration isn't kept: it means the default.
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "supersession": {},
+            "notifications": {
+                "button_snooze_duration": {"hours": 0, "minutes": 0, "seconds": 0}
+            },
+        },
+    )
+    assert "button_snooze_duration" not in entry.subentries[subentry.subentry_id].data
+
+
+@pytest.mark.parametrize(
+    ("button", "error"),
+    [
+        ({"label": " ", "action": [{"action": "test.x"}]}, "button_incomplete"),
+        ({"label": "Close", "action": []}, "button_incomplete"),
+        ({"label": "Close", "action": [{"nonsense": 1}]}, "invalid_button_action"),
+    ],
+)
+async def test_invalid_buttons(
+    hass: HomeAssistant,
+    setup_alerts: SetupAlerts,
+    button: dict[str, Any],
+    error: str,
+) -> None:
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**FORM, "supersession": {}, "notifications": {"buttons": [button]}},
+    )
+    assert result["errors"] == {"base": error}
 
 
 async def _start_group(

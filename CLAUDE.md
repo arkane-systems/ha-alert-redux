@@ -19,7 +19,8 @@ phase 6 (snoozing, disabling, and suspending, the card's snooze control, and the
 admin card), phase 7 (supersession, propagation and pre-acknowledgement, the
 alert state kind, dangling references, and the card's superseded alerts), and
 phase 8 (the summary sensors, the logbook platform, and the `_data_restored`
-event).
+event), and phase 9 (replacing and clearing notifications, and notification
+buttons).
 
 ## Specification
 
@@ -93,15 +94,22 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     for the card and re-renders them as the entities they read change.
   - `notifications.py` — the alert side of notifying: which groups an alert sends
     to (its own, the defaults, or the fallback), rendering the on / reminder / done
-    messages, and handing them to the notifier. Reminder timing lives in `model.py`
+    messages, and handing them to the notifier with the alert's lifecycle key;
+    telling the notifier when an alert is acknowledged, deleted, or renamed. Reminder timing lives in `model.py`
     (`AlertRuntime.next_reminder`, `next_reminder_slot`) and `entity.py`.
   - `notifier/` — the **self-contained notifier module** (spec §9.1): groups and
     members (`model.py`), delivery per member kind (`members.py`), the retry queue's
     records (`retry.py`), missing-action Repairs issues (`repairs.py`), and the
     `Notifier` (`__init__.py`). **It must not import anything Alert-Redux-specific**,
     so it can be extracted later; its owner passes in the store key and issue domain.
-    It keeps its own `Store` (the retry queue). Named `notifier`, not `notify`: a
-    `notify.py` would be loaded as a notify platform.
+    It keeps its own `Store` (the retry queue, and the *live records* of which
+    members are showing each key's notification, so clears reach exactly those;
+    spec §9.10). Named `notifier`, not `notify`: a `notify.py` would be loaded as
+    a notify platform.
+  - `buttons.py` — notification buttons (spec §9.11): building an alert's
+    (custom, then Acknowledge and Snooze), their action IDs
+    (`ALERT_REDUX_<unique ID>_<button>`), and the `mobile_app_notification_action`
+    listener, which hands a tap to the alert (`AlertEntity.async_button_tapped`).
   - `issues.py` — Alert Redux's own Repairs issues (the unset default groups, and
     references to alerts that don't exist). `__init__.py` follows alert renames
     in the entity registry, rewriting the references to them. Not

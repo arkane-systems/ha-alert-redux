@@ -461,7 +461,10 @@ TAG = "alert_redux_back_door_open"
 
 
 def _mobile(calls: list[ServiceCall]) -> list[tuple[str, Any]]:
-    return [(call.data["message"], call.data.get("data")) for call in calls]
+    """Return the messages with their tags (buttons are tested on their own)."""
+    return [
+        (call.data["message"], {"tag": call.data["data"]["tag"]}) for call in calls
+    ]
 
 
 async def test_notifications_replace_and_ack_clears(

@@ -62,7 +62,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -72,7 +74,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -128,7 +132,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -138,7 +144,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -192,7 +200,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -202,7 +212,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -248,7 +260,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -258,7 +272,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -314,7 +330,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -324,7 +342,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -378,7 +398,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -388,7 +410,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -438,7 +462,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -448,7 +474,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -500,7 +528,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -510,7 +540,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -560,7 +592,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -570,7 +604,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -622,7 +658,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -632,7 +670,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -696,7 +736,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -706,7 +748,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -766,7 +810,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -776,7 +822,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -836,7 +884,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -846,7 +896,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -910,7 +962,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -920,7 +974,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -976,7 +1032,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -986,7 +1044,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -1042,7 +1102,9 @@
                 "message": "On message",
                 "display_message": "Card message",
                 "reminder_message": "Reminder message",
-                "done_message": "Done message"
+                "done_message": "Done message",
+                "buttons": "Notification buttons",
+                "button_snooze_duration": "Snooze button duration"
               },
               "data_description": {
                 "use_default_groups": "Send to the default notifier groups set in the integration's options. Turn off to choose this alert's own groups.",
@@ -1052,7 +1114,9 @@
                 "message": "Optional. Sent when the alert starts firing, and shown on the card. A template: it can use `name`, `subject_entity_name`, `fire_count`, `fire_data`, `duration`, and entity states. Leave empty for the default: the alert's name, followed by \"is firing.\"",
                 "display_message": "Optional. A different message for the card, if the on message isn't what you want shown there. Also a template.",
                 "reminder_message": "Optional. Sent as a reminder while the alert is still firing. A template, as for the on message; `duration` is how long it has been firing. Leave empty for the default, which gives the name and that duration.",
-                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default."
+                "done_message": "Optional. Sent when the alert stops firing. A template, as for the on message; `duration` is how long it fired, and `end_reason` is `resolved`, `dismissed`, or `no_data`. Leave empty for the default.",
+                "buttons": "Optional. Buttons on this alert's mobile app notifications, each running an action, e.g. a *Close door* button that closes the garage door. Only the configured action runs. On and reminder notifications carry them, followed by the built-in *Acknowledge* and *Snooze* (unless the alert can't be acknowledged); Android shows the first three. A button still runs its action after the alert has stopped firing.",
+                "button_snooze_duration": "Optional. How long the notification's *Snooze* button snoozes this alert. Leave empty to use the default from the integration's options."
               }
             },
             "supersession": {
@@ -1085,7 +1149,9 @@
         "supersedes_duplicate": "Each alert can be listed only once.",
         "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself.",
         "propagation_unacknowledgeable": "This alert can't be acknowledged, so acknowledgements can't be passed on to it. Set each relationship to do nothing, or make the alert acknowledgeable.",
-        "snooze_duration_missing": "A relationship set to snooze this alert needs a duration to snooze it for."
+        "snooze_duration_missing": "A relationship set to snooze this alert needs a duration to snooze it for.",
+        "button_incomplete": "Each notification button needs a label and an action.",
+        "invalid_button_action": "A notification button's action isn't valid."
       },
       "abort": {
         "reconfigure_successful": "Re-configuration was successful"
@@ -1337,7 +1403,8 @@
           "default_reminder_schedule": "Default reminder schedule",
           "fallback_group": "Fallback group",
           "retry_timeout": "Retry timeout",
-          "snooze_reminder_window": "Snooze-end reminder window"
+          "snooze_reminder_window": "Snooze-end reminder window",
+          "button_snooze_duration": "Snooze button duration"
         },
         "data_description": {
           "no_data_grace": "How long a firing alert keeps firing while its inputs have no data, unless the alert sets its own.",
@@ -1346,7 +1413,8 @@
           "default_reminder_schedule": "Minutes between reminders while an alert is firing and unacknowledged, unless it sets its own, e.g. `10, 20, 30, 60`: the last gap repeats. Leave empty for no reminders.",
           "fallback_group": "Receives a notification when no member of any group it was sent to could be notified. Leave empty to use a persistent notification.",
           "retry_timeout": "How long a notifier that is missing or failing keeps being retried before it's given up on.",
-          "snooze_reminder_window": "When a snooze runs out, a reminder is sent straight away, unless the alert's next scheduled reminder is closer than this."
+          "snooze_reminder_window": "When a snooze runs out, a reminder is sent straight away, unless the alert's next scheduled reminder is closer than this.",
+          "button_snooze_duration": "How long a notification's *Snooze* button snoozes an alert, unless the alert sets its own."
         },
         "sections": {
           "event_durations": {

@@ -24,15 +24,20 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-- **A live notification can still be cleared after the restart** (phase 9a).
-  *Set up just before an install restart* (not earlier: reminders would keep
-  arriving on the phones): let a Quiet-only test alert fire and leave it
-  `active`, e.g. Test Condition Alert with the test value on, and check its
-  notification is on the phones.
-  *Expect:* once HA is back, acknowledging it removes the notification from
-  both phones: the notifier's live records were restored from its store.
+- **A button on a notification sent before the restart still works after it**
+  (phase 9b). *Set up just before an install restart:* open the test door, so
+  Test Door Open (which has a Close Door button) notifies the phones, and leave
+  the notification there.
+  *Expect:* once HA is back, tapping Close Door turns
+  `input_boolean.alert_redux_test_value` off, as the user who tapped; the
+  action ID holds the alert's unique ID, which the restart doesn't change.
 
 ## Done
+
+- **2026-09-26, 9b install restart. A live notification can still be cleared
+  after the restart** (phase 9a). Test Condition Alert fired at 11:08:04 local
+  and notified both phones (Quiet) before the restart; acknowledged after it,
+  its notification disappeared from both. Passed.
 
 - **2026-09-26, 9a install restart. Snooze runs out, and suspension ends,
   during the restart** (phases 6a, 6b). Test Threshold Alert snoozed and Test

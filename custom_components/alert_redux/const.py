@@ -218,6 +218,15 @@ DEFAULT_REMINDER_SCHEDULE: tuple[float, ...] = (10, 20, 30, 60)
 CONF_FALLBACK_GROUP = "fallback_group"
 CONF_RETRY_TIMEOUT = "retry_timeout"
 DEFAULT_RETRY_TIMEOUT = timedelta(minutes=5)
+# How long a notification's Snooze button snoozes for (spec §9.11); also an
+# alert's own setting.
+CONF_BUTTON_SNOOZE_DURATION = "button_snooze_duration"
+DEFAULT_BUTTON_SNOOZE_DURATION = timedelta(hours=1)
+# An alert's custom notification buttons (spec §9.11), each with its label, the
+# action it runs (a script sequence), and whether it needs an unlocked device.
+CONF_BUTTONS = "buttons"
+CONF_LABEL = "label"
+CONF_REQUIRE_UNLOCK = "require_unlock"
 # The snooze-end reminder rule's window (spec §6.2).
 CONF_SNOOZE_REMINDER_WINDOW = "snooze_reminder_window"
 DEFAULT_SNOOZE_REMINDER_WINDOW = timedelta(minutes=5)
@@ -356,4 +365,5 @@ ATTR_SUPERSEDES = "supersedes"
 ATTR_SUPERSEDED_BY = "superseded_by"
 ATTR_PRE_ACKED_BY = "pre_acked_by"
 ATTR_PRE_SNOOZED_UNTIL = "pre_snoozed_until"
+ATTR_BUTTONS = "buttons"
 ATTR_BROKEN_REFERENCES = "broken_references"

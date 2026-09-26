@@ -333,6 +333,34 @@ because it was disabled.
 - **Restarts:** an alert that was firing resumes without a new on notification. A
   reminder that fell due while Home Assistant was down is sent when it's back.
 
+### Replacing and clearing
+
+On the mobile app and in persistent notifications, each alert's notifications
+replace one another, so its reminder takes the place of its on message, and its
+done message the place of its last reminder. When the alert is acknowledged
+(or snoozed), its notification is cleared. Deleting an alert clears it too.
+
+Mobile app actions (`notify.mobile_app_*`) do this automatically. For other legacy
+actions that send to phones, such as a legacy notify group of them, set the
+member's **Mobile app features**. Each legacy action member can also **keep the
+notification when acknowledged**, or **clear it instead of showing the done
+message**; the persistent notification has the same two settings. Notify entities
+can't replace or clear: each notification arrives separately.
+
+### Buttons
+
+Mobile app notifications carry buttons: **Acknowledge** and **Snooze** (for an
+alert that can be acknowledged), after any of the alert's own. An alert's own
+buttons, in its **Notifications and messages** section, each have a label and an
+action, e.g. *Close door* running `cover.close_cover` on the garage door. Tapping one
+runs only that action, as the person who tapped it; it still works after the alert
+has stopped firing. Turn on **Only from an unlocked phone** for anything
+security-sensitive (iOS). Android shows at most three buttons, so the alert's own
+come first. The done notification has no buttons.
+
+The Snooze button snoozes for the alert's **Snooze button duration**, or else the
+default from the integration's options (1 hour).
+
 ### When a notifier fails
 
 A notifier that's missing (e.g. its integration hasn't loaded yet) or fails is
@@ -360,6 +388,8 @@ The integration's **Configure** button sets:
 - the fallback group, and the retry timeout;
 - the **snooze-end window** (5 minutes by default): when a snooze runs out, a
   reminder is sent at once unless the next scheduled one is closer than this;
+- the **Snooze button duration** (1 hour by default) for notifications' Snooze
+  buttons;
 - the default event alert duration for each priority.
 
 ## Lovelace card

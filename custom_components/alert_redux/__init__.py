@@ -61,6 +61,7 @@ from .const import (
     SUBENTRY_ALERT,
     SUBENTRY_NOTIFIER_GROUP,
 )
+from .buttons import async_setup_buttons
 from .entity import AlertEntity, create_alert_entity
 from .frontend import async_register_frontend, async_setup_websocket
 from .labels import async_setup_label
@@ -224,6 +225,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data[DATA_SUBENTRIES] = _alert_subentries(entry)
     data[DATA_OPTIONS] = dict(entry.options)
     entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
+    # Taps on notification buttons (spec §9.11).
+    entry.async_on_unload(async_setup_buttons(hass))
     return True
 
 

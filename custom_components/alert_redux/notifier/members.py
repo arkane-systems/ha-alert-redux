@@ -2,7 +2,8 @@
 
 Members that replace notifications (spec §9.10) are sent a tag with each one: the
 mobile app's `tag`, or the persistent notification's ID. Clearing removes the
-notification with that tag.
+notification with that tag. Members that show buttons (§9.11) get them as mobile
+app `actions`, as many as every platform shows.
 """
 
 from __future__ import annotations
@@ -16,12 +17,21 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.template import Template, is_template_string, render_complex
 
-from .model import ActionMember, EntityMember, Member, Notification, PersistentMember
+from .model import (
+    ActionMember,
+    Button,
+    EntityMember,
+    Member,
+    Notification,
+    PersistentMember,
+)
 
 NOTIFY_DOMAIN = "notify"
 SERVICE_SEND_MESSAGE = "send_message"
 # The mobile app's message that removes the notification with the data's tag.
 CLEAR_NOTIFICATION = "clear_notification"
+# Android shows at most three buttons; the ones after that are dropped.
+MAX_BUTTONS = 3
 
 
 class MemberMissing(HomeAssistantError):
@@ -74,6 +84,10 @@ async def async_deliver(
     # Alert Redux's own keys win over the member's data.
     if member.replaces:
         extra["tag"] = tag
+    if member.shows_buttons and notification.buttons and not notification.final:
+        extra["actions"] = [
+            _mobile_action(button) for button in notification.buttons[:MAX_BUTTONS]
+        ]
     if extra:
         data["data"] = extra
     if member.target:
@@ -93,6 +107,15 @@ async def async_clear(hass: HomeAssistant, member: Member, tag: str) -> None:
     if member.target:
         data["target"] = list(member.target)
     await hass.services.async_call(NOTIFY_DOMAIN, member.action, data, blocking=True)
+
+
+def _mobile_action(button: Button) -> dict[str, Any]:
+    """Return a button as a mobile app notification action."""
+    action: dict[str, Any] = {"action": button.id, "title": button.title}
+    if button.require_unlock:
+        # iOS only runs it from an unlocked device; Android ignores it.
+        action["authenticationRequired"] = True
+    return action
 
 
 def render_data(
