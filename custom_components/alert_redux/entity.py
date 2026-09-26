@@ -7,11 +7,19 @@ from datetime import datetime, timedelta
 import logging
 from typing import Any
 
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import CALLBACK_TYPE, Context, HomeAssistant, callback
-from homeassistant.exceptions import ServiceValidationError, TemplateError
+from homeassistant.exceptions import (
+    HomeAssistantError,
+    ServiceValidationError,
+    TemplateError,
+)
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_point_in_utc_time
+from homeassistant.helpers.script import Script, async_validate_actions_config
 from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 
@@ -19,6 +27,7 @@ from .const import (
     ATTR_ACKNOWLEDGEABLE,
     ATTR_ATTRIBUTE,
     ATTR_BROKEN_REFERENCES,
+    ATTR_BUTTONS,
     ATTR_CONDITION,
     ATTR_DELAY_OFF,
     ATTR_DELAY_OFF_UNTIL,
@@ -85,9 +94,12 @@ from .const import (
     ATTR_VALUE_TEMPLATE,
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_ACTION,
     CONF_ALERT,
     CONF_ALERT_STATES,
     CONF_ATTRIBUTE,
+    CONF_BUTTON_SNOOZE_DURATION,
+    CONF_BUTTONS,
     CONF_CONDITION,
     CONF_DELAY_OFF,
     CONF_DELAY_ON,
@@ -100,6 +112,7 @@ from .const import (
     CONF_HYSTERESIS,
     CONF_ICON,
     CONF_KIND,
+    CONF_LABEL,
     CONF_MAXIMUM,
     CONF_MESSAGE,
     CONF_MINIMUM,
@@ -145,6 +158,7 @@ from .const import (
 )
 from .labels import async_apply_label
 from .messages import Messages, MessageTracker, message_context
+from .buttons import BUTTON_ACK, BUTTON_SNOOZE, alert_buttons, custom_button_key
 from .model import (
     AlertRuntime,
     Change,
@@ -304,6 +318,11 @@ class AlertEntity(Entity):
         # None means the defaults; a list, even an empty one, is the alert's own.
         self._notifier_groups: list[str] | None = data.get(CONF_NOTIFIER_GROUPS)
         self._own_schedule: list[float] | None = data.get(CONF_REMINDER_SCHEDULE)
+        # Notification buttons (spec §9.11).
+        self._custom_buttons: list[dict[str, Any]] = [
+            dict(button) for button in data.get(CONF_BUTTONS) or []
+        ]
+        self._own_button_snooze = to_timedelta(data.get(CONF_BUTTON_SNOOZE_DURATION))
         self._supersedes: list[dict[str, Any]] = [
             dict(rel) for rel in data.get(CONF_SUPERSEDES) or []
         ]
@@ -366,6 +385,12 @@ class AlertEntity(Entity):
         return self._settings.reminder_schedule
 
     @property
+    def _button_snooze(self) -> timedelta:
+        """Return how long the Snooze button snoozes: the alert's own, or else the
+        default."""
+        return self._own_button_snooze or self._settings.button_snooze_duration
+
+    @property
     def state(self) -> str:
         """Return the alert's state."""
         return self._runtime.state
@@ -412,6 +437,7 @@ class AlertEntity(Entity):
             ),
             ATTR_PRE_SNOOZED_UNTIL: runtime.pre_ack_deadline(now),
             ATTR_BROKEN_REFERENCES: self._broken_references,
+            ATTR_BUTTONS: [button[CONF_LABEL] for button in self._custom_buttons],
         }
         if self._kind is AlertKind.MANUAL:
             attributes[ATTR_USER_DISMISSABLE] = self._user_dismissable
@@ -669,6 +695,7 @@ class AlertEntity(Entity):
     def _async_notify(
         self, reason: str, template: str | None, variables: dict[str, Any]
     ) -> None:
+        assert self.unique_id is not None
         async_send_notification(
             self.hass,
             entity_id=self.entity_id,
@@ -676,6 +703,12 @@ class AlertEntity(Entity):
             groups=effective_groups(self._settings, self._notifier_groups),
             template=template,
             variables=variables,
+            buttons=alert_buttons(
+                self.unique_id,
+                self._custom_buttons,
+                acknowledgeable=self._acknowledgeable,
+                snooze=self._button_snooze,
+            ),
         )
 
     @callback
@@ -1007,6 +1040,47 @@ class AlertEntity(Entity):
             return
         self._apply_changes(changes)
         self._async_inputs_started()
+
+    async def async_button_tapped(self, key: str, context: Context) -> None:
+        """Handle a tap on one of the alert's notification buttons (spec §9.11).
+
+        Acknowledge and Snooze do nothing unless the alert can be acknowledged
+        now; a custom button runs its action whatever the alert's state. The
+        context is the tap's, so the user who tapped is recorded.
+        """
+        if key in (BUTTON_ACK, BUTTON_SNOOZE):
+            if not self._acknowledgeable:
+                _LOGGER.info("%s: button ignored; not acknowledgeable", self.entity_id)
+                return
+            self.async_set_context(context)
+            if key == BUTTON_ACK:
+                await self.async_ack()
+            else:
+                await self.async_snooze(self._button_snooze)
+            return
+        button = next(
+            (b for b in self._custom_buttons if custom_button_key(b) == key), None
+        )
+        if button is None:
+            _LOGGER.info(
+                "%s: tapped a notification button it no longer has", self.entity_id
+            )
+            return
+        label = button[CONF_LABEL]
+        try:
+            sequence = await async_validate_actions_config(
+                self.hass, cv.SCRIPT_SCHEMA(button[CONF_ACTION])
+            )
+            script = Script(
+                self.hass, sequence, f"{self.name}: {label}", DOMAIN, logger=_LOGGER
+            )
+            await script.async_run(
+                context=Context(user_id=context.user_id, parent_id=context.id)
+            )
+        except (HomeAssistantError, vol.Invalid) as err:
+            _LOGGER.warning(
+                "%s: the %s button's action failed: %s", self.entity_id, label, err
+            )
 
     def _announce_pre_ack(self, pre_acked: list[str] | None) -> None:
         """Fire _acked for a firing that started pre-acknowledged (spec §11.3)."""

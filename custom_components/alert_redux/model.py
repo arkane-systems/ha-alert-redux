@@ -15,6 +15,7 @@ from enum import StrEnum
 from typing import Any
 
 from .const import (
+    CONF_BUTTON_SNOOZE_DURATION,
     CONF_DEFAULT_GROUPS,
     CONF_DEFAULT_REMINDER_SCHEDULE,
     CONF_DONE_WINDOW,
@@ -25,6 +26,7 @@ from .const import (
     CONF_SNOOZE_REMINDER_WINDOW,
     CONF_STARTUP_DELAY,
     CONF_SUPERSESSION_DEBOUNCE,
+    DEFAULT_BUTTON_SNOOZE_DURATION,
     DEFAULT_DONE_WINDOW,
     DEFAULT_EVENT_DURATIONS,
     DEFAULT_NO_DATA_GRACE,
@@ -76,6 +78,8 @@ class Settings:
     # end (§9.7).
     supersession_debounce: timedelta = DEFAULT_SUPERSESSION_DEBOUNCE
     done_window: timedelta = DEFAULT_DONE_WINDOW
+    # How long a notification's Snooze button snoozes for (spec §9.11).
+    button_snooze_duration: timedelta = DEFAULT_BUTTON_SNOOZE_DURATION
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> Settings:
@@ -88,6 +92,7 @@ class Settings:
         window = to_timedelta(options.get(CONF_SNOOZE_REMINDER_WINDOW))
         debounce = to_timedelta(options.get(CONF_SUPERSESSION_DEBOUNCE))
         done_window = to_timedelta(options.get(CONF_DONE_WINDOW))
+        button_snooze = to_timedelta(options.get(CONF_BUTTON_SNOOZE_DURATION))
         return cls(
             no_data_grace=DEFAULT_NO_DATA_GRACE if grace is None else grace,
             startup_delay=DEFAULT_STARTUP_DELAY if startup is None else startup,
@@ -108,6 +113,8 @@ class Settings:
                 DEFAULT_SUPERSESSION_DEBOUNCE if debounce is None else debounce
             ),
             done_window=DEFAULT_DONE_WINDOW if done_window is None else done_window,
+            # A zero snooze would do nothing, so it means the default too.
+            button_snooze_duration=button_snooze or DEFAULT_BUTTON_SNOOZE_DURATION,
         )
 
     def update(self, other: Settings) -> None:

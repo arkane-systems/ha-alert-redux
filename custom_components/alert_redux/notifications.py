@@ -25,7 +25,7 @@ from .const import (
     EndReason,
 )
 from .model import Settings
-from .notifier import Notification, Notifier
+from .notifier import Button, Notification, Notifier
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,11 +102,12 @@ def async_send_notification(
     groups: tuple[str, ...] | None,
     template: str | None,
     variables: Mapping[str, Any],
+    buttons: tuple[Button, ...] = (),
 ) -> None:
     """Render and send one of an alert's notifications.
 
     groups comes from effective_groups: None sends to the fallback, and an empty
-    tuple sends nothing.
+    tuple sends nothing. Done notifications carry no buttons (spec §9.11).
     """
     if groups == ():
         return
@@ -123,6 +124,7 @@ def async_send_notification(
         message=message,
         key=lifecycle_key(entity_id),
         variables=variables,
+        buttons=() if reason == REASON_DONE else buttons,
         final=reason == REASON_DONE,
     )
     notifier: Notifier = hass.data[DOMAIN][DATA_NOTIFIER]

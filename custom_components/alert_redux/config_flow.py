@@ -20,7 +20,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import section
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.script import async_validate_actions_config
 from homeassistant.helpers.selector import (
+    ActionSelector,
     BooleanSelector,
     DurationSelector,
     EntitySelector,
@@ -49,8 +52,10 @@ from .const import (
     CONF_ALERT,
     CONF_ALERT_STATES,
     CONF_ATTRIBUTE,
-    CONF_CONDITION,
+    CONF_BUTTON_SNOOZE_DURATION,
+    CONF_BUTTONS,
     CONF_CLEAR_WHEN_ENDED,
+    CONF_CONDITION,
     CONF_DATA,
     CONF_DEFAULT_GROUPS,
     CONF_DEFAULT_REMINDER_SCHEDULE,
@@ -80,6 +85,7 @@ from .const import (
     CONF_ON_TEMPLATE,
     CONF_ON_TRIGGERS,
     CONF_KEEP_ON_ACK,
+    CONF_LABEL,
     CONF_MOBILE,
     CONF_PERSISTENT,
     CONF_PERSISTENT_CLEAR_ON_ACK,
@@ -88,6 +94,7 @@ from .const import (
     CONF_PROPAGATION,
     CONF_REMINDER_MESSAGE,
     CONF_REMINDER_SCHEDULE,
+    CONF_REQUIRE_UNLOCK,
     CONF_RETRY_TIMEOUT,
     CONF_SNOOZE_DURATION,
     CONF_SNOOZE_REMINDER_WINDOW,
@@ -184,6 +191,9 @@ class AlertReduxOptionsFlow(OptionsFlow):
                         CONF_SNOOZE_REMINDER_WINDOW: user_input[
                             CONF_SNOOZE_REMINDER_WINDOW
                         ],
+                        CONF_BUTTON_SNOOZE_DURATION: user_input[
+                            CONF_BUTTON_SNOOZE_DURATION
+                        ],
                         CONF_EVENT_DURATIONS: user_input.get(CONF_EVENT_DURATIONS)
                         or _event_durations(settings),
                         **(
@@ -202,6 +212,9 @@ class AlertReduxOptionsFlow(OptionsFlow):
             CONF_RETRY_TIMEOUT: _duration_dict(settings.retry_timeout),
             CONF_SNOOZE_REMINDER_WINDOW: _duration_dict(
                 settings.snooze_reminder_window
+            ),
+            CONF_BUTTON_SNOOZE_DURATION: _duration_dict(
+                settings.button_snooze_duration
             ),
         }
         return self.async_show_form(
@@ -234,6 +247,10 @@ class AlertReduxOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_SNOOZE_REMINDER_WINDOW,
                         default=defaults[CONF_SNOOZE_REMINDER_WINDOW],
+                    ): DurationSelector(),
+                    vol.Required(
+                        CONF_BUTTON_SNOOZE_DURATION,
+                        default=defaults[CONF_BUTTON_SNOOZE_DURATION],
                     ): DurationSelector(),
                     # No default: the frontend then builds the section's value from
                     # its fields' defaults (see the alert form's section).
@@ -423,6 +440,37 @@ def _notifications_section(entry: ConfigEntry, defaults: dict[str, Any]) -> sect
         schema[vol.Optional(key, description=_suggested(defaults, key))] = (
             TemplateSelector()
         )
+    # Notification buttons (spec §9.11).
+    schema[
+        vol.Optional(CONF_BUTTONS, description=_suggested(defaults, CONF_BUTTONS))
+    ] = ObjectSelector(
+        ObjectSelectorConfig(
+            multiple=True,
+            label_field=CONF_LABEL,
+            fields={
+                CONF_LABEL: {
+                    "label": "Label",
+                    "required": True,
+                    "selector": TextSelector(),
+                },
+                CONF_ACTION: {
+                    "label": "Action",
+                    "required": True,
+                    "selector": ActionSelector(),
+                },
+                CONF_REQUIRE_UNLOCK: {
+                    "label": "Only from an unlocked phone (iOS)",
+                    "selector": BooleanSelector(),
+                },
+            },
+        )
+    )
+    schema[
+        vol.Optional(
+            CONF_BUTTON_SNOOZE_DURATION,
+            description=_suggested(defaults, CONF_BUTTON_SNOOZE_DURATION),
+        )
+    ] = DurationSelector()
     return section(vol.Schema(schema), {"collapsed": True})
 
 
@@ -841,6 +889,11 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         if isinstance(rel, dict) and rel.get(CONF_ALERT)
     ]:
         data[CONF_SUPERSEDES] = supersedes
+    if buttons := [_button(item) for item in user_input.get(CONF_BUTTONS) or []]:
+        data[CONF_BUTTONS] = buttons
+    # A zero duration means the default.
+    if to_timedelta(user_input.get(CONF_BUTTON_SNOOZE_DURATION)):
+        data[CONF_BUTTON_SNOOZE_DURATION] = user_input[CONF_BUTTON_SNOOZE_DURATION]
     if not user_input.get(CONF_USE_DEFAULT_GROUPS, True):
         data[CONF_NOTIFIER_GROUPS] = list(user_input.get(CONF_NOTIFIER_GROUPS, []))
     if not user_input.get(CONF_USE_DEFAULT_REMINDERS, True):
@@ -851,10 +904,40 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _button(item: Any) -> dict[str, Any]:
+    """Return a notification button from the form, in its stored form."""
+    item = item if isinstance(item, dict) else {}
+    button: dict[str, Any] = {
+        CONF_LABEL: str(item.get(CONF_LABEL) or "").strip(),
+        CONF_ACTION: item.get(CONF_ACTION),
+    }
+    if item.get(CONF_REQUIRE_UNLOCK):
+        button[CONF_REQUIRE_UNLOCK] = True
+    return button
+
+
+async def _async_check_buttons(
+    hass: HomeAssistant, buttons: list[dict[str, Any]]
+) -> str | None:
+    """Return an error key for notification buttons that aren't complete and valid."""
+    for button in buttons:
+        if not button[CONF_LABEL] or not button[CONF_ACTION]:
+            return "button_incomplete"
+        try:
+            await async_validate_actions_config(
+                hass, cv.SCRIPT_SCHEMA(button[CONF_ACTION])
+            )
+        except (vol.Invalid, HomeAssistantError):
+            return "invalid_button_action"
+    return None
+
+
 async def _async_check_alert(
     hass: HomeAssistant, kind: AlertKind, data: dict[str, Any]
 ) -> str | None:
     """Return an error key for a kind's own fields, if they don't make sense."""
+    if error := await _async_check_buttons(hass, data.get(CONF_BUTTONS, [])):
+        return error
     if kind is AlertKind.EVENT:
         if not data[CONF_EVENT_TYPE]:
             return "event_type_missing"
