@@ -24,15 +24,22 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-- **A button on a notification sent before the restart still works after it**
-  (phase 9b). *Set up just before an install restart:* open the test door, so
-  Test Door Open (which has a Close Door button) notifies the phones, and leave
-  the notification there.
-  *Expect:* once HA is back, tapping Close Door turns
-  `input_boolean.alert_redux_test_value` off, as the user who tapped; the
-  action ID holds the alert's unique ID, which the restart doesn't change.
+- **Throttling that ends during the restart sends its summary once HA is back**
+  (phase 10a). Test Bus Event Alert (Quiet) throttles at 3 per 5 minutes.
+  *Set up just before an install restart:* fire `alert_redux_test_event` (with
+  `source: test`) four times in a row, so the third starts throttling and the
+  fourth is held; then request the restart about 4 minutes 30 seconds after the
+  third, so that throttling's end (5 minutes after it) falls while HA is down.
+  *Expect:* once HA is back, the phones get one "[Throttling ends] Fired 1×
+  while throttled, …" summary, and `throttled_since` is null.
 
 ## Done
+
+- **2026-09-26, 10a install restart. A button on a notification sent before
+  the restart still works after it** (phase 9b). Test Door Open fired at
+  12:17:42 local and notified the phones; the restart followed. At 12:20:12,
+  after HA was back, Close Door turned `input_boolean.alert_redux_test_value`
+  off in a context parented by the tap, with the tapping user. Passed.
 
 - **2026-09-26, 9b install restart. A live notification can still be cleared
   after the restart** (phase 9a). Test Condition Alert fired at 11:08:04 local
