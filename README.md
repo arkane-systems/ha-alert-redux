@@ -3,11 +3,12 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.6.0). Every alert kind works except alert state:
-> manual, state, on/off, threshold, template, trigger, and bus event alerts. The card
+> **Status:** early development (0.8.0). Every alert kind works: manual, state,
+> on/off, threshold, template, alert state, trigger, and bus event alerts. The card
 > shows, acknowledges, and snoozes them, they send on, reminder, and done
-> notifications, and the admin card disables and suspends them. Supersession and the
-> rest arrive in later releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
+> notifications, the admin card disables and suspends them, alerts can supersede
+> each other, and summary sensors and the Activity card make them easy to build on.
+> The rest arrives in later releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
 > The design is in [docs/SPEC.md](docs/SPEC.md).
 
 ## Installation
@@ -180,21 +181,94 @@ data:
 
 ### Events
 
-Every change fires an event: `alert_redux_fired`, `alert_redux_ended`,
-`alert_redux_acked`, `alert_redux_unacked`, `alert_redux_snoozed`,
-`alert_redux_snooze_expired`, `alert_redux_disabled`, `alert_redux_enabled`,
-`alert_redux_no_data`, `alert_redux_created`, and `alert_redux_deleted`. Each
-carries `entity_id`, `name`, `priority`, `kind`, `old_state`, `new_state`, and
-`user_id` (for changes made by a user). `alert_redux_ended` also carries a `reason`
-(`resolved`, `dismissed`, `no_data`, or `disabled`), `alert_redux_no_data` the
-`missing_inputs`, `alert_redux_snoozed` the `snoozed_until`, and
-`alert_redux_disabled` the `disabled_until`.
+Every change fires an event. Each carries `entity_id`, `name`, `priority`, `kind`,
+`old_state`, `new_state`, and `user_id` (for changes made by a user), and some carry
+more:
+
+| Event | Also carries |
+|---|---|
+| `alert_redux_fired` | `fire_count`; `fire_data` (manual) or `trigger_data` (trigger and bus event) |
+| `alert_redux_ended` | `fire_count`, `duration_seconds`, `reason` (`resolved`, `dismissed`, `no_data`, or `disabled`) |
+| `alert_redux_acked` | `pre_acked_by`, when acknowledged by supersession |
+| `alert_redux_unacked` | |
+| `alert_redux_snoozed` | `snoozed_until` |
+| `alert_redux_snooze_expired` | |
+| `alert_redux_disabled` | `disabled_until` (null when disabled indefinitely) |
+| `alert_redux_enabled` | |
+| `alert_redux_no_data` | `missing_inputs` |
+| `alert_redux_data_restored` | `missing_inputs` (the inputs that were missing) |
+| `alert_redux_superseded` | `superseded_by` |
+| `alert_redux_created` | |
+| `alert_redux_deleted` | |
+
+Home Assistant's event triggers don't take wildcards, but they do take a list. To
+listen for all of them:
+
+```yaml
+triggers:
+  - trigger: event
+    event_type:
+      - alert_redux_fired
+      - alert_redux_ended
+      - alert_redux_acked
+      - alert_redux_unacked
+      - alert_redux_snoozed
+      - alert_redux_snooze_expired
+      - alert_redux_disabled
+      - alert_redux_enabled
+      - alert_redux_no_data
+      - alert_redux_data_restored
+      - alert_redux_superseded
+      - alert_redux_created
+      - alert_redux_deleted
+```
 
 When one change implies another, both fire: snoozing an active alert fires
 `_snoozed` then `_acked`; a snooze running out fires `_snooze_expired` then
 `_unacked`; disabling a firing alert fires `_ended` then `_disabled`.
 
 Alert state is saved as it changes and restored after a restart.
+
+### Summary sensors
+
+Seven sensors summarise every alert, so glue needs to follow only one entity:
+
+| Sensor | State |
+|---|---|
+| `sensor.alert_redux_highest_priority` | the highest priority among firing alerts, or `none` |
+| `sensor.alert_redux_highest_unacked_priority` | the same, counting only unacknowledged (`active`) alerts |
+| `sensor.alert_redux_firing` | how many alerts are firing (`active` or `ack`) |
+| `sensor.alert_redux_active` | how many are firing and unacknowledged |
+| `sensor.alert_redux_acknowledged` | how many are acknowledged |
+| `sensor.alert_redux_no_data` | how many are missing data, including firing alerts in their grace period |
+| `sensor.alert_redux_disabled` | how many are disabled or suspended (a diagnostic sensor) |
+
+Each count sensor lists the alerts it counts in its `entity_ids` attribute, and the
+firing and active sensors also count each priority (`emergency: 0`,
+`critical: 1`, …).
+
+For example, a signal light that shows the most serious unacknowledged alert:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.alert_redux_highest_unacked_priority
+actions:
+  - choose:
+      - conditions: "{{ trigger.to_state.state == 'none' }}"
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: light.signal
+    default:
+      - action: light.turn_on
+        target:
+          entity_id: light.signal
+        data:
+          color_name: >-
+            {{ {'emergency': 'red', 'critical': 'orange', 'warning': 'yellow',
+                'notice': 'green', 'informational': 'blue'}[trigger.to_state.state] }}
+```
 
 ### The Alert Redux label
 
@@ -203,6 +277,11 @@ before 0.3.1 get it on upgrade). To show all your alerts' history in an Activity
 (logbook) card, including alerts you add later, choose that label as the card's
 target. If you remove the label from an alert, it isn't put back; if you delete the
 label, it isn't recreated.
+
+The Activity card shows each change of an alert's state, with who made it. Alert
+Redux adds entries for what a state change can't show: snoozing (and until when), a
+snooze running out, suspending (until when), being superseded (and by what), losing
+data (and which inputs) and getting it back, and alerts being created and deleted.
 
 The dots beside alert entries in an Activity card are always grey: Home Assistant's
 frontend only colours those for its own built-in domains.
