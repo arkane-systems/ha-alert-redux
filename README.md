@@ -3,11 +3,12 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.5.0). Every alert kind works except alert state:
+> **Status:** early development (0.6.0). Every alert kind works except alert state:
 > manual, state, on/off, threshold, template, trigger, and bus event alerts. The card
-> shows and acknowledges them, and they send on, reminder, and done notifications.
-> Snoozing, supersession, and the rest arrive in later releases; see the
-> [phase plan](docs/SPEC.md#20-phase-plan). The design is in [docs/SPEC.md](docs/SPEC.md).
+> shows, acknowledges, and snoozes them, they send on, reminder, and done
+> notifications, and the admin card disables and suspends them. Supersession and the
+> rest arrive in later releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
+> The design is in [docs/SPEC.md](docs/SPEC.md).
 
 ## Installation
 
@@ -35,6 +36,7 @@ Each alert is an `alert_redux.*` entity, with one of these states:
 | `active` | Firing, and not acknowledged. |
 | `ack` | Firing, and acknowledged. |
 | `no_data` | Not firing, and its inputs are unavailable, unknown, or won't parse. |
+| `disabled` | Disabled, or suspended until `disabled_until`: it can't fire. |
 
 Its attributes show its configuration and current condition: `priority`,
 `firing_since`, `fire_count`, who last acknowledged it, `subject_entity` (the entity
@@ -130,6 +132,27 @@ alert only sends reminders if its duration is longer than the first reminder
 interval. Triggers start once Home Assistant has started (and after the startup
 delay), so entities loading at startup don't fire them.
 
+### Snoozing, disabling, and suspending
+
+**Snoozing** acknowledges a firing alert for a while. If it's still firing when the
+snooze runs out, it's `active` again (`snoozed_until` shows when), and a reminder is
+sent straight away, unless its next scheduled reminder is less than 5 minutes off
+(the **snooze-end window**; see [Global defaults](#global-defaults)). Reminders then
+carry on from the original schedule. Snoozing an acknowledged alert gives it a new
+end, sooner or later; acknowledging a snoozed alert keeps it acknowledged until it
+stops firing. Unacknowledgeable alerts can't be snoozed.
+
+**Disabling** turns an alert off, e.g. for maintenance: its state is `disabled`, and
+it ignores its inputs until it's enabled again. A firing alert stops firing, and its
+done message says it was disabled rather than resolved. Enabling it starts from
+scratch: a condition alert waits for data, then evaluates as usual, `delay_on` and
+all, so a condition that still holds fires anew. **Suspending** disables an alert
+for a while, or until a time (`disabled_until`), and then enables it by itself.
+Disabling, enabling, and suspending are for admins only.
+
+Snoozes and suspensions survive a restart; one that ran out while Home Assistant was
+down ends as soon as it's back.
+
 ### Actions
 
 | Action | Effect |
@@ -137,7 +160,11 @@ delay), so entities loading at startup don't fire them.
 | `alert_redux.fire` | Fires a manual alert. Optional `data` is kept as `fire_data`. Firing an alert that's already firing adds to its fire count, and keeps its acknowledgement. |
 | `alert_redux.dismiss` | Ends a manual alert's firing. (Other kinds end by themselves.) |
 | `alert_redux.ack` | Acknowledges a firing alert. |
-| `alert_redux.unack` | Removes the acknowledgement. |
+| `alert_redux.unack` | Removes the acknowledgement (and any snooze). |
+| `alert_redux.snooze` | Acknowledges a firing alert for a `duration`. |
+| `alert_redux.disable` | Disables an alert until it's enabled. Admin only. |
+| `alert_redux.enable` | Enables a disabled or suspended alert. Admin only. |
+| `alert_redux.suspend` | Disables an alert for a `duration`, or `until` a time (local time if it has no time zone). Admin only. |
 
 An action that doesn't apply to an alert's current state (such as acknowledging an
 idle alert) does nothing.
@@ -154,11 +181,18 @@ data:
 ### Events
 
 Every change fires an event: `alert_redux_fired`, `alert_redux_ended`,
-`alert_redux_acked`, `alert_redux_unacked`, `alert_redux_no_data`,
-`alert_redux_created`, and `alert_redux_deleted`. Each carries `entity_id`, `name`,
-`priority`, `kind`, `old_state`, `new_state`, and `user_id` (for changes made by a
-user). `alert_redux_ended` also carries a `reason` (`resolved`, `dismissed`, or
-`no_data`), and `alert_redux_no_data` the `missing_inputs`.
+`alert_redux_acked`, `alert_redux_unacked`, `alert_redux_snoozed`,
+`alert_redux_snooze_expired`, `alert_redux_disabled`, `alert_redux_enabled`,
+`alert_redux_no_data`, `alert_redux_created`, and `alert_redux_deleted`. Each
+carries `entity_id`, `name`, `priority`, `kind`, `old_state`, `new_state`, and
+`user_id` (for changes made by a user). `alert_redux_ended` also carries a `reason`
+(`resolved`, `dismissed`, `no_data`, or `disabled`), `alert_redux_no_data` the
+`missing_inputs`, `alert_redux_snoozed` the `snoozed_until`, and
+`alert_redux_disabled` the `disabled_until`.
+
+When one change implies another, both fire: snoozing an active alert fires
+`_snoozed` then `_acked`; a snooze running out fires `_snooze_expired` then
+`_unacked`; disabling a firing alert fires `_ended` then `_disabled`.
 
 Alert state is saved as it changes and restored after a restart.
 
@@ -201,8 +235,9 @@ The notification's title is the alert's name. An alert sends:
 Each message can be replaced with your own template, in the alert's **Notifications
 and messages** section. There, `duration` is how long the alert has been firing (or
 fired, for the done message), `reason` is `on`, `reminder`, or `done`, and in the
-done message `end_reason` is `resolved`, `dismissed`, or `no_data`. The default done
-message says when an alert stopped because its data was lost.
+done message `end_reason` is `resolved`, `dismissed`, `no_data`, or `disabled`. The
+default done message says when an alert stopped because its data was lost, or
+because it was disabled.
 
 - **Which groups:** an alert uses the **default groups** unless you turn that off
   and choose its own; choosing none means it notifies nobody. If no default groups
@@ -212,7 +247,8 @@ message says when an alert stopped because its data was lost.
   The default, `10, 20, 30, 60`, reminds at 10, 30, and 60 minutes, then hourly. An
   alert can have its own schedule, or none. Acknowledging stops reminders;
   removing the acknowledgement resumes them on the original schedule, counted from
-  when the alert started firing.
+  when the alert started firing. When a snooze runs out, a reminder is sent at once
+  unless a scheduled one is due within the snooze-end window.
 - **Firing again:** a manual or event alert fired while it's already firing sends
   its on message again, with the new `fire_count`, unless it has been acknowledged.
 - **Restarts:** an alert that was firing resumes without a new on notification. A
@@ -243,6 +279,8 @@ The integration's **Configure** button sets:
   evaluating condition alerts and starting triggers;
 - the default notifier groups and reminder schedule;
 - the fallback group, and the retry timeout;
+- the **snooze-end window** (5 minutes by default): when a snooze runs out, a
+  reminder is sent at once unless the next scheduled one is closer than this;
 - the default event alert duration for each priority.
 
 ## Lovelace card
@@ -257,6 +295,7 @@ Add it to a dashboard as **Alert Redux** from the card picker, or in YAML:
 ```yaml
 type: custom:alert-redux-card
 title: Alerts # optional
+snooze_durations: [15, 30, 60, 120, 240] # optional: the snooze menu, in minutes
 ```
 
 It shows one box per firing alert, most important first: by priority, then
@@ -264,17 +303,33 @@ unacknowledged before acknowledged, then newest first. Each is coloured by
 priority. Emergency and Critical alerts glow (an unacknowledged Emergency pulses),
 and Warning alerts have caution stripes; acknowledging an alert tones this down.
 Each box shows the alert's icon, name, how long it's been firing, and its message,
-with buttons to acknowledge it (or remove the acknowledgement) and, for manual
-alerts set as dismissable from the card, to dismiss it. Event alerts have a bar
+with buttons to acknowledge it (or remove the acknowledgement), to snooze it and,
+for manual alerts set as dismissable from the card, to dismiss it. **Snooze** opens
+a row of durations below the buttons; a snoozed alert shows how long is left, and
+its menu can also keep it acknowledged or unsnooze it. Event alerts have a bar
 along the bottom that drains as their duration runs out. Click the icon or name for
 the alert's details.
 
 Alerts that have no data are listed in their own section at the bottom, with the
-inputs they're missing. When nothing is firing, the card says so.
+inputs they're missing. Disabled alerts aren't shown, only counted ("2 alerts
+disabled"). When nothing is firing, the card says so.
 
 The priority colours can be changed from a theme, with `alert-redux-emergency-color`,
 `alert-redux-critical-color`, `alert-redux-warning-color`, `alert-redux-notice-color`,
 and `alert-redux-informational-color`.
+
+### Admin card
+
+The admin card lists **every** alert, grouped by priority, with its kind and state
+(and when it started firing, when a snooze or suspension ends, and so on). Admins
+get buttons to disable or enable each alert, and to suspend it for 1 hour to a week
+or until a date and time; everyone else sees the list without them. It comes in the
+same install as the main card: add **Alert Redux admin** from the card picker, or
+
+```yaml
+type: custom:alert-redux-admin-card
+title: All alerts # optional
+```
 
 ### After installing or upgrading
 
