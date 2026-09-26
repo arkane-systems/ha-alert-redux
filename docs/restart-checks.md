@@ -24,23 +24,30 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
+**For the phase 11 install restart** (the user asked that 0.10.1 not get a
+restart of its own). The three checks below share one set-up. Office Only's
+quiet hours follow `input_boolean.alert_redux_test_quiet_hours`, with its own
+threshold of Critical; Test Bus Event Alert (Quiet and Office Only) throttles
+at 3 per 5 minutes and lasts 2 minutes.
+*Set up just before the install restart:* turn the helper on; fire
+`alert_redux_test_event` (with `source: test`) four times in a row, so the
+third starts throttling and the fourth is held; then request the restart about
+4 minutes 45 seconds after the third, so that throttling's end falls about 15
+seconds after the request (in 10b the new process was loading Alert Redux 24
+seconds after it).
+
 - **Throttling whose end falls due while HA is down sends its summary at
-  startup** (phase 10a). Test Bus Event Alert (Quiet and Office Only) throttles
-  at 3 per 5 minutes. *Set up just before an install restart:* fire
-  `alert_redux_test_event` (with `source: test`) four times in a row, so the
-  third starts throttling and the fourth is held; then request the restart
-  about 4 minutes 45 seconds after the third, so that throttling's end falls
-  about 15 seconds after the request: in 10b the new process was already
-  loading Alert Redux 24 seconds after it.
-  *Expect:* once HA is back, the phones get one "[Throttling ends] Fired 1×
-  while throttled, …" summary, and `throttled_since` is null.
-- **Held quiet-hours notifications survive the restart** (phase 10b). Office
-  Only's quiet hours follow `input_boolean.alert_redux_test_quiet_hours`, with
-  its own threshold of Critical. *Set up just before an install restart:* turn
-  the helper on, then fire the test event once and let it expire (2 minutes).
-  *Expect:* after the restart, nothing is announced while the helper stays on;
-  turning it off announces a summary listing Test Bus Event Alert, started and
-  stopped at the times it fired and expired.
+  startup** (phase 10a). *Expect:* once HA is back, the phones get one
+  "[Throttling ends] Fired 1× while throttled, …; stopped firing … after 2
+  minutes." summary, and `throttled_since` is null.
+- **Quiet hours hold through startup** (0.10.1). That summary is sent while HA
+  is starting, possibly before the helper has its state. *Expect:* the Echo
+  stays silent through the restart and afterwards, while the helper is on.
+- **Held quiet-hours notifications survive the restart** (phase 10b).
+  *Expect:* turning the helper off afterwards has the Echo announce one Quiet
+  hours summary: "Test Bus Event Alert: [Throttling ends] Fired 1× while
+  throttled, …" (throttling held the done notification itself, so its summary
+  is what's listed), and nothing else.
 
 ## Done
 
