@@ -60,4 +60,6 @@ export interface Alert {
   snoozedUntil: Date | null;
   /** While suspended: when the alert is enabled again (spec §6.4). */
   disabledUntil: Date | null;
+  /** The firing alerts that supersede this one, transitively (spec §8.1). */
+  supersededBy: string[];
 }

@@ -294,6 +294,26 @@ export const cardStyles = css`
     gap: 8px;
   }
 
+  /* --- Superseded alerts, behind a disclosure under their superseder --- */
+  .superseded {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: -4px 0 0 16px;
+  }
+  button.disclosure {
+    align-self: flex-start;
+    padding: 2px 8px 2px 2px;
+    border: none;
+    background: none;
+    color: var(--secondary-text-color);
+    font-size: 0.85rem;
+    --mdc-icon-size: 18px;
+  }
+  button.disclosure:hover {
+    color: var(--primary-text-color);
+  }
+
   /* --- Empty state, no-data section, version banner --- */
   .empty {
     color: var(--secondary-text-color);
