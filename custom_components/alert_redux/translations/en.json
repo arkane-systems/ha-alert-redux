@@ -1178,6 +1178,45 @@
           }
         }
       }
+    },
+    "sensor": {
+      "highest_priority": {
+        "name": "Alert Redux highest priority",
+        "state": {
+          "emergency": "Emergency",
+          "critical": "Critical",
+          "warning": "Warning",
+          "notice": "Notice",
+          "informational": "Informational",
+          "none": "None"
+        }
+      },
+      "highest_unacked_priority": {
+        "name": "Alert Redux highest unacknowledged priority",
+        "state": {
+          "emergency": "Emergency",
+          "critical": "Critical",
+          "warning": "Warning",
+          "notice": "Notice",
+          "informational": "Informational",
+          "none": "None"
+        }
+      },
+      "firing": {
+        "name": "Alert Redux firing"
+      },
+      "active": {
+        "name": "Alert Redux active"
+      },
+      "acknowledged": {
+        "name": "Alert Redux acknowledged"
+      },
+      "no_data": {
+        "name": "Alert Redux no data"
+      },
+      "disabled": {
+        "name": "Alert Redux disabled"
+      }
     }
   },
   "selector": {

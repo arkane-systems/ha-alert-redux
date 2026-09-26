@@ -884,13 +884,27 @@ recorder with `_unrecorded_attributes`.
   `critical: 1`, `warning: 2`, and so on.
 - Each count sensor lists the entity IDs it counts, as an attribute, so automations
   don't need to scan all alerts.
+- [Decided, phase 8] As built: the two priority sensors are enum sensors whose
+  state is a priority or `none`. The count sensors are `sensor.alert_redux_firing`,
+  `…_active`, `…_acknowledged`, `…_no_data`, and `…_disabled`, each with an
+  `entity_ids` attribute (kept out of the recorder); the firing and active sensors
+  also carry a count per priority. The count sensors have a state class
+  (`measurement`), which gives them statistics and keeps them out of the logbook.
+  The sensors have no device, and don't get the alerts label (§11.5).
+- [Decided, phase 8] The **no data** count counts every alert missing data,
+  whatever its state: `no_data` alerts, and firing alerts in their grace period
+  (§4.4), which count as firing too. Something's input being broken shows at
+  once (fail loud).
+- [Decided, phase 8] The sensors update once per burst of changes (a
+  supersession cascade, say), not once per alert.
 
 ### 11.3 Events
 
 [Decided, N2, R17] Every change fires its own HA event, with the common prefix
 `alert_redux_`: `alert_redux_fired`, `…_ended`, `…_acked`, `…_unacked`,
 `…_snoozed`, `…_snooze_expired`, `…_disabled`, `…_enabled`, `…_no_data`,
-`…_superseded`, `…_created`, `…_deleted`. Every event carries `entity_id`, `name`,
+`…_superseded`, `…_created`, `…_deleted`, and [Decided, phase 8]
+`…_data_restored`. Every event carries `entity_id`, `name`,
 `priority`, `kind`, the old and new states, and, for user actions, `user_id`
 [Decided, R18].
 
@@ -936,6 +950,57 @@ tells the whole story and nothing has to be inferred:
   grace period then runs out, only `_ended` fires. Data returning has no event of
   its own (`state_changed` shows it); the phase 8 review of the event set can
   revisit that. Waiting for data at startup fires no events.
+- [Decided, phase 8] `_data_restored` fires when data returns after a loss that
+  `_no_data` announced, and carries the `missing_inputs` that were missing. It's
+  the only sign of data returning to a firing alert within its grace period,
+  where the state doesn't change. It fires before any `_fired` or `_ended` the
+  same result causes. Data arriving after waiting at startup fires nothing, as
+  the wait itself fired nothing; a loss announced before a restart is announced
+  as restored after it.
+
+[Decided, phase 8] **The event set, reviewed.** Each event's data, beyond the
+common data above:
+
+| Event | Also carries |
+|---|---|
+| `_fired` | `fire_count`; `fire_data` (manual alerts) or `trigger_data` (event alerts) |
+| `_ended` | `fire_count`, `duration_seconds`, `reason` |
+| `_acked` | `pre_acked_by`, when acknowledged by supersession (§8.2, §8.3) |
+| `_unacked` | — |
+| `_snoozed` | `snoozed_until` |
+| `_snooze_expired` | — |
+| `_disabled` | `disabled_until` (null when disabled indefinitely) |
+| `_enabled` | — |
+| `_no_data` | `missing_inputs` |
+| `_data_restored` | `missing_inputs` (the inputs that were missing) |
+| `_superseded` | `superseded_by` |
+| `_created` | — (`old_state` is null) |
+| `_deleted` | — (`new_state` is null; the rest comes from the stored record) |
+
+The review kept `_superseded` without a counterpart: an alert ceasing to be
+superseded shows in `superseded_by`, and the change that caused it (the
+superseding alert ending) has its own event.
+
+**Ready to paste**, to listen for every event:
+
+```yaml
+triggers:
+  - trigger: event
+    event_type:
+      - alert_redux_fired
+      - alert_redux_ended
+      - alert_redux_acked
+      - alert_redux_unacked
+      - alert_redux_snoozed
+      - alert_redux_snooze_expired
+      - alert_redux_disabled
+      - alert_redux_enabled
+      - alert_redux_no_data
+      - alert_redux_data_restored
+      - alert_redux_superseded
+      - alert_redux_created
+      - alert_redux_deleted
+```
 
 ### 11.4 Logbook / Activity
 
@@ -946,6 +1011,27 @@ tells the whole story and nothing has to be inferred:
 - A logbook platform describes Alert Redux events in readable text, including who did
   what, e.g. "Back Door Open acknowledged by Alistair". This is what lets a standard
   Activity card stand in for Alert2's history view.
+- [Decided, phase 8] **Only events that add to the state rows are described.**
+  The logbook already has a row for every change of an alert's state, showing the
+  translated state and, from the change's context, the user who made it ("Back
+  Door Open · Acknowledged · Alistair"). Describing `_fired`, `_acked`,
+  `_unacked`, `_enabled`, or `_ended` too would show each of those changes twice,
+  and a describer can't drop a row once its event type is registered. So only
+  these get rows, each with the user from its context:
+
+  | Event | Row |
+  |---|---|
+  | `_snoozed` | "snoozed until 14:30" (the date too, unless it's today) |
+  | `_snooze_expired` | "snooze ran out" |
+  | `_disabled` | "suspended until Tue 06 Oct 18:00", or "disabled" (which repeats the state row; it's rare) |
+  | `_superseded` | "superseded by Door Left Open" |
+  | `_no_data` | "lost data from sensor.x" (it also covers a firing alert, whose state doesn't change) |
+  | `_data_restored` | "data restored" |
+  | `_created`, `_deleted` | "created", "deleted" |
+
+  An end's reason is still clear without `_ended`: an end for lack of data
+  follows its `_no_data` row, and a dismissal's state row carries the user. The
+  messages are English, like the cards (§13.1).
 - **Known limitation: grey dots.** The Activity card colours each entry's dot from
   theme variables (`--state-<domain>-<state>-color`), but the HA frontend only
   looks these up for a hard-coded list of built-in domains (`STATE_COLORED_DOMAIN`
@@ -1457,6 +1543,9 @@ Decisions with their reasons, in the order they were made.
 | Pre-acknowledgements are kept by unique ID | They survive renames without depending on the order of registry events [§8.3]. |
 | The edit form lists an alert's referrers, instead of the delete dialog | HA gives integrations no hook into the subentry delete dialog [§12.4]. |
 | Restart checks ride on install restarts | Development already restarts HA to install each subphase; pytest covers every restore path in its own phase, and a ledger confirms them in real HA one install later [§20]. |
+| The logbook describes only events that add to the state rows | The state rows already show each state change and who made it; describing the rest would show those changes twice [§11.4]. |
+| `_data_restored` event | Data returning to a firing alert in its grace period changes no state, so nothing else would show it [§11.3]. |
+| The no-data count includes firing alerts in their grace period | A broken input shows at once (fail loud) [§11.2]. |
 
 ## 20. Phase plan
 
@@ -1657,6 +1746,13 @@ dialog. Decisions from building it are recorded in §4.1, §8.1–§8.3, §9.7,
 
 *Done when* the signal-light glue can be written as a single-entity automation, and
 the Activity card reads well.
+
+[Phase 8 as built] The summary sensors are a sensor platform reading a summary
+the alerts report to as they write their state (`summary.py`). The logbook
+platform describes only the events that add to the state rows, since the
+logbook already shows each state change with its user; the review of the event
+set added `_data_restored`. Decisions from building it are recorded in §11.2,
+§11.3, and §11.4.
 
 ### Phase 9 — Notifications II: replacing, clearing, buttons (0.9.0)
 

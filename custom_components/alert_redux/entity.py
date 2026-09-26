@@ -121,11 +121,13 @@ from .const import (
     CONF_VALUE_TEMPLATE,
     DATA_LABEL,
     DATA_STARTUP_UNTIL,
+    DATA_SUMMARY,
     DATA_SUPERSESSION,
     DEFAULT_PRIORITY_ICONS,
     DOMAIN,
     EVENT_ACKED,
     EVENT_CREATED,
+    EVENT_DATA_RESTORED,
     EVENT_DISABLED,
     EVENT_ENABLED,
     EVENT_ENDED,
@@ -173,6 +175,7 @@ from .sources import (
     value_template,
 )
 from .store import AlertStore
+from .summary import AlertReport, SummaryCoordinator
 from .supersession import DoneDecision, Supersession, relationship_targets
 from .triggers import TriggerWatcher, bus_event_trigger
 
@@ -189,6 +192,7 @@ _CHANGE_EVENTS = {
     Change.SNOOZE_EXPIRED: EVENT_SNOOZE_EXPIRED,
     Change.DISABLED: EVENT_DISABLED,
     Change.ENABLED: EVENT_ENABLED,
+    Change.DATA_RESTORED: EVENT_DATA_RESTORED,
 }
 
 
@@ -350,6 +354,10 @@ class AlertEntity(Entity):
         return self.hass.data[DOMAIN][DATA_SUPERSESSION]
 
     @property
+    def _summary(self) -> SummaryCoordinator:
+        return self.hass.data[DOMAIN][DATA_SUMMARY]
+
+    @property
     def _reminder_schedule(self) -> tuple[float, ...]:
         """Return the reminder schedule: the alert's own, or else the default."""
         if self._own_schedule is not None:
@@ -444,19 +452,31 @@ class AlertEntity(Entity):
         self._async_done_due(dt_util.utcnow())
         self._async_stop_messages()
         self._async_cancel_timers()
+        assert self.unique_id is not None
+        self._summary.async_withdraw(self.unique_id)
 
     @callback
     def async_write_ha_state(self) -> None:
         """Bring the rendered messages and supersession up to date, then write.
 
         A change in whether the alert is firing is passed on to the alerts it
-        supersedes.
+        supersedes, and every write is reported to the summary (spec §11.2).
         """
         supersession = self._supersession
         self._async_sync_messages()
         self._superseded_by = supersession.superseded_by(self.entity_id)
         self._broken_references = supersession.broken_references(self)
         super().async_write_ha_state()
+        assert self.unique_id is not None
+        self._summary.async_report(
+            self.unique_id,
+            AlertReport(
+                self.entity_id,
+                self._runtime.state,
+                self._priority,
+                self._runtime.no_data_since is not None,
+            ),
+        )
         firing = self._runtime.firing
         if firing != self._was_firing:
             started = firing and self._was_firing is False
@@ -1423,6 +1443,7 @@ class ConditionAlertEntity(AlertEntity):
         before = self._runtime.to_dict()
         now = dt_util.utcnow()
         condition, missing = self._judge(self._results)
+        was_missing = list(self._runtime.missing_inputs)
         changes = self._runtime.evaluate(condition, missing, now, timing)
         pre_acked = None
         if any(change is Change.FIRED for change, _ in changes):
@@ -1458,6 +1479,12 @@ class ConditionAlertEntity(AlertEntity):
                     EVENT_ENDED, transition.old_state, _ended_data(transition)
                 )
                 self._async_notify_done(transition)
+            elif change is Change.DATA_RESTORED:
+                self._fire_event(
+                    EVENT_DATA_RESTORED,
+                    transition.old_state,
+                    {ATTR_MISSING_INPUTS: was_missing},
+                )
             else:
                 self._fire_event(
                     EVENT_NO_DATA,

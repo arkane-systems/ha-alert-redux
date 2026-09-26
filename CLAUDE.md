@@ -16,8 +16,10 @@ handling) and 3 (the main card, with messages rendered for it) are implemented, 
 reminder / done, retries and the fallback), phase 5 (on/off and threshold
 condition alerts, trigger and bus event alerts, and the card's progress bar), and
 phase 6 (snoozing, disabling, and suspending, the card's snooze control, and the
-admin card), and phase 7 (supersession, propagation and pre-acknowledgement, the
-alert state kind, dangling references, and the card's superseded alerts).
+admin card), phase 7 (supersession, propagation and pre-acknowledgement, the
+alert state kind, dangling references, and the card's superseded alerts), and
+phase 8 (the summary sensors, the logbook platform, and the `_data_restored`
+event).
 
 ## Specification
 
@@ -72,6 +74,17 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     acknowledgements as pre-acknowledgements (the entities call it from
     `async_write_ha_state`). Pre-acknowledgements are kept by the source's
     unique ID. It also reports each alert's `broken_references`.
+  - `summary.py` — `summarise` (HA-free: the counts, entity-ID lists, and
+    highest priorities across all alerts) and `SummaryCoordinator` in
+    `hass.data`, which each alert reports to (by unique ID) from
+    `async_write_ha_state` and withdraws from when removed; it recomputes once
+    per burst of reports and tells the sensors.
+  - `sensor.py` — the summary sensors (spec §11.2), the one platform forwarded
+    from the config entry. No device and no label; their entity IDs are set
+    explicitly, whatever the translated names.
+  - `logbook.py` — describes only the events that add to the logbook's state rows
+    (spec §11.4). A describer can't drop a row, so events like `_acked`, which
+    would duplicate their state rows, are simply not registered.
   - `triggers.py` — `TriggerWatcher`: attaches HA triggers once HA has started and
     after the startup delay, handing on each firing's variables made JSON-safe.
     Used by event alerts and on/off sides.

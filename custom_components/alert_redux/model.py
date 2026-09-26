@@ -249,6 +249,7 @@ class Change(StrEnum):
     SNOOZE_EXPIRED = "snooze_expired"
     DISABLED = "disabled"
     ENABLED = "enabled"
+    DATA_RESTORED = "data_restored"
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,6 +290,8 @@ class AlertRuntime:
     # Condition alerts: missing data, and the pending delay deadlines.
     no_data_since: datetime | None = None
     missing_inputs: list[str] = field(default_factory=list)
+    # Whether losing the data was announced, so that its return is too.
+    no_data_announced: bool = False
     delay_on_until: datetime | None = None
     delay_off_until: datetime | None = None
     # When the next reminder is due, while firing and unacknowledged (spec §9.6).
@@ -463,6 +466,7 @@ class AlertRuntime:
         self.last_disabled_by = user_id
         self.no_data_since = None
         self.missing_inputs = []
+        self.no_data_announced = False
         self.delay_on_until = None
         self.delay_off_until = None
         self.on_latched = False
@@ -602,10 +606,17 @@ class AlertRuntime:
         if condition is None:
             return self._evaluate_no_data(missing_inputs, now, timing)
 
+        changes: list[tuple[Change, Transition]] = []
+        old = self.state
         self.awaiting_data = False
         self.no_data_since = None
         self.missing_inputs = []
-        changes: list[tuple[Change, Transition]] = []
+        if self.no_data_announced:
+            # Only a loss that was announced; waiting at startup fires nothing.
+            self.no_data_announced = False
+            changes.append(
+                (Change.DATA_RESTORED, Transition(old, self.state, self.fire_count))
+            )
         if condition:
             self.delay_off_until = None
             if not self.firing:
@@ -639,6 +650,7 @@ class AlertRuntime:
         if self.no_data_since is None:
             old = self.state
             self.no_data_since = now
+            self.no_data_announced = True
             changes.append(
                 (Change.NO_DATA, Transition(old, self.state, self.fire_count))
             )

@@ -17,6 +17,7 @@ from custom_components.alert_redux.const import (
     DOMAIN,
     EVENT_ACKED,
     EVENT_CREATED,
+    EVENT_DATA_RESTORED,
     EVENT_DELETED,
     EVENT_ENDED,
     EVENT_FIRED,
@@ -188,6 +189,7 @@ async def test_pending_delay_survives_restart(
     await hass.async_block_till_done()
     hass.states.async_remove(SENSOR)
 
+    restored = async_capture_events(hass, EVENT_DATA_RESTORED)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert hass.states.get(DOOR).state == "no_data"
@@ -195,11 +197,33 @@ async def test_pending_delay_survives_restart(
     hass.states.async_set(SENSOR, "on")
     await hass.async_block_till_done()
     assert hass.states.get(DOOR).state == "idle"
+    # Waiting for data at startup announced nothing, so nor does its arrival.
+    assert not restored
 
     freezer.tick(timedelta(minutes=1))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
     assert hass.states.get(DOOR).state == "active"
+
+
+async def test_data_restored_after_restart(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Data lost before a restart, and announced then, is announced on return."""
+    hass.states.async_set(SENSOR, "off")
+    entry = await setup_alerts(state_alert("Back Door Open", SENSOR))
+    hass.states.async_set(SENSOR, "unavailable")
+    await hass.async_block_till_done()
+    assert hass.states.get(DOOR).state == "no_data"
+    restored = async_capture_events(hass, EVENT_DATA_RESTORED)
+
+    await _restart(hass, entry)
+    assert hass.states.get(DOOR).state == "no_data"
+    assert not restored
+    hass.states.async_set(SENSOR, "off")
+    await hass.async_block_till_done()
+    assert hass.states.get(DOOR).state == "idle"
+    assert [event.data["missing_inputs"] for event in restored] == [[SENSOR]]
 
 
 async def test_startup_delay(

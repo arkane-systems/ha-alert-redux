@@ -16,12 +16,13 @@ Test alerts are the ones named "Test …", and send only to the Quiet group.
 
 **Timing on this instance:** the old process keeps running for at least 20
 seconds after a restart is requested: in 7a and 7b it still handled deadlines 10
-and 20 seconds after the request. In 7b the new process loaded Alert Redux 37
-seconds after the request and set it up at 60 seconds; in 7a, set-up was at 56
-seconds (in 6b, 25). So the real downtime is roughly 25 to 55 seconds after the
-request, and a deadline meant to fall *during* it should be about 45 seconds
-after: e.g. snooze or suspend for 1 minute, then request the restart 15 seconds
-later.
+and 20 seconds after the request. Set-up of Alert Redux in the new process came
+50 seconds after the request in phase 8, 60 in 7b, 56 in 7a, and 25 in 6b. So
+the real downtime is roughly 25 to 50 seconds after the request, and a deadline
+meant to fall *during* it should be about 35 to 40 seconds after: e.g. snooze or
+suspend for 1 minute, then request the restart 20 to 25 seconds later. (In phase
+8 the restart went only 3 seconds after, and the deadlines fell 7 seconds after
+set-up.)
 
 - **Snooze runs out during the restart** (phase 6a). *Set up just before an
   install restart:* snooze a firing, Quiet-only test alert so that the deadline
@@ -36,17 +37,36 @@ later.
   *Expect:* enabled once HA is back, with `last_enabled_by` null; a condition
   alert evaluates from scratch (`no_data` until its inputs report).
 
-- **A pre-acknowledgement survives the restart** (phase 7b). Test Door Left Open
-  supersedes Test Door Open with propagation *Acknowledge*. *Set up just before
-  an install restart:* open the test door, acknowledge Test Door Open at once,
-  and restart within the minute, so that Left Open's `delay_on` runs out during
-  the restart.
-  *Expect:* Left Open's `pre_acked_by` is `[alert_redux.test_door_open]` once
-  HA is back, and Left Open fires at startup (its restored `delay_on`) as `ack`,
-  with no on notification. Close the door afterwards: only Left Open's done
-  notification.
+- **The summary sensors are right straight after a restart** (phase 8). *Just
+  after the next install restart:* before touching any alert, compare
+  `sensor.alert_redux_firing`, `…_active`, `…_acknowledged`, `…_no_data`, and
+  `…_disabled` (and their `entity_ids`) with the alerts' own states.
+  *Expect:* they agree; the sensors' IDs are unchanged.
+
+- **A no-data spell spanning the restart announces its end** (phase 8). *Set up
+  just before an install restart:* with the test door open (so Test Sensor Is
+  On is firing), turn `input_boolean.alert_redux_test_available` off, and
+  check the `alert_redux_no_data` event (a "lost data" row in the logbook).
+  Leave it off across the restart. Test Sensor Is On's 60 s grace runs out,
+  so it ends and shows `no_data`.
+  *Expect:* once HA is back, turning the input back on fires
+  `alert_redux_data_restored` with `missing_inputs:
+  [binary_sensor.alert_redux_test_sensor]` (a "data restored" logbook row).
 
 ## Done
+
+- **2026-09-26, phase 8 install restart. A pre-acknowledgement survives the
+  restart** (phase 7b). Door opened and Test Door Open acknowledged at
+  12:42:11, restart requested at 12:42:14. Alert Redux was set up again at about
+  12:43:04, and Left Open's `delay_on` ran out at 12:43:11, live: it fired as
+  `ack` with `pre_acked_by: [alert_redux.test_door_open]`, restored from before
+  the restart. Passed. (The done notification on closing wasn't observed.)
+- **2026-09-26, phase 8 install restart. Snooze runs out, and suspension ends,
+  during the restart** (phases 6a, 6b). *Not exercised again:* both fell due at
+  12:43:11, 7 seconds after set-up. Live, both were correct: Test Condition
+  Alert went `active` with `last_unacked_by` null; Test Threshold Alert was
+  enabled with `last_enabled_by` null. Still pending, with the timing note
+  revised.
 
 - **2026-09-26, 7b install restart. A superseded alert stays suppressed across
   the restart** (phase 7a). Test Door Open and Left Open came back firing with

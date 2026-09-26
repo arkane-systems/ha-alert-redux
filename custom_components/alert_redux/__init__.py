@@ -9,6 +9,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import CoreState, Event, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import (
     config_validation as cv,
@@ -44,6 +45,7 @@ from .const import (
     DATA_STARTUP_UNTIL,
     DATA_STORE,
     DATA_SUBENTRIES,
+    DATA_SUMMARY,
     DATA_SUPERSESSION,
     DOMAIN,
     EVENT_DELETED,
@@ -66,11 +68,15 @@ from .model import AlertRuntime, Settings
 from .notifier import GroupConfig, Notifier
 from .issues import async_check_broken_references, async_check_default_groups
 from .store import AlertStore
+from .summary import SummaryCoordinator
 from .supersession import Supersession
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# The summary sensors (spec §11.2); alerts are our own domain's EntityComponent.
+PLATFORMS = [Platform.SENSOR]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -187,6 +193,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entities: dict[str, AlertEntity] = {}
     data[DATA_ENTITIES] = entities
     data[DATA_SUPERSESSION] = Supersession(hass, entities, settings)
+    data[DATA_SUMMARY] = SummaryCoordinator(hass)
 
     component: EntityComponent[AlertEntity] = data[DATA_COMPONENT]
     if not await component.async_setup_entry(entry):
@@ -195,6 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # stale (spec §8.3); references to missing alerts are raised (§12.4).
     data[DATA_SUPERSESSION].async_sweep_pre_acks()
     async_check_broken_references(hass, entry)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     @callback
     def _async_registry_updated(event: Event[er.EventEntityRegistryUpdatedData]) -> None:
@@ -219,7 +227,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload an Alert Redux config entry."""
     data = hass.data[DOMAIN]
-    unloaded = await data[DATA_COMPONENT].async_unload_entry(entry)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await data[DATA_COMPONENT].async_unload_entry(entry) and unloaded
     await data[DATA_NOTIFIER].async_stop()
     await data[DATA_STORE].async_flush()
     return unloaded

@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from freezegun.api import FrozenDateTimeFactory
 import pytest
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from pytest_homeassistant_custom_component.common import (
     async_capture_events,
@@ -16,6 +16,7 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.alert_redux.const import (
     DOMAIN,
     EVENT_ACKED,
+    EVENT_DATA_RESTORED,
     EVENT_ENDED,
     EVENT_FIRED,
     EVENT_NO_DATA,
@@ -55,6 +56,7 @@ def events(hass: HomeAssistant) -> dict[str, list]:
             ("ended", EVENT_ENDED),
             ("no_data", EVENT_NO_DATA),
             ("acked", EVENT_ACKED),
+            ("restored", EVENT_DATA_RESTORED),
         )
     }
 
@@ -175,6 +177,11 @@ async def test_dropout_within_grace(
     assert state.state == "ack"
     assert state.attributes["no_data_since"] is None
     assert state.attributes["missing_inputs"] == []
+    # No state changed, but the return is announced, with what was missing.
+    assert len(events["restored"]) == 1
+    assert events["restored"][0].data["old_state"] == "ack"
+    assert events["restored"][0].data["new_state"] == "ack"
+    assert events["restored"][0].data["missing_inputs"] == [SENSOR]
     await _tick(hass, freezer, timedelta(minutes=5))
     assert _state(hass) == "ack"
     assert not events["ended"]
@@ -200,10 +207,17 @@ async def test_dropout_past_grace(
     assert events["ended"][0].data["new_state"] == "no_data"
     assert len(events["no_data"]) == 1
 
-    # Data returning starts a new firing.
+    # Data returning is announced, then starts a new firing.
+    order: list[str] = []
+    for event_type in (EVENT_DATA_RESTORED, EVENT_FIRED):
+        hass.bus.async_listen(
+            event_type, callback(lambda event: order.append(event.event_type))
+        )
     await _set(hass, SENSOR, "on")
     assert _state(hass) == "active"
     assert len(events["fired"]) == 2
+    assert events["restored"][0].data["old_state"] == "no_data"
+    assert order == [EVENT_DATA_RESTORED, EVENT_FIRED]
 
 
 async def test_dropout_while_idle(
