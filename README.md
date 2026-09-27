@@ -3,7 +3,7 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.11.0). Every alert kind works: manual, state,
+> **Status:** early development (0.11.1). Every alert kind works: manual, state,
 > on/off, threshold, template, alert state, trigger, and bus event alerts. The card
 > shows, acknowledges, and snoozes them, they send on, reminder, and done
 > notifications (with throttling, quiet hours, and buttons), the admin card
