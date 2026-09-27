@@ -157,6 +157,23 @@ no ad-hoc alerts [Decided, R4].
   dismiss any manual alert. The setting is exposed as the `user_dismissable`
   attribute. [Decided] It defaults to *off*: a dismiss button is then something you
   opt into deliberately, and it's less likely to be turned on by accident.
+- [Decided; 1.1.0] **End by itself after.** A manual alert can optionally end by
+  itself, like an event alert (§4.2): fired by `alert_redux.fire`, it then stays
+  firing for a duration. This fills the gap between manual alerts, which stay until
+  dismissed, and event alerts, which can't be fired by action. (Today that needs a
+  bus event alert listening for a made-up event.)
+  - The option is off by default. When it's on, the duration is the alert's own, or
+    else its priority's default event duration (§5), as for event alerts.
+  - Firing again while it's firing restarts the duration, adds to the fire count,
+    and keeps the acknowledgement, as for event alerts.
+  - It can still be dismissed early: the `alert_redux.dismiss` action always works,
+    and the card's dismiss button follows *Dismissable from the card* as usual.
+  - Everything else follows event alerts: the card's progress bar (§13.1), reminders
+    only if the duration outlasts the first reminder interval (§9.6), the expiry
+    kept across restarts, and the `duration` and `event_expires` attributes.
+  - It stays a manual alert, not a new kind. Event alerts still can't be fired by
+    action (R2), and manual alerts are still the only kind that can be dismissed
+    (R3).
 
 ### 4.4 Missing data
 
@@ -1830,6 +1847,7 @@ Decisions with their reasons, in the order they were made.
 | The notification button is "Snooze Alert", and the app's own snooze options stay | Tells ours apart without taking away something people may use [§9.11]. |
 | A superseded alert's reminder waits for a superseding alert about to fire; sent late if it doesn't | A reminder and the superseding on notification arriving together is noise, and no setting should be needed to avoid it; a lost reminder would fail quiet [§8.1]. |
 | Logbook messages are capitalised | They sit beside the translated states, which are [§11.4]. |
+| Manual alerts can end by themselves after a duration, as an option, not a new kind | Fills the gap between manual and event alerts without a ninth kind, and without overturning R2 or R3 [§4.3]. |
 
 ## 20. Phase plan
 
@@ -2104,6 +2122,16 @@ Live testing waits for the next real-HA run.
   of [Alert2](https://github.com/redstone99/hass-alert2) and
   [weather_alerts_card](https://github.com/seevee/weather_alerts_card) for their
   inspiration (moved from phase 13).
+
+### After 1.0.0 — Manual alerts that end by themselves (1.1.0)
+
+- The *End by itself after* option for manual alerts (§4.3). The duration handling
+  moves out of the event alerts into a part both kinds share: the expiry timer,
+  restoring the expiry after a restart, gating reminders, and the attributes.
+- The option and its duration on the manual alert form.
+
+It's small and self-contained, so it comes first after 1.0.0, ahead of phase 12,
+and leaves the daily-use soak before 1.0.0 undisturbed.
 
 ### Phase 12 — Voice control (0.12.0)
 
