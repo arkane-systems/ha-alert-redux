@@ -401,19 +401,25 @@ async def test_reminder_held_within_the_window(
             supersedes=_supersedes(OPEN),
         ),
         PHONE,
-        options=DEFAULTS,
+        # Long enough that the test's time steps keep the timers apart.
+        options={**DEFAULTS, "supersession_debounce": 30},
     )
     hass.states.async_set(DOOR, "on")
     await hass.async_block_till_done()
-    await _tick(hass, freezer, 1)
+    await _tick(hass, freezer, 31)
+    assert [title for title, _ in _sent(calls)] == ["Back Door Open"]
     calls.clear()
 
     # At 10 minutes, Left Open is 3 minutes off: the reminder waits for it.
-    await _tick(hass, freezer, 10 * 60)
+    await _tick(hass, freezer, 10 * 60 - 31)
     assert calls == []
     assert hass.states.get(OPEN).attributes["next_reminder"] is not None
+    # At 13 minutes Left Open fires; the reminder, held past the debounce,
+    # is then skipped.
     await _tick(hass, freezer, 3 * 60)
-    await _tick(hass, freezer, 1)
+    assert hass.states.get(LEFT_OPEN).state == "active"
+    assert [title for title, _ in _sent(calls)] == ["Back Door Left Open"]
+    await _tick(hass, freezer, 31)
     assert [title for title, _ in _sent(calls)] == ["Back Door Left Open"]
 
 
