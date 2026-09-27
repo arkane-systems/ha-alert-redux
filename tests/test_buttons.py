@@ -80,7 +80,7 @@ def test_alert_buttons_order() -> None:
     ) == (
         Button(f"ALERT_REDUX_{UID}_{key}", "Close door", True),
         Button(f"ALERT_REDUX_{UID}_ACK", "Acknowledge"),
-        Button(f"ALERT_REDUX_{UID}_SNOOZE", "Snooze 1 hour"),
+        Button(f"ALERT_REDUX_{UID}_SNOOZE", "Snooze Alert 1 hour"),
     )
     # No built-in buttons for unacknowledgeable alerts.
     assert alert_buttons(
@@ -175,7 +175,7 @@ async def test_alert_notifications_carry_buttons(
     assert [action["title"] for action in _actions(calls[0])] == [
         "Close door",
         "Acknowledge",
-        "Snooze 30 minutes",
+        "Snooze Alert 30 minutes",
     ]
     assert _actions(calls[1]) is None
 
@@ -192,7 +192,7 @@ async def test_snooze_duration_default_option(
     await _call(hass, "fire")
     assert [action["title"] for action in _actions(calls[0])] == [
         "Acknowledge",
-        "Snooze 2 hours",
+        "Snooze Alert 2 hours",
     ]
 
 

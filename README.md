@@ -390,7 +390,7 @@ can't replace or clear: each notification arrives separately.
 
 ### Buttons
 
-Mobile app notifications carry buttons: **Acknowledge** and **Snooze** (for an
+Mobile app notifications carry buttons: **Acknowledge** and **Snooze Alert** (for an
 alert that can be acknowledged), after any of the alert's own. An alert's own
 buttons, in its **Notifications and messages** section, each have a label and an
 action, e.g. *Close door* running `cover.close_cover` on the garage door. Tapping one
@@ -399,8 +399,10 @@ has stopped firing. Turn on **Only from an unlocked phone** for anything
 security-sensitive (iOS). Android shows at most three buttons, so the alert's own
 come first. The done notification has no buttons.
 
-The Snooze button snoozes for the alert's **Snooze button duration**, or else the
-default from the integration's options (1 hour).
+The Snooze Alert button snoozes for the alert's **Snooze button duration**, or else
+the default from the integration's options (1 hour). It's named so as not to be
+confused with the app's own *Snooze* options, which only snooze the notification on
+the phone; the alert itself isn't snoozed.
 
 ### When a notifier fails
 
@@ -433,7 +435,7 @@ The integration's **Configure** button sets:
 - the **snooze-end window** (5 minutes by default): when a snooze runs out, a
   reminder is sent at once unless the next scheduled one is closer than this;
 - the **Snooze button duration** (1 hour by default) for notifications' Snooze
-  buttons;
+  Alert buttons;
 - the default event alert duration for each priority.
 
 ## Lovelace card

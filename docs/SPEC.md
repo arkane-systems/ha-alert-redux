@@ -910,7 +910,7 @@ keyboards could be added later. Other members leave the buttons out.
   label and the HA action it runs. For example, *Garage Door Left Open* has "Close
   door", which runs `cover.close_cover` on `cover.garage_door`. The definition says
   nothing about mobile; the member converts it into its own format.
-- **Built-in buttons** [Decided, P3]: **Acknowledge**, and **Snooze** for a fixed
+- **Built-in buttons** [Decided, P3]: **Acknowledge**, and **Snooze Alert** for a fixed
   duration (per alert, or else a global default). They aren't shown on
   unacknowledgeable alerts (§6.1).
 - **Require unlock** [Decided]: a per-button setting. It maps to iOS
@@ -942,12 +942,13 @@ keyboards could be added later. Other members leave the buttons out.
   the platform isn't known for a notify group of phones.
 - [Decided, phase 9] The Snooze button's duration is the alert's own setting, or
   the **Snooze button duration** option, 1 hour by default. Its title gives the
-  duration ("Snooze 1 hour").
-- [Deferred, phase 13] **The app's own snooze options.** By default the HA app
+  duration ("Snooze Alert 1 hour").
+- [Decided, 0.11.1] **The app's own snooze options.** By default the HA app
   offers its own *Snooze 5 min*, *Snooze 15 min*, and *Snooze 1 hour* on
-  notifications. These aren't Alert Redux's snooze (§6.2), which is confusing next
-  to our Snooze button. Investigate whether they can be suppressed, or at least
-  told apart from ours.
+  notifications. These aren't Alert Redux's snooze (§6.2): they only snooze the
+  notification on the phone, which was confusing next to our button. They're
+  left alone, since people may want them, and ours is called **Snooze Alert**
+  instead, so the two are told apart.
 
 ## 10. Acknowledgement queue
 
@@ -1804,6 +1805,7 @@ Decisions with their reasons, in the order they were made.
 | The owner says what's sent when quiet hours end | Only Alert Redux knows which alerts are still active and how to summarise them [§9.9]. |
 | An unavailable quiet-hours entity isn't quiet, but doesn't release what's held | New notifications fail loud; a blip in the night doesn't deliver the morning summary [§9.9]. |
 | One quiet-hours summary line per alert | A door opened three times in the night is one line, with the times it was opened and for how long in all [§9.9]. |
+| The notification button is "Snooze Alert", and the app's own snooze options stay | Tells ours apart without taking away something people may use [§9.11]. |
 | Logbook messages are capitalised | They sit beside the translated states, which are [§11.4]. |
 
 ## 20. Phase plan
@@ -2069,6 +2071,8 @@ Live testing waits for the next real-HA run.
 
 - Capitalise the logbook messages, to match the translated states (§11.4).
 - Add the snooze durations to the main card's visual editor (§13.1).
+- Rename the notification button Snooze to Snooze Alert, to tell it apart from
+  the HA app's own snooze options (§9.11; moved from phase 13).
 
 ### Phase 12 — Voice control (0.12.0)
 
@@ -2083,8 +2087,6 @@ Live testing waits for the next real-HA run.
 - The export and import actions and admin-card controls (§13.2, §16).
 - The admin card flags superseded alerts, and shows a copyable summary of an
   alert's settings on request (§13.2).
-- Investigate the HA app's own snooze options on notifications, and suppress or
-  distinguish them (§9.11).
 - iOS interruption levels for Emergency and Critical alerts (§9.3).
 - Review the layout and grouping of the configuration forms for each kind of
   alert (§12.1).
