@@ -2568,8 +2568,8 @@
           "throttle_minutes": "The default throttle's window, in minutes.",
           "fallback_group": "Receives a notification when no member of any group it was sent to could be notified. Leave empty to use a persistent notification.",
           "retry_timeout": "How long a notifier that is missing or failing keeps being retried before it's given up on.",
-          "snooze_reminder_window": "When a snooze runs out, a reminder is sent straight away, unless the alert's next scheduled reminder is closer than this.",
-          "button_snooze_duration": "How long a notification's *Snooze* button snoozes an alert, unless the alert sets its own."
+          "snooze_reminder_window": "When a snooze runs out, a reminder is sent straight away, unless the alert's next scheduled reminder is closer than this. A superseded alert's reminder also waits for a superseding alert due to fire within this long.",
+          "button_snooze_duration": "How long a notification's *Snooze Alert* button snoozes an alert, unless the alert sets its own."
         },
         "sections": {
           "event_durations": {

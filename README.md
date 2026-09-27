@@ -368,7 +368,10 @@ because it was disabled.
   alert can have its own schedule, or none. Acknowledging stops reminders;
   removing the acknowledgement resumes them on the original schedule, counted from
   when the alert started firing. When a snooze runs out, a reminder is sent at once
-  unless a scheduled one is due within the snooze-end window.
+  unless a scheduled one is due within the snooze-end window. A superseded alert
+  sends no reminders while an alert superseding it is firing; one that falls due
+  as such an alert is about to fire (its delay ends within the snooze-end window)
+  waits for it, and is dropped if it fires, or sent late if it doesn't.
 - **Firing again:** a manual or event alert fired while it's already firing sends
   its on message again, with the new `fire_count`, unless it has been acknowledged.
 - **Restarts:** an alert that was firing resumes without a new on notification. A
@@ -433,7 +436,9 @@ The integration's **Configure** button sets:
 - the default notifier groups and reminder schedule;
 - the fallback group, and the retry timeout;
 - the **snooze-end window** (5 minutes by default): when a snooze runs out, a
-  reminder is sent at once unless the next scheduled one is closer than this;
+  reminder is sent at once unless the next scheduled one is closer than this; and
+  a superseded alert's reminder waits for a superseding alert due to fire within
+  this long;
 - the **Snooze button duration** (1 hour by default) for notifications' Snooze
   Alert buttons;
 - the default event alert duration for each priority.

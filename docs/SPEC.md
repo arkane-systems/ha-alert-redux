@@ -383,6 +383,25 @@ notifications; see below).
   notification is never sent late. Reminders keep their schedule, but a slot that
   falls due while the alert is superseded is skipped, as is the snooze-end
   reminder (§6.2). The debounce is the **supersession debounce** option.
+- [Decided, 0.11.1] **A reminder about to be superseded is held.** A superseding
+  alert whose `delay_on` matches a slot of the superseded alert's reminder
+  schedule (Door Left Open, 10 minutes after Door Open, against the default first
+  reminder at 10 minutes) would otherwise send the reminder and the on
+  notification together, since at that instant nothing supersedes the reminder
+  yet. So when a reminder of an alert that something supersedes (and that isn't
+  superseded already) falls due:
+  - if a superseding alert, transitively, has a `delay_on` counting down that
+    ends within the **snooze-end window** (§6.2; a reminder that close to
+    something else speaking up is redundant), the reminder is held until then
+    plus the debounce;
+  - otherwise it waits out the debounce, as an on notification does, for a
+    superseding alert that fires unannounced (manual and event alerts).
+
+  When the hold ends, the reminder is skipped if a superseding alert is firing,
+  and otherwise sent late, with the real firing duration; the schedule carries
+  on from its original slots. `next_reminder` shows the held time. Only
+  scheduled reminders are held, not the snooze-end reminder. A hold isn't
+  stored as such: after a restart, the held time is simply a reminder due.
 
 ### 8.2 Propagating acknowledgements
 
@@ -1806,6 +1825,7 @@ Decisions with their reasons, in the order they were made.
 | An unavailable quiet-hours entity isn't quiet, but doesn't release what's held | New notifications fail loud; a blip in the night doesn't deliver the morning summary [§9.9]. |
 | One quiet-hours summary line per alert | A door opened three times in the night is one line, with the times it was opened and for how long in all [§9.9]. |
 | The notification button is "Snooze Alert", and the app's own snooze options stay | Tells ours apart without taking away something people may use [§9.11]. |
+| A superseded alert's reminder waits for a superseding alert about to fire; sent late if it doesn't | A reminder and the superseding on notification arriving together is noise, and no setting should be needed to avoid it; a lost reminder would fail quiet [§8.1]. |
 | Logbook messages are capitalised | They sit beside the translated states, which are [§11.4]. |
 
 ## 20. Phase plan
@@ -2073,6 +2093,8 @@ Live testing waits for the next real-HA run.
 - Add the snooze durations to the main card's visual editor (§13.1).
 - Rename the notification button Snooze to Snooze Alert, to tell it apart from
   the HA app's own snooze options (§9.11; moved from phase 13).
+- Hold a superseded alert's reminder for a superseding alert about to fire, so
+  the two don't arrive together (§8.1).
 
 ### Phase 12 — Voice control (0.12.0)
 
