@@ -451,6 +451,8 @@ title: Alerts # optional
 snooze_durations: [15, 30, 60, 120, 240] # optional: the snooze menu, in minutes
 ```
 
+Both options can also be set in the card's visual editor.
+
 It shows one box per firing alert, most important first: by priority, then
 unacknowledged before acknowledged, then newest first. Each is coloured by
 priority. Emergency and Critical alerts glow (an unacknowledged Emergency pulses),

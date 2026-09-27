@@ -1434,6 +1434,9 @@ To make sure it gets fixed:
   than floating over the card, where the alert's box would clip it. A snoozed alert
   shows "Snoozed · 23 min" in place of its acknowledge button, and its menu adds
   **Keep acknowledged** (ack) and **Unsnooze** (unack).
+  [Decided, 0.11.1] The card's visual editor sets the durations too, as a list
+  of numbers of minutes (HA's multiple text selector). It stores them as
+  strings, which the card reads just as well as numbers.
 - Filters (hide acknowledged; per priority) [Decided, R22, late phase].
 - Styling follows [weather_alerts_card](https://github.com/seevee/weather_alerts_card)
   [Decided, N31].
@@ -2065,6 +2068,7 @@ Small issues that don't belong to a phase, gathered between phases 11 and 12.
 Live testing waits for the next real-HA run.
 
 - Capitalise the logbook messages, to match the translated states (§11.4).
+- Add the snooze durations to the main card's visual editor (§13.1).
 
 ### Phase 12 — Voice control (0.12.0)
 
