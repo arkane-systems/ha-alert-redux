@@ -32,8 +32,11 @@ export interface AlertReduxAdminCardConfig {
 export interface AlertReduxCardConfig {
   type: string;
   title?: string;
-  /** The snooze menu's durations, in minutes. */
-  snooze_durations?: number[];
+  /**
+   * The snooze menu's durations, in minutes. The visual editor stores them as
+   * strings.
+   */
+  snooze_durations?: (number | string)[];
 }
 
 export type Priority = "emergency" | "critical" | "warning" | "notice" | "informational";

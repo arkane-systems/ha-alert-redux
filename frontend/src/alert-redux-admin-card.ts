@@ -100,7 +100,8 @@ export class AlertReduxAdminCard extends LitElement {
         font-size: 0.8rem;
         color: var(--secondary-text-color);
       }
-      .generated {
+      .generated,
+      .superseded {
         font-style: italic;
       }
       .state {
@@ -257,7 +258,7 @@ export class AlertReduxAdminCard extends LitElement {
             <div class="meta">
               ${this._kind(alert)}${this._generated(alert)} ·
               <span class="state ${alert.state}">${this._state(alert)}</span>
-              ${this._detail(alert)}
+              ${this._detail(alert)}${this._superseded(alert)}
             </div>
           </div>
           ${admin
@@ -366,6 +367,21 @@ export class AlertReduxAdminCard extends LitElement {
       return html`for ${elapsed(alert.noDataSince)}`;
     }
     return nothing;
+  }
+
+  /**
+   * Marks a firing alert that another is superseding (§8.1): the highest
+   * priority superseder by name, and a count of any others, all in the tooltip.
+   */
+  private _superseded(alert: Alert) {
+    if (!isFiring(alert) || !alert.supersededBy.length) return nothing;
+    const names = alert.supersededBy.map(
+      (id) => this.hass?.states[id]?.attributes.friendly_name ?? id,
+    );
+    const more = names.length > 1 ? ` +${names.length - 1}` : "";
+    return html` · <span class="superseded" title=${`Superseded by ${names.join(", ")}`}
+        >superseded by ${names[0]}${more}</span
+      >`;
   }
 
   /** Tomorrow at 08:00, local time, in the form a datetime-local input takes. */

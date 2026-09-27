@@ -210,6 +210,8 @@ async def test_reminders_skipped_while_superseded(
     await _call(hass, "dismiss", LEFT_OPEN)
     calls.clear()
     await _tick(hass, freezer, 20 * 60)
+    # After the debounce: Left Open could still fire again.
+    await _tick(hass, freezer, 1)
     assert _sent(calls) == [
         ("Back Door Open", "Back Door Open is still firing (30 minutes).")
     ]
@@ -347,6 +349,160 @@ async def test_door_left_open_example(
     assert _sent(calls)[2:] == [("Back Door Left Open", "Back door closed.")]
     assert hass.states.get(OPEN).state == "idle"
     assert hass.states.get(LEFT_OPEN).state == "idle"
+
+
+async def test_reminder_held_for_a_superseder_about_to_fire(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """Open's first reminder and Left Open's delay_on end together: only Left
+    Open's on notification is sent."""
+    hass.states.async_set(DOOR, "off")
+    calls = async_mock_service(hass, "notify", "phone")
+    await setup_alerts(
+        state_alert("Back Door Open", DOOR),
+        state_alert(
+            "Back Door Left Open",
+            DOOR,
+            delay_on={"minutes": 10},
+            supersedes=_supersedes(OPEN),
+        ),
+        PHONE,
+        options=DEFAULTS,
+    )
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 1)
+    calls.clear()
+
+    await _tick(hass, freezer, 10 * 60)
+    await _tick(hass, freezer, 1)
+    assert [title for title, _ in _sent(calls)] == ["Back Door Left Open"]
+
+
+async def test_reminder_held_within_the_window(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A superseding alert due within the snooze-end window (5 minutes) holds
+    the reminder until it fires; one due later doesn't."""
+    hass.states.async_set(DOOR, "off")
+    calls = async_mock_service(hass, "notify", "phone")
+    await setup_alerts(
+        state_alert("Back Door Open", DOOR),
+        state_alert(
+            "Back Door Left Open",
+            DOOR,
+            delay_on={"minutes": 13},
+            supersedes=_supersedes(OPEN),
+        ),
+        state_alert(
+            "Back Door Open Overnight",
+            DOOR,
+            delay_on={"minutes": 16},
+            supersedes=_supersedes(OPEN),
+        ),
+        PHONE,
+        # Long enough that the test's time steps keep the timers apart.
+        options={**DEFAULTS, "supersession_debounce": 30},
+    )
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 31)
+    assert [title for title, _ in _sent(calls)] == ["Back Door Open"]
+    calls.clear()
+
+    # At 10 minutes, Left Open is 3 minutes off: the reminder waits for it.
+    await _tick(hass, freezer, 10 * 60 - 31)
+    assert calls == []
+    assert hass.states.get(OPEN).attributes["next_reminder"] is not None
+    # At 13 minutes Left Open fires; the reminder, held past the debounce,
+    # is then skipped.
+    await _tick(hass, freezer, 3 * 60)
+    assert hass.states.get(LEFT_OPEN).state == "active"
+    assert [title for title, _ in _sent(calls)] == ["Back Door Left Open"]
+    await _tick(hass, freezer, 31)
+    assert [title for title, _ in _sent(calls)] == ["Back Door Left Open"]
+
+
+async def test_held_reminder_sent_late_if_the_superseder_does_not_fire(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A countdown that's cancelled: the held reminder goes out late, with the
+    real firing duration, and the schedule carries on."""
+    porch = "binary_sensor.porch"
+    hass.states.async_set(DOOR, "off")
+    hass.states.async_set(porch, "off")
+    calls = async_mock_service(hass, "notify", "phone")
+    await setup_alerts(
+        state_alert("Back Door Open", DOOR),
+        state_alert(
+            "Back Door Left Open",
+            porch,
+            delay_on={"minutes": 12},
+            supersedes=_supersedes(OPEN),
+        ),
+        PHONE,
+        options=DEFAULTS,
+    )
+    hass.states.async_set(DOOR, "on")
+    hass.states.async_set(porch, "on")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 1)
+    calls.clear()
+
+    await _tick(hass, freezer, 10 * 60)
+    assert calls == []
+    await _tick(hass, freezer, 60)
+    hass.states.async_set(porch, "off")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 60)
+    await _tick(hass, freezer, 1)
+    assert _sent(calls) == [
+        ("Back Door Open", "Back Door Open is still firing (12 minutes).")
+    ]
+    # The next slot is still 30 minutes after it started firing.
+    calls.clear()
+    await _tick(hass, freezer, 17 * 60)
+    assert calls == []
+    await _tick(hass, freezer, 60)
+    await _tick(hass, freezer, 1)
+    assert _sent(calls) == [
+        ("Back Door Open", "Back Door Open is still firing (30 minutes).")
+    ]
+
+
+async def test_reminder_waits_for_the_debounce(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A superseding alert that fires unannounced as a reminder falls due: the
+    reminder waits out the debounce, and is skipped."""
+    calls = async_mock_service(hass, "notify", "phone")
+    await _manual_pair(setup_alerts)
+    await _call(hass, "fire", OPEN)
+    await _tick(hass, freezer, 1)
+    calls.clear()
+
+    await _tick(hass, freezer, 10 * 60 - 1)
+    assert calls == []
+    await _call(hass, "fire", LEFT_OPEN)
+    await _tick(hass, freezer, 1)
+    assert [title for title, _ in _sent(calls)] == ["Back Door Left Open"]
+
+
+async def test_reminder_after_the_debounce_when_alone(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    calls = async_mock_service(hass, "notify", "phone")
+    await _manual_pair(setup_alerts)
+    await _call(hass, "fire", OPEN)
+    await _tick(hass, freezer, 1)
+    calls.clear()
+
+    await _tick(hass, freezer, 10 * 60 - 1)
+    assert calls == []
+    await _tick(hass, freezer, 1)
+    assert _sent(calls) == [
+        ("Back Door Open", "Back Door Open is still firing (10 minutes).")
+    ]
 
 
 async def test_editing_supersession_applies_in_place(

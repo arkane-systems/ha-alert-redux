@@ -202,6 +202,21 @@ class Supersession:
         firing.sort(key=lambda e: (Priority(e.priority).rank, e.entity_id))
         return [entity.entity_id for entity in firing]
 
+    def superseder_due(self, entity_id: str, by: datetime) -> datetime | None:
+        """Return the soonest time, no later than by, that an alert superseding
+        this one is due to fire at the end of its delay_on; None if none is."""
+        entities = self._by_entity_id()
+        return min(
+            (
+                due
+                for eid in self.graph.superseders(entity_id)
+                if (entity := entities.get(eid)) is not None
+                and (due := entity.fires_at) is not None
+                and due <= by
+            ),
+            default=None,
+        )
+
     def done_decision(self, entity_id: str, now: datetime) -> DoneDecision:
         """Decide on a superseded alert's done notification, as it stops firing.
 

@@ -3,7 +3,7 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.11.0). Every alert kind works: manual, state,
+> **Status:** early development (0.11.1). Every alert kind works: manual, state,
 > on/off, threshold, template, alert state, trigger, and bus event alerts. The card
 > shows, acknowledges, and snoozes them, they send on, reminder, and done
 > notifications (with throttling, quiet hours, and buttons), the admin card
@@ -12,6 +12,8 @@ now-deprecated built-in `alert` integration.
 > them easy to build on.
 > The rest arrives in later releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
 > The design is in [docs/SPEC.md](docs/SPEC.md).
+
+![The Alert Redux card, in Home Assistant's default light and dark themes](assets/screenshots/hero.png)
 
 ## Installation
 
@@ -368,7 +370,10 @@ because it was disabled.
   alert can have its own schedule, or none. Acknowledging stops reminders;
   removing the acknowledgement resumes them on the original schedule, counted from
   when the alert started firing. When a snooze runs out, a reminder is sent at once
-  unless a scheduled one is due within the snooze-end window.
+  unless a scheduled one is due within the snooze-end window. A superseded alert
+  sends no reminders while an alert superseding it is firing; one that falls due
+  as such an alert is about to fire (its delay ends within the snooze-end window)
+  waits for it, and is dropped if it fires, or sent late if it doesn't.
 - **Firing again:** a manual or event alert fired while it's already firing sends
   its on message again, with the new `fire_count`, unless it has been acknowledged.
 - **Restarts:** an alert that was firing resumes without a new on notification. A
@@ -390,7 +395,7 @@ can't replace or clear: each notification arrives separately.
 
 ### Buttons
 
-Mobile app notifications carry buttons: **Acknowledge** and **Snooze** (for an
+Mobile app notifications carry buttons: **Acknowledge** and **Snooze Alert** (for an
 alert that can be acknowledged), after any of the alert's own. An alert's own
 buttons, in its **Notifications and messages** section, each have a label and an
 action, e.g. *Close door* running `cover.close_cover` on the garage door. Tapping one
@@ -399,8 +404,10 @@ has stopped firing. Turn on **Only from an unlocked phone** for anything
 security-sensitive (iOS). Android shows at most three buttons, so the alert's own
 come first. The done notification has no buttons.
 
-The Snooze button snoozes for the alert's **Snooze button duration**, or else the
-default from the integration's options (1 hour).
+The Snooze Alert button snoozes for the alert's **Snooze button duration**, or else
+the default from the integration's options (1 hour). It's named so as not to be
+confused with the app's own *Snooze* options, which only snooze the notification on
+the phone; the alert itself isn't snoozed.
 
 ### When a notifier fails
 
@@ -431,9 +438,11 @@ The integration's **Configure** button sets:
 - the default notifier groups and reminder schedule;
 - the fallback group, and the retry timeout;
 - the **snooze-end window** (5 minutes by default): when a snooze runs out, a
-  reminder is sent at once unless the next scheduled one is closer than this;
+  reminder is sent at once unless the next scheduled one is closer than this; and
+  a superseded alert's reminder waits for a superseding alert due to fire within
+  this long;
 - the **Snooze button duration** (1 hour by default) for notifications' Snooze
-  buttons;
+  Alert buttons;
 - the default event alert duration for each priority.
 
 ## Lovelace card
@@ -450,6 +459,10 @@ type: custom:alert-redux-card
 title: Alerts # optional
 snooze_durations: [15, 30, 60, 120, 240] # optional: the snooze menu, in minutes
 ```
+
+Both options can also be set in the card's visual editor.
+
+![The Alert Redux card with a range of alerts, in the light and dark themes](assets/screenshots/main-card.png)
 
 It shows one box per firing alert, most important first: by priority, then
 unacknowledged before acknowledged, then newest first. Each is coloured by
@@ -474,7 +487,8 @@ and `alert-redux-informational-color`.
 ### Admin card
 
 The admin card lists **every** alert, grouped by priority, with its kind and state
-(and when it started firing, when a snooze or suspension ends, and so on). Admins
+(and when it started firing, when a snooze or suspension ends, which alert is
+superseding it, and so on). Admins
 get buttons to disable or enable each alert, and to suspend it for 1 hour to a week
 or until a date and time; everyone else sees the list without them. It comes in the
 same install as the main card: add **Alert Redux admin** from the card picker, or
@@ -484,6 +498,8 @@ type: custom:alert-redux-admin-card
 title: All alerts # optional
 ```
 
+![The Alert Redux admin card, in the light and dark themes](assets/screenshots/admin-card.png)
+
 ### After installing or upgrading
 
 Browsers load dashboard resources only when the page loads, so a newly installed or
@@ -492,6 +508,21 @@ upgraded card isn't used until you refresh the page. Until then, a dashboard may
 a new card version needs a refresh, and a card that's older than the integration
 offers a **Reload** button. In the companion app, pull down to reload, or reset
 the frontend cache from the app's own settings.
+
+## Acknowledgements
+
+Alert Redux owes a great deal to two other projects, and thanks their authors:
+
+- **[Alert2](https://github.com/redstone99/hass-alert2)**, by
+  [redstone99](https://github.com/redstone99), which showed how much better
+  alerting in Home Assistant could be. Many of Alert Redux's ideas began with
+  Alert2's: the split between condition and event alerts, delays before an alert
+  fires, on/off conditions that act on their edges, and throttling an alert that
+  keeps firing until it calms down. Alert Redux is an independent integration
+  with a different design, and isn't affiliated with Alert2; if Alert2's approach
+  suits you better, it's well worth a look.
+- **[weather_alerts_card](https://github.com/seevee/weather_alerts_card)**, by
+  [seevee](https://github.com/seevee), whose look inspired the Alert Redux card's.
 
 ## License
 

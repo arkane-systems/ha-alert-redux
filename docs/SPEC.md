@@ -67,7 +67,7 @@ changes. It can't be fired or dismissed manually [Decided, R3].
 
 | Kind | Configuration |
 |---|---|
-| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. |
+| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. [Deferred, phase 13, N38] A target state typed as its displayed name, e.g. "open" for a door binary sensor whose state is `on`, never matches. Recognising displayed names and storing the real state is to be considered in phase 13. |
 | **On/off** | Separate *on* and *off* criteria, each a condition and/or trigger. Turns on when the on criterion becomes true, and off when the off criterion becomes true (edge-triggered, as in Alert2). [Decided, phase 5] Each side is a template, triggers, or both. A template-only side counts on its false-to-true change; a side with triggers counts when one fires while its template (if any) is true. The off side is edge-triggered too: an off criterion already true when the alert fires has to go false and true again. An unknown previous value counts as false, so an on criterion already true when a new alert is first evaluated fires it. The edge state is persisted, so a restart or a data dropout doesn't create a false edge. Only the side that can change the state counts for missing data (the on side while idle, the off side while firing). |
 | **Threshold** | A numeric value (from an entity, attribute, or template) with a minimum and/or maximum, and hysteresis. The limits can themselves come from entities or templates [P18]. [Decided, phase 5] The limits are templates, where a plain number works as-is. It fires when the value is strictly above the maximum or below the minimum, and a firing ends once the value is back inside by the hysteresis (an absolute amount, default 0). A value, or a configured limit, that isn't a number means no data. |
 | **Template** | A template that evaluates to true or false. The fully general option. [Decided, phase 2] Only a clearly true or false result counts (`true`/`on`/`yes`/`1`, `false`/`off`/`no`/`0`, or a real boolean or number). An error, an undefined variable, or a result of `none`, `unknown`, `unavailable`, or anything else means no data (§4.4). A template binary sensor would read those as false, but for an alert that silently hides a broken template. |
@@ -383,6 +383,25 @@ notifications; see below).
   notification is never sent late. Reminders keep their schedule, but a slot that
   falls due while the alert is superseded is skipped, as is the snooze-end
   reminder (§6.2). The debounce is the **supersession debounce** option.
+- [Decided, 0.11.1] **A reminder about to be superseded is held.** A superseding
+  alert whose `delay_on` matches a slot of the superseded alert's reminder
+  schedule (Door Left Open, 10 minutes after Door Open, against the default first
+  reminder at 10 minutes) would otherwise send the reminder and the on
+  notification together, since at that instant nothing supersedes the reminder
+  yet. So when a reminder of an alert that something supersedes (and that isn't
+  superseded already) falls due:
+  - if a superseding alert, transitively, has a `delay_on` counting down that
+    ends within the **snooze-end window** (§6.2; a reminder that close to
+    something else speaking up is redundant), the reminder is held until then
+    plus the debounce;
+  - otherwise it waits out the debounce, as an on notification does, for a
+    superseding alert that fires unannounced (manual and event alerts).
+
+  When the hold ends, the reminder is skipped if a superseding alert is firing,
+  and otherwise sent late, with the real firing duration; the schedule carries
+  on from its original slots. `next_reminder` shows the held time. Only
+  scheduled reminders are held, not the snooze-end reminder. A hold isn't
+  stored as such: after a restart, the held time is simply a reminder due.
 
 ### 8.2 Propagating acknowledgements
 
@@ -910,7 +929,7 @@ keyboards could be added later. Other members leave the buttons out.
   label and the HA action it runs. For example, *Garage Door Left Open* has "Close
   door", which runs `cover.close_cover` on `cover.garage_door`. The definition says
   nothing about mobile; the member converts it into its own format.
-- **Built-in buttons** [Decided, P3]: **Acknowledge**, and **Snooze** for a fixed
+- **Built-in buttons** [Decided, P3]: **Acknowledge**, and **Snooze Alert** for a fixed
   duration (per alert, or else a global default). They aren't shown on
   unacknowledgeable alerts (§6.1).
 - **Require unlock** [Decided]: a per-button setting. It maps to iOS
@@ -942,12 +961,13 @@ keyboards could be added later. Other members leave the buttons out.
   the platform isn't known for a notify group of phones.
 - [Decided, phase 9] The Snooze button's duration is the alert's own setting, or
   the **Snooze button duration** option, 1 hour by default. Its title gives the
-  duration ("Snooze 1 hour").
-- [Deferred, phase 13] **The app's own snooze options.** By default the HA app
+  duration ("Snooze Alert 1 hour").
+- [Decided, 0.11.1] **The app's own snooze options.** By default the HA app
   offers its own *Snooze 5 min*, *Snooze 15 min*, and *Snooze 1 hour* on
-  notifications. These aren't Alert Redux's snooze (§6.2), which is confusing next
-  to our Snooze button. Investigate whether they can be suppressed, or at least
-  told apart from ours.
+  notifications. These aren't Alert Redux's snooze (§6.2): they only snooze the
+  notification on the phone, which was confusing next to our button. They're
+  left alone, since people may want them, and ours is called **Snooze Alert**
+  instead, so the two are told apart.
 
 ## 10. Acknowledgement queue
 
@@ -1163,17 +1183,20 @@ triggers:
 
   | Event | Row |
   |---|---|
-  | `_snoozed` | "snoozed until 14:30" (the date too, unless it's today) |
-  | `_snooze_expired` | "snooze ran out" |
-  | `_disabled` | "suspended until Tue 06 Oct 18:00", or "disabled" (which repeats the state row; it's rare) |
-  | `_superseded` | "superseded by Door Left Open" |
-  | `_no_data` | "lost data from sensor.x" (it also covers a firing alert, whose state doesn't change) |
-  | `_data_restored` | "data restored" |
-  | `_created`, `_deleted` | "created", "deleted" |
+  | `_snoozed` | "Snoozed until 14:30" (the date too, unless it's today) |
+  | `_snooze_expired` | "Snooze ran out" |
+  | `_disabled` | "Suspended until Tue 06 Oct 18:00", or "Disabled" (which repeats the state row; it's rare) |
+  | `_superseded` | "Superseded by Door Left Open" |
+  | `_no_data` | "Lost data from sensor.x" (it also covers a firing alert, whose state doesn't change) |
+  | `_data_restored` | "Data restored" |
+  | `_created`, `_deleted` | "Created", "Deleted" |
 
   An end's reason is still clear without `_ended`: an end for lack of data
   follows its `_no_data` row, and a dismissal's state row carries the user. The
   messages are English, like the cards (§13.1).
+- [Decided, 0.11.1] The messages are **capitalised**, like the translated
+  states on the state rows beside them ("Acknowledged", "Idle"), so the
+  Activity list reads consistently.
 - **Known limitation: grey dots.** The Activity card colours each entry's dot from
   theme variables (`--state-<domain>-<state>-color`), but the HA frontend only
   looks these up for a hard-coded list of built-in domains (`STATE_COLORED_DOMAIN`
@@ -1431,6 +1454,9 @@ To make sure it gets fixed:
   than floating over the card, where the alert's box would clip it. A snoozed alert
   shows "Snoozed · 23 min" in place of its acknowledge button, and its menu adds
   **Keep acknowledged** (ack) and **Unsnooze** (unack).
+  [Decided, 0.11.1] The card's visual editor sets the durations too, as a list
+  of numbers of minutes (HA's multiple text selector). It stores them as
+  strings, which the card reads just as well as numbers.
 - Filters (hide acknowledged; per priority) [Decided, R22, late phase].
 - Styling follows [weather_alerts_card](https://github.com/seevee/weather_alerts_card)
   [Decided, N31].
@@ -1491,8 +1517,11 @@ To make sure it gets fixed:
 - [Decided, phase 11] Generated alerts are marked "generated" beside their
   kind, with the generator's name as a tooltip; they're edited through their
   generator (§12.3).
-- [Deferred, phase 13] Flag alerts that are currently **superseded** (§8.1)
-  alongside their state.
+- [Decided, 0.11.1] A firing alert that's currently **superseded** (§8.1) says
+  so after its state's detail: "superseded by Back Door Left Open", naming the
+  highest-priority superseder and counting any others ("+1"), with all of them
+  in the tooltip. An alert that isn't firing isn't marked, since supersession
+  only affects its notifications.
 - [Deferred, phase 13] On request (a click, not shown all the time), show a
   **copyable text summary** of an alert's settings. That's useful when setting up a
   matching alert.
@@ -1798,6 +1827,9 @@ Decisions with their reasons, in the order they were made.
 | The owner says what's sent when quiet hours end | Only Alert Redux knows which alerts are still active and how to summarise them [§9.9]. |
 | An unavailable quiet-hours entity isn't quiet, but doesn't release what's held | New notifications fail loud; a blip in the night doesn't deliver the morning summary [§9.9]. |
 | One quiet-hours summary line per alert | A door opened three times in the night is one line, with the times it was opened and for how long in all [§9.9]. |
+| The notification button is "Snooze Alert", and the app's own snooze options stay | Tells ours apart without taking away something people may use [§9.11]. |
+| A superseded alert's reminder waits for a superseding alert about to fire; sent late if it doesn't | A reminder and the superseding on notification arriving together is noise, and no setting should be needed to avoid it; a lost reminder would fail quiet [§8.1]. |
+| Logbook messages are capitalised | They sit beside the translated states, which are [§11.4]. |
 
 ## 20. Phase plan
 
@@ -2055,6 +2087,24 @@ criteria and OR within each. Alert entities are now built from an
 slow integrations don't make alerts flap. Decisions from building it are
 recorded in §9.5, §11.1, §12.1, §12.3, §13.2, and §16.
 
+### Minor fixes (0.11.1)
+
+Small issues that don't belong to a phase, gathered between phases 11 and 12.
+Live testing waits for the next real-HA run.
+
+- Capitalise the logbook messages, to match the translated states (§11.4).
+- Add the snooze durations to the main card's visual editor (§13.1).
+- Rename the notification button Snooze to Snooze Alert, to tell it apart from
+  the HA app's own snooze options (§9.11; moved from phase 13).
+- Hold a superseded alert's reminder for a superseding alert about to fire, so
+  the two don't arrive together (§8.1).
+- The admin card marks firing alerts that are currently superseded (§13.2;
+  moved from phase 13).
+- The README gains screenshots of the cards, and a section thanking the authors
+  of [Alert2](https://github.com/redstone99/hass-alert2) and
+  [weather_alerts_card](https://github.com/seevee/weather_alerts_card) for their
+  inspiration (moved from phase 13).
+
 ### Phase 12 — Voice control (0.12.0)
 
 - Assist intents for acknowledge, unacknowledge, and snooze (§14).
@@ -2066,17 +2116,14 @@ recorded in §9.5, §11.1, §12.1, §12.3, §13.2, and §16.
 - Card filters (§13.1).
 - Creating and editing alerts from the admin card (§13.2).
 - The export and import actions and admin-card controls (§13.2, §16).
-- The admin card flags superseded alerts, and shows a copyable summary of an
-  alert's settings on request (§13.2).
-- Investigate the HA app's own snooze options on notifications, and suppress or
-  distinguish them (§9.11).
+- The admin card shows a copyable summary of an alert's settings on request
+  (§13.2).
 - iOS interruption levels for Emergency and Critical alerts (§9.3).
 - Review the layout and grouping of the configuration forms for each kind of
   alert (§12.1).
-- A section in the README thanking the authors of
-  [Alert2](https://github.com/redstone99/hass-alert2) and
-  [weather_alerts_card](https://github.com/seevee/weather_alerts_card) for their
-  inspiration.
+- Consider recognising displayed state names in a state alert's target state,
+  e.g. "open" for a door binary sensor's `on`, and storing the real state
+  (§4.1; assessment in `docs/spec-notes.md`, N38).
 
 ### Phase 14 — Converter utilities
 

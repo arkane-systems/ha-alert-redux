@@ -299,6 +299,9 @@ class AlertEntity(Entity):
         # Whether this alert has been given the alerts label (spec §11.5).
         self._labelled = False
         self._reminder_timer = PointTimer(self._async_reminder_due)
+        # A reminder held for a superseding alert about to fire (spec §8.1): the
+        # time it was moved to, while next_reminder is still that time.
+        self._reminder_held: datetime | None = None
         self._snooze_timer = PointTimer(self._async_snooze_due)
         self._suspension_timer = PointTimer(self._async_suspension_due)
         # Supersession (spec §8): the on notification waiting out the debounce,
@@ -392,6 +395,15 @@ class AlertEntity(Entity):
     def last_ended(self) -> datetime | None:
         """Return when the alert last stopped firing."""
         return self._runtime.last_ended
+
+    @property
+    def fires_at(self) -> datetime | None:
+        """Return when the alert will fire, if a delay_on is counting down.
+
+        Only condition alerts can say; others fire unannounced.
+        """
+        runtime = self._runtime
+        return None if runtime.firing else runtime.delay_on_until
 
     @property
     def supersedes(self) -> list[dict[str, Any]]:
@@ -974,18 +986,56 @@ class AlertEntity(Entity):
 
     @callback
     def _async_reminder_due(self, _now: datetime) -> None:
-        """Send a reminder, and plan the next one."""
+        """Send a reminder, and plan the next one.
+
+        A reminder that a superseding alert is about to make redundant is held
+        for it first (spec §8.1), by moving next_reminder; once held, it's sent
+        then, or skipped if that alert did fire.
+        """
         runtime = self._runtime
         if runtime.state is not AlertState.ACTIVE or runtime.next_reminder is None:
             return
         # The reminder is the alert's own doing, not the last user action's.
         self._context = None
         now = dt_util.utcnow()
+        held = self._reminder_held is not None and (
+            runtime.next_reminder == self._reminder_held
+        )
+        self._reminder_held = None
+        if not held and (hold := self._reminder_hold(now)) is not None:
+            _LOGGER.debug("%s: reminder held until %s", self.entity_id, hold)
+            self._reminder_held = runtime.next_reminder = hold
+            self._async_update_timers()
+            self.async_write_ha_state()
+            self._persist()
+            return
         self._async_send_reminder(now)
         runtime.plan_reminder(self._reminder_schedule, now)
         self._async_update_timers()
         self.async_write_ha_state()
         self._persist()
+
+    def _reminder_hold(self, now: datetime) -> datetime | None:
+        """Return when to send a reminder due now, if it's to be held (§8.1).
+
+        It waits for a superseding alert whose delay_on ends within the
+        snooze-end reminder window, and then the debounce, to see whether that
+        alert fires. Otherwise, it waits the debounce, as an on notification
+        does, for one that fires unannounced. An alert that nothing supersedes,
+        or that's already superseded, isn't held.
+        """
+        supersession = self._supersession
+        if self._superseded_by or not supersession.has_superseders(self.entity_id):
+            return None
+        debounce = self._settings.supersession_debounce
+        due = supersession.superseder_due(
+            self.entity_id, now + self._settings.snooze_reminder_window
+        )
+        if due is not None:
+            return max(due, now) + debounce
+        if debounce > timedelta(0):
+            return now + debounce
+        return None
 
     @callback
     def _async_send_reminder(self, now: datetime) -> None:

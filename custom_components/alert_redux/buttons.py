@@ -70,7 +70,7 @@ def alert_buttons(
             Button(_action_id(unique_id, BUTTON_ACK), "Acknowledge"),
             Button(
                 _action_id(unique_id, BUTTON_SNOOZE),
-                f"Snooze {readable_duration(snooze.total_seconds())}",
+                f"Snooze Alert {readable_duration(snooze.total_seconds())}",
             ),
         ]
     return tuple(buttons)

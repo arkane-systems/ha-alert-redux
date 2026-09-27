@@ -92,18 +92,18 @@ async def test_messages(hass: HomeAssistant, describers) -> None:
     later = datetime(2030, 3, 5, 18, 0, tzinfo=dt_util.get_default_time_zone())
     assert (
         _message(describers, EVENT_SNOOZED, snoozed_until=dt_util.as_utc(today))
-        == "snoozed until 14:30"
+        == "Snoozed until 14:30"
     )
     # Read back from the database, times are strings.
     assert (
         _message(describers, EVENT_SNOOZED, snoozed_until=later.isoformat())
-        == "snoozed until Tue 05 Mar 18:00"
+        == "Snoozed until Tue 05 Mar 18:00"
     )
-    assert _message(describers, EVENT_SNOOZE_EXPIRED) == "snooze ran out"
-    assert _message(describers, EVENT_DISABLED, disabled_until=None) == "disabled"
+    assert _message(describers, EVENT_SNOOZE_EXPIRED) == "Snooze ran out"
+    assert _message(describers, EVENT_DISABLED, disabled_until=None) == "Disabled"
     assert (
         _message(describers, EVENT_DISABLED, disabled_until=later)
-        == "suspended until Tue 05 Mar 18:00"
+        == "Suspended until Tue 05 Mar 18:00"
     )
     hass.states.async_set(
         "alert_redux.door_left_open", "active", {"friendly_name": "Door Left Open"}
@@ -114,15 +114,15 @@ async def test_messages(hass: HomeAssistant, describers) -> None:
             EVENT_SUPERSEDED,
             superseded_by=["alert_redux.door_left_open", "alert_redux.gone"],
         )
-        == "superseded by Door Left Open, alert_redux.gone"
+        == "Superseded by Door Left Open, alert_redux.gone"
     )
     assert (
         _message(describers, EVENT_NO_DATA, missing_inputs=["sensor.a", "sensor.b"])
-        == "lost data from sensor.a, sensor.b"
+        == "Lost data from sensor.a, sensor.b"
     )
-    assert _message(describers, EVENT_DATA_RESTORED) == "data restored"
-    assert _message(describers, EVENT_CREATED) == "created"
-    assert _message(describers, EVENT_DELETED) == "deleted"
+    assert _message(describers, EVENT_DATA_RESTORED) == "Data restored"
+    assert _message(describers, EVENT_CREATED) == "Created"
+    assert _message(describers, EVENT_DELETED) == "Deleted"
 
 
 async def test_activity_rows(
@@ -170,13 +170,13 @@ async def test_activity_rows(
         if row.get("entity_id") == DOOR
     ]
     assert [message for message, _ in rows[:5]] == [
-        "created",
+        "Created",
         "active",
         "ack",
         "active",
         "ack",
     ]
-    assert rows[5][0].startswith("snoozed until ")
+    assert rows[5][0].startswith("Snoozed until ")
     assert len(rows) == 6
     # The user shows on state rows and on described rows alike.
     assert [user for _, user in rows] == [None, *[hass_admin_user.id] * 5]

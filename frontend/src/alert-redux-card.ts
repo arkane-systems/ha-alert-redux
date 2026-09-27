@@ -1,6 +1,7 @@
 import { LitElement, html, nothing, type PropertyValues } from "lit";
 
 import {
+  DEFAULT_SNOOZE_DURATIONS,
   PRIORITY_NAMES,
   cardMessage,
   collectAlerts,
@@ -72,7 +73,21 @@ export class AlertReduxCard extends LitElement {
   }
 
   static getConfigForm() {
-    return { schema: [{ name: "title", selector: { text: {} } }] };
+    return {
+      schema: [
+        { name: "title", selector: { text: {} } },
+        {
+          name: "snooze_durations",
+          selector: { text: { multiple: true, type: "number", suffix: "min" } },
+        },
+      ],
+      computeLabel: (schema: { name: string }) =>
+        schema.name === "snooze_durations" ? "Snooze durations" : undefined,
+      computeHelper: (schema: { name: string }) =>
+        schema.name === "snooze_durations"
+          ? `The snooze menu, in minutes. Leave empty for ${DEFAULT_SNOOZE_DURATIONS.join(", ")}.`
+          : undefined,
+    };
   }
 
   setConfig(config: AlertReduxCardConfig): void {

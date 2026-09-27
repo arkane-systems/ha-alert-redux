@@ -71,8 +71,8 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     and announces it.
   - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
     persistence, and the rendered messages while firing; snoozing, disabling, and
-    suspending, for every kind; supersession's on debounce, skipped reminders, and
-    held done notifications; throttling on and done notifications, and the
+    suspending, for every kind; supersession's on debounce, skipped and held reminders,
+    and held done notifications; throttling on and done notifications, and the
     throttling summary), `ConditionAlertEntity`
     (state, on/off, threshold, template, and alert state kinds: watches its sources,
     judges them
@@ -93,7 +93,9 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `supersession.py` — `SupersessionGraph` (HA-free: relationships by entity ID,
     their transitive closure, `find_cycle`) and `Supersession`, the coordinator in
     `hass.data` that the entities share: it builds the graph from the entities'
-    own configuration, answers `superseded_by` and the done-window decision, and
+    own configuration, answers `superseded_by`, when a superseding alert is due to
+    fire (`superseder_due`, for holding reminders), and the done-window
+    decision, and
     passes on an alert starting or stopping firing, and propagates
     acknowledgements as pre-acknowledgements (the entities call it from
     `async_write_ha_state`). Pre-acknowledgements are kept by the source's
@@ -187,7 +189,9 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     admin card and `?user` shows it as a non-admin; `?menu=<object ID>` opens that
     alert's snooze or suspend menu, and `?until` its date and time field). Not
     shipped.
-- **`assets/`** — the icon's SVG master and the 32 px README header icon.
+- **`assets/`** — the icon's SVG master, the 32 px README header icon, and
+  `screenshots/`, the README's pictures of the cards: the dev preview's theme
+  columns (without its toolbar), at 1.5× scale, quantized to 256 colours.
 - **`tests/`** — smoke tests using `pytest-homeassistant-custom-component`.
 
 ## Card development
