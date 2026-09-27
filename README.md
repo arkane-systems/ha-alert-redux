@@ -483,7 +483,8 @@ and `alert-redux-informational-color`.
 ### Admin card
 
 The admin card lists **every** alert, grouped by priority, with its kind and state
-(and when it started firing, when a snooze or suspension ends, and so on). Admins
+(and when it started firing, when a snooze or suspension ends, which alert is
+superseding it, and so on). Admins
 get buttons to disable or enable each alert, and to suspend it for 1 hour to a week
 or until a date and time; everyone else sees the list without them. It comes in the
 same install as the main card: add **Alert Redux admin** from the card picker, or

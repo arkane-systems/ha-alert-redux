@@ -1517,8 +1517,11 @@ To make sure it gets fixed:
 - [Decided, phase 11] Generated alerts are marked "generated" beside their
   kind, with the generator's name as a tooltip; they're edited through their
   generator (§12.3).
-- [Deferred, phase 13] Flag alerts that are currently **superseded** (§8.1)
-  alongside their state.
+- [Decided, 0.11.1] A firing alert that's currently **superseded** (§8.1) says
+  so after its state's detail: "superseded by Back Door Left Open", naming the
+  highest-priority superseder and counting any others ("+1"), with all of them
+  in the tooltip. An alert that isn't firing isn't marked, since supersession
+  only affects its notifications.
 - [Deferred, phase 13] On request (a click, not shown all the time), show a
   **copyable text summary** of an alert's settings. That's useful when setting up a
   matching alert.
@@ -2095,6 +2098,8 @@ Live testing waits for the next real-HA run.
   the HA app's own snooze options (§9.11; moved from phase 13).
 - Hold a superseded alert's reminder for a superseding alert about to fire, so
   the two don't arrive together (§8.1).
+- The admin card marks firing alerts that are currently superseded (§13.2;
+  moved from phase 13).
 
 ### Phase 12 — Voice control (0.12.0)
 
@@ -2107,8 +2112,8 @@ Live testing waits for the next real-HA run.
 - Card filters (§13.1).
 - Creating and editing alerts from the admin card (§13.2).
 - The export and import actions and admin-card controls (§13.2, §16).
-- The admin card flags superseded alerts, and shows a copyable summary of an
-  alert's settings on request (§13.2).
+- The admin card shows a copyable summary of an alert's settings on request
+  (§13.2).
 - iOS interruption levels for Emergency and Critical alerts (§9.3).
 - Review the layout and grouping of the configuration forms for each kind of
   alert (§12.1).
