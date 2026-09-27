@@ -67,7 +67,7 @@ changes. It can't be fired or dismissed manually [Decided, R3].
 
 | Kind | Configuration |
 |---|---|
-| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. |
+| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. [Deferred, phase 13, N38] A target state typed as its displayed name, e.g. "open" for a door binary sensor whose state is `on`, never matches. Recognising displayed names and storing the real state is to be considered in phase 13. |
 | **On/off** | Separate *on* and *off* criteria, each a condition and/or trigger. Turns on when the on criterion becomes true, and off when the off criterion becomes true (edge-triggered, as in Alert2). [Decided, phase 5] Each side is a template, triggers, or both. A template-only side counts on its false-to-true change; a side with triggers counts when one fires while its template (if any) is true. The off side is edge-triggered too: an off criterion already true when the alert fires has to go false and true again. An unknown previous value counts as false, so an on criterion already true when a new alert is first evaluated fires it. The edge state is persisted, so a restart or a data dropout doesn't create a false edge. Only the side that can change the state counts for missing data (the on side while idle, the off side while firing). |
 | **Threshold** | A numeric value (from an entity, attribute, or template) with a minimum and/or maximum, and hysteresis. The limits can themselves come from entities or templates [P18]. [Decided, phase 5] The limits are templates, where a plain number works as-is. It fires when the value is strictly above the maximum or below the minimum, and a firing ends once the value is back inside by the hysteresis (an absolute amount, default 0). A value, or a configured limit, that isn't a number means no data. |
 | **Template** | A template that evaluates to true or false. The fully general option. [Decided, phase 2] Only a clearly true or false result counts (`true`/`on`/`yes`/`1`, `false`/`off`/`no`/`0`, or a real boolean or number). An error, an undefined variable, or a result of `none`, `unknown`, `unavailable`, or anything else means no data (§4.4). A template binary sensor would read those as false, but for an alert that silently hides a broken template. |
@@ -2090,6 +2090,9 @@ Live testing waits for the next real-HA run.
 - iOS interruption levels for Emergency and Critical alerts (§9.3).
 - Review the layout and grouping of the configuration forms for each kind of
   alert (§12.1).
+- Consider recognising displayed state names in a state alert's target state,
+  e.g. "open" for a door binary sensor's `on`, and storing the real state
+  (§4.1; assessment in `docs/spec-notes.md`, N38).
 - A section in the README thanking the authors of
   [Alert2](https://github.com/redstone99/hass-alert2) and
   [weather_alerts_card](https://github.com/seevee/weather_alerts_card) for their

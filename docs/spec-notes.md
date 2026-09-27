@@ -416,6 +416,61 @@ notification.
   door" button, which the group passes only to notifiers that support it (the mobile
   apps).
 
+## After phase 11
+
+### Batch 9
+
+- **N38 — State alerts and displayed state names.** A state alert on a door
+  binary sensor with the target state "open" never fires: the sensor's state is
+  `on`, and "Open" is only how HA displays it for the `door` device class. Could
+  the form recognise displayed names and store the real state, using data HA
+  has at runtime, so new device classes are picked up without our keeping a
+  list? Assessed while working on 0.11.1, and deferred to phase 13 to think
+  about:
+  - **Where the data is.** The displayed names are HA's translations, now kept
+    in the backend. For binary sensors they're under
+    `entity_component.<device_class>.state` (door: `on` → "Open", `off` →
+    "Closed"; 29 device classes in HA 2026.9), read with
+    `async_get_translations(hass, language, "entity_component", {domain})`,
+    which works for any domain. Entities with their own translation key use
+    the `entity` category
+    (`component.<integration>.entity.<domain>.<translation_key>.state.<state>`),
+    and an enum sensor lists its raw states in its `options` attribute.
+  - **Suggested approach: normalise when the form is saved.** Look up the
+    entity's domain, device class, and translation key in the entity registry,
+    and read the matching translations. A value that's already a real state is
+    stored as it is; one that matches a displayed name (ignoring case) is
+    stored as the raw state ("open" → `on`); anything else is stored as typed,
+    as now. Roughly 40–60 lines of helper, called from the state kind's save
+    path, plus tests and a spec note. Matching displayed names at runtime
+    instead would tie a stored alert to the display language, so a language
+    change or a translation fix could quietly break it.
+  - **Language.** A config flow isn't told the user's own language. Checking
+    HA's configured language and English covers nearly everyone; a user whose
+    profile language differs from the system's falls through to the value as
+    typed.
+  - **Showing what happened.** A silent conversion means the form shows `on`
+    when the alert is next edited. A line in the field's description would
+    explain it ("States are stored as HA's own values, e.g. Open is `on` for a
+    door"). Optionally, the form could warn when a binary sensor's value
+    matches neither `on`/`off` nor a displayed name; that's cheap for binary
+    and enum sensors, impossible for free-form states.
+  - **Generators.** One target state covers many entities, possibly of
+    different device classes, and there's no single entity to look up when a
+    generator is saved. Either normalise per target when each alert is
+    generated (more code, and back to depending on translations), or leave
+    generators as they are and document it.
+  - **An entity that doesn't exist yet.** Nothing to look up, so the value is
+    stored as typed.
+  - **The ideal, not reachable now: HA's state selector.** The automation
+    editor offers a dropdown of the entity's states, with displayed names,
+    storing the raw state, by linking the selector to the entity field on the
+    same form. In HA 2026.9 a config flow form can't express that link. The
+    alternatives are splitting the form (choose the entity, then its state),
+    which restructures the state kind's flow and options flow for a small
+    gain, or adding the link to the serialized schema ourselves, which relies
+    on frontend behaviour that isn't a public interface.
+
 ## Flags for the reconciliation pass
 
 Points to raise once the capture phase is over. These are not objections yet.
