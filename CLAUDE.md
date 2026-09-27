@@ -189,7 +189,9 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     admin card and `?user` shows it as a non-admin; `?menu=<object ID>` opens that
     alert's snooze or suspend menu, and `?until` its date and time field). Not
     shipped.
-- **`assets/`** — the icon's SVG master and the 32 px README header icon.
+- **`assets/`** — the icon's SVG master, the 32 px README header icon, and
+  `screenshots/`, the README's pictures of the cards: the dev preview's theme
+  columns (without its toolbar), at 1.5× scale, quantized to 256 colours.
 - **`tests/`** — smoke tests using `pytest-homeassistant-custom-component`.
 
 ## Card development

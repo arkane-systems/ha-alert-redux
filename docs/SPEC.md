@@ -2100,6 +2100,10 @@ Live testing waits for the next real-HA run.
   the two don't arrive together (§8.1).
 - The admin card marks firing alerts that are currently superseded (§13.2;
   moved from phase 13).
+- The README gains screenshots of the cards, and a section thanking the authors
+  of [Alert2](https://github.com/redstone99/hass-alert2) and
+  [weather_alerts_card](https://github.com/seevee/weather_alerts_card) for their
+  inspiration (moved from phase 13).
 
 ### Phase 12 — Voice control (0.12.0)
 
@@ -2120,10 +2124,6 @@ Live testing waits for the next real-HA run.
 - Consider recognising displayed state names in a state alert's target state,
   e.g. "open" for a door binary sensor's `on`, and storing the real state
   (§4.1; assessment in `docs/spec-notes.md`, N38).
-- A section in the README thanking the authors of
-  [Alert2](https://github.com/redstone99/hass-alert2) and
-  [weather_alerts_card](https://github.com/seevee/weather_alerts_card) for their
-  inspiration.
 
 ### Phase 14 — Converter utilities
 

@@ -13,6 +13,8 @@ now-deprecated built-in `alert` integration.
 > The rest arrives in later releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
 > The design is in [docs/SPEC.md](docs/SPEC.md).
 
+![The Alert Redux card, in Home Assistant's default light and dark themes](assets/screenshots/hero.png)
+
 ## Installation
 
 ### HACS
@@ -460,6 +462,8 @@ snooze_durations: [15, 30, 60, 120, 240] # optional: the snooze menu, in minutes
 
 Both options can also be set in the card's visual editor.
 
+![The Alert Redux card with a range of alerts, in the light and dark themes](assets/screenshots/main-card.png)
+
 It shows one box per firing alert, most important first: by priority, then
 unacknowledged before acknowledged, then newest first. Each is coloured by
 priority. Emergency and Critical alerts glow (an unacknowledged Emergency pulses),
@@ -494,6 +498,8 @@ type: custom:alert-redux-admin-card
 title: All alerts # optional
 ```
 
+![The Alert Redux admin card, in the light and dark themes](assets/screenshots/admin-card.png)
+
 ### After installing or upgrading
 
 Browsers load dashboard resources only when the page loads, so a newly installed or
@@ -502,6 +508,21 @@ upgraded card isn't used until you refresh the page. Until then, a dashboard may
 a new card version needs a refresh, and a card that's older than the integration
 offers a **Reload** button. In the companion app, pull down to reload, or reset
 the frontend cache from the app's own settings.
+
+## Acknowledgements
+
+Alert Redux owes a great deal to two other projects, and thanks their authors:
+
+- **[Alert2](https://github.com/redstone99/hass-alert2)**, by
+  [redstone99](https://github.com/redstone99), which showed how much better
+  alerting in Home Assistant could be. Many of Alert Redux's ideas began with
+  Alert2's: the split between condition and event alerts, delays before an alert
+  fires, on/off conditions that act on their edges, and throttling an alert that
+  keeps firing until it calms down. Alert Redux is an independent integration
+  with a different design, and isn't affiliated with Alert2; if Alert2's approach
+  suits you better, it's well worth a look.
+- **[weather_alerts_card](https://github.com/seevee/weather_alerts_card)**, by
+  [seevee](https://github.com/seevee), whose look inspired the Alert Redux card's.
 
 ## License
 
