@@ -7,7 +7,8 @@ enabled, ended) would show each of those changes twice. A describer can't drop a
 row, so the choice is made by which event types are registered.
 
 The user comes from the event's context, as for the state rows. Messages are
-English, as the cards are (spec §13.1).
+English, as the cards are (spec §13.1), and capitalised like the translated
+states on the state rows.
 """
 
 from __future__ import annotations
@@ -66,21 +67,21 @@ def async_describe_events(
         return describe
 
     def superseded(data: dict[str, Any]) -> str:
-        return f"superseded by {_names(hass, data.get(ATTR_SUPERSEDED_BY))}"
+        return f"Superseded by {_names(hass, data.get(ATTR_SUPERSEDED_BY))}"
 
     messages: dict[str, Callable[[dict[str, Any]], str]] = {
         EVENT_SNOOZED: lambda data: (
-            f"snoozed until {_when(data.get(ATTR_SNOOZED_UNTIL))}"
+            f"Snoozed until {_when(data.get(ATTR_SNOOZED_UNTIL))}"
         ),
-        EVENT_SNOOZE_EXPIRED: lambda data: "snooze ran out",
+        EVENT_SNOOZE_EXPIRED: lambda data: "Snooze ran out",
         EVENT_DISABLED: _disabled,
         EVENT_SUPERSEDED: superseded,
         EVENT_NO_DATA: lambda data: (
-            f"lost data from {_list(data.get(ATTR_MISSING_INPUTS))}"
+            f"Lost data from {_list(data.get(ATTR_MISSING_INPUTS))}"
         ),
-        EVENT_DATA_RESTORED: lambda data: "data restored",
-        EVENT_CREATED: lambda data: "created",
-        EVENT_DELETED: lambda data: "deleted",
+        EVENT_DATA_RESTORED: lambda data: "Data restored",
+        EVENT_CREATED: lambda data: "Created",
+        EVENT_DELETED: lambda data: "Deleted",
     }
     for event_type, message in messages.items():
         async_describe_event(DOMAIN, event_type, describer(message))
@@ -88,8 +89,8 @@ def async_describe_events(
 
 def _disabled(data: dict[str, Any]) -> str:
     if (until := data.get(ATTR_DISABLED_UNTIL)) is None:
-        return "disabled"
-    return f"suspended until {_when(until)}"
+        return "Disabled"
+    return f"Suspended until {_when(until)}"
 
 
 def _when(value: datetime | str | None) -> str:

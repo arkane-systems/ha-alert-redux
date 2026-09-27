@@ -1163,17 +1163,20 @@ triggers:
 
   | Event | Row |
   |---|---|
-  | `_snoozed` | "snoozed until 14:30" (the date too, unless it's today) |
-  | `_snooze_expired` | "snooze ran out" |
-  | `_disabled` | "suspended until Tue 06 Oct 18:00", or "disabled" (which repeats the state row; it's rare) |
-  | `_superseded` | "superseded by Door Left Open" |
-  | `_no_data` | "lost data from sensor.x" (it also covers a firing alert, whose state doesn't change) |
-  | `_data_restored` | "data restored" |
-  | `_created`, `_deleted` | "created", "deleted" |
+  | `_snoozed` | "Snoozed until 14:30" (the date too, unless it's today) |
+  | `_snooze_expired` | "Snooze ran out" |
+  | `_disabled` | "Suspended until Tue 06 Oct 18:00", or "Disabled" (which repeats the state row; it's rare) |
+  | `_superseded` | "Superseded by Door Left Open" |
+  | `_no_data` | "Lost data from sensor.x" (it also covers a firing alert, whose state doesn't change) |
+  | `_data_restored` | "Data restored" |
+  | `_created`, `_deleted` | "Created", "Deleted" |
 
   An end's reason is still clear without `_ended`: an end for lack of data
   follows its `_no_data` row, and a dismissal's state row carries the user. The
   messages are English, like the cards (§13.1).
+- [Decided, 0.11.1] The messages are **capitalised**, like the translated
+  states on the state rows beside them ("Acknowledged", "Idle"), so the
+  Activity list reads consistently.
 - **Known limitation: grey dots.** The Activity card colours each entry's dot from
   theme variables (`--state-<domain>-<state>-color`), but the HA frontend only
   looks these up for a hard-coded list of built-in domains (`STATE_COLORED_DOMAIN`
@@ -1798,6 +1801,7 @@ Decisions with their reasons, in the order they were made.
 | The owner says what's sent when quiet hours end | Only Alert Redux knows which alerts are still active and how to summarise them [§9.9]. |
 | An unavailable quiet-hours entity isn't quiet, but doesn't release what's held | New notifications fail loud; a blip in the night doesn't deliver the morning summary [§9.9]. |
 | One quiet-hours summary line per alert | A door opened three times in the night is one line, with the times it was opened and for how long in all [§9.9]. |
+| Logbook messages are capitalised | They sit beside the translated states, which are [§11.4]. |
 
 ## 20. Phase plan
 
@@ -2054,6 +2058,13 @@ criteria and OR within each. Alert entities are now built from an
 `target_name` template variables. Removals wait for a startup grace period, so
 slow integrations don't make alerts flap. Decisions from building it are
 recorded in §9.5, §11.1, §12.1, §12.3, §13.2, and §16.
+
+### Minor fixes (0.11.1)
+
+Small issues that don't belong to a phase, gathered between phases 11 and 12.
+Live testing waits for the next real-HA run.
+
+- Capitalise the logbook messages, to match the translated states (§11.4).
 
 ### Phase 12 — Voice control (0.12.0)
 
