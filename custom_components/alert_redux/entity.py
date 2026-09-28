@@ -272,19 +272,25 @@ def create_alert_entity(
         return ConditionAlertEntity(definition, store, settings)
     if kind in EVENT_KINDS:
         return EventAlertEntity(definition, store, settings)
-    return AlertEntity(definition, store, settings)
+    return ManualAlertEntity(definition, store, settings)
 
 
 class AlertEntity(Entity):
-    """One configured alert; on its own, a manual alert (spec §4.3)."""
+    """One configured alert: what every kind shares.
+
+    Not used on its own; each kind's class adds its inputs (spec §4).
+    """
 
     _attr_should_poll = False
     _attr_translation_key = "alert"
     # Whether the alert has inputs to wait for when it's enabled (spec §6.3).
     _awaits_data = False
-    _unrecorded_attributes = frozenset(
-        {ATTR_FIRE_DATA, ATTR_MESSAGE, ATTR_DISPLAY_MESSAGE}
-    )
+    # Whether a firing runs for a duration and then ends (spec §4.2, §4.3).
+    _has_duration = False
+    # Whether the fire data is a trigger's variables, shown to message templates
+    # as trigger rather than fire_data (spec §9.5).
+    _fire_data_is_trigger = False
+    _unrecorded_attributes = frozenset({ATTR_MESSAGE, ATTR_DISPLAY_MESSAGE})
 
     def __init__(
         self, definition: AlertDefinition, store: AlertStore, settings: Settings
@@ -336,13 +342,8 @@ class AlertEntity(Entity):
         data = definition.data
         self._priority = Priority(data[CONF_PRIORITY])
         self._acknowledgeable: bool = data[CONF_ACKNOWLEDGEABLE]
-        self._user_dismissable: bool = data.get(CONF_USER_DISMISSABLE, False)
-        # A duration, for event alerts and self-ending manual alerts (§4.2, §4.3):
-        # the alert's own, if it has one, and whether it has a duration at all.
+        # The alert's own duration, if it has one and it's set (§4.2, §4.3).
         self._own_duration = to_timedelta(data.get(CONF_DURATION))
-        self._has_duration = self._kind in EVENT_KINDS or (
-            self._kind is AlertKind.MANUAL and data.get(CONF_ENDS_BY_ITSELF, False)
-        )
         self._explicit_subject: str | None = data.get(CONF_SUBJECT_ENTITY) or None
         self._message: str | None = data.get(CONF_MESSAGE) or None
         self._display_message: str | None = data.get(CONF_DISPLAY_MESSAGE) or None
@@ -547,9 +548,6 @@ class AlertEntity(Entity):
             ATTR_BUTTONS: [button[CONF_LABEL] for button in self._custom_buttons],
             ATTR_GENERATED_BY: self._generated_by(),
         }
-        if self._kind is AlertKind.MANUAL:
-            attributes[ATTR_USER_DISMISSABLE] = self._user_dismissable
-            attributes[ATTR_FIRE_DATA] = runtime.fire_data
         if (duration := self._duration) is not None:
             attributes[ATTR_DURATION] = duration.total_seconds()
             attributes[ATTR_EVENT_EXPIRES] = runtime.event_expires
@@ -798,8 +796,7 @@ class AlertEntity(Entity):
         """
         runtime = self._runtime
         data = transition.fire_data if transition else runtime.fire_data
-        # An event alert's fire data is its trigger's variables (spec §9.5).
-        is_event = self._kind in EVENT_KINDS
+        is_trigger = self._fire_data_is_trigger
         return message_context(
             self.hass,
             name=str(self.name),
@@ -807,8 +804,8 @@ class AlertEntity(Entity):
             priority=self._priority,
             subject_entity=self.subject_entity,
             fire_count=transition.fire_count if transition else runtime.fire_count,
-            fire_data=None if is_event else data,
-            trigger=(data or {}) if is_event else None,
+            fire_data=None if is_trigger else data,
+            trigger=(data or {}) if is_trigger else None,
             reason=reason,
             duration_seconds=(
                 transition.duration_seconds or 0 if transition else duration_seconds
@@ -1216,24 +1213,12 @@ class AlertEntity(Entity):
         self._persist()
 
     async def async_fire(self, data: dict[str, Any] | None = None) -> None:
-        """Fire a manual alert, or fire it again if it is already firing."""
-        self._require_manual()
-        if self._runtime.disabled:
-            # A disabled alert can't fire (spec §6.3).
-            _LOGGER.debug("%s: fire ignored; disabled", self.entity_id)
-            return
-        self._async_start_firing(data, ATTR_FIRE_DATA)
+        """Fire the alert: only manual alerts can be fired by action (R2)."""
+        raise self._not_manual()
 
     async def async_dismiss(self) -> None:
-        """Dismiss a firing manual alert."""
-        self._require_manual()
-        if (
-            transition := self._runtime.end(dt_util.utcnow(), EndReason.DISMISSED)
-        ) is None:
-            _LOGGER.debug("%s: dismiss ignored; not firing", self.entity_id)
-            return
-        self._apply(EVENT_ENDED, transition, _ended_data(transition))
-        self._async_notify_done(transition)
+        """Dismiss the alert: only manual alerts can be dismissed."""
+        raise self._not_manual()
 
     async def async_ack(self) -> None:
         """Acknowledge the alert, or make a snooze a lasting acknowledgement."""
@@ -1409,13 +1394,12 @@ class AlertEntity(Entity):
                 translation_placeholders={"entity_id": self.entity_id},
             )
 
-    def _require_manual(self) -> None:
-        if self._kind is not AlertKind.MANUAL:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="not_manual",
-                translation_placeholders={"entity_id": self.entity_id},
-            )
+    def _not_manual(self) -> ServiceValidationError:
+        return ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="not_manual",
+            translation_placeholders={"entity_id": self.entity_id},
+        )
 
     def _apply(
         self,
@@ -1487,6 +1471,50 @@ class AlertEntity(Entity):
             },
             context=self._context,
         )
+
+
+class ManualAlertEntity(AlertEntity):
+    """An alert fired and dismissed by action (spec §4.3).
+
+    It stays firing until it's dismissed, or, if it's set to end by itself, for
+    a duration, like an event alert.
+    """
+
+    _unrecorded_attributes = AlertEntity._unrecorded_attributes | frozenset(
+        {ATTR_FIRE_DATA}
+    )
+
+    def _configure(self, definition: AlertDefinition) -> None:
+        super()._configure(definition)
+        data = definition.data
+        self._user_dismissable: bool = data.get(CONF_USER_DISMISSABLE, False)
+        self._has_duration = data.get(CONF_ENDS_BY_ITSELF, False)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Add whether the card can dismiss the alert, and the fire data."""
+        return super().extra_state_attributes | {
+            ATTR_USER_DISMISSABLE: self._user_dismissable,
+            ATTR_FIRE_DATA: self._runtime.fire_data,
+        }
+
+    async def async_fire(self, data: dict[str, Any] | None = None) -> None:
+        """Fire a manual alert, or fire it again if it is already firing."""
+        if self._runtime.disabled:
+            # A disabled alert can't fire (spec §6.3).
+            _LOGGER.debug("%s: fire ignored; disabled", self.entity_id)
+            return
+        self._async_start_firing(data, ATTR_FIRE_DATA)
+
+    async def async_dismiss(self) -> None:
+        """Dismiss a firing manual alert."""
+        if (
+            transition := self._runtime.end(dt_util.utcnow(), EndReason.DISMISSED)
+        ) is None:
+            _LOGGER.debug("%s: dismiss ignored; not firing", self.entity_id)
+            return
+        self._apply(EVENT_ENDED, transition, _ended_data(transition))
+        self._async_notify_done(transition)
 
 
 class ConditionAlertEntity(AlertEntity):
@@ -1908,6 +1936,8 @@ class EventAlertEntity(AlertEntity):
     _unrecorded_attributes = AlertEntity._unrecorded_attributes | frozenset(
         {ATTR_TRIGGER_DATA, ATTR_TRIGGERS, ATTR_EVENT_DATA, ATTR_CONDITION}
     )
+    _has_duration = True
+    _fire_data_is_trigger = True
 
     def __init__(
         self, definition: AlertDefinition, store: AlertStore, settings: Settings
