@@ -133,6 +133,8 @@ CONF_PRIORITY = "priority"
 CONF_ICON = "icon"
 CONF_ACKNOWLEDGEABLE = "acknowledgeable"
 CONF_USER_DISMISSABLE = "user_dismissable"
+# Manual alerts: end by itself after a duration, like an event alert (spec §4.3).
+CONF_ENDS_BY_ITSELF = "ends_by_itself"
 CONF_SUBJECT_ENTITY = "subject_entity"
 CONF_ENTITY_ID = "entity_id"
 CONF_TARGET_STATE = "target_state"

@@ -81,6 +81,7 @@ from .const import (
     CONF_DONE_MESSAGE,
     CONF_DONE_WINDOW,
     CONF_DURATION,
+    CONF_ENDS_BY_ITSELF,
     CONF_ENTITIES,
     CONF_ENTITY_ID,
     CONF_EVENT_DATA,
@@ -807,6 +808,15 @@ def _alert_schema(
                 default=defaults.get(CONF_USER_DISMISSABLE, False),
             )
         ] = BooleanSelector()
+        schema[
+            vol.Required(
+                CONF_ENDS_BY_ITSELF,
+                default=defaults.get(CONF_ENDS_BY_ITSELF, False),
+            )
+        ] = BooleanSelector()
+        schema[
+            vol.Optional(CONF_DURATION, description=_suggested(defaults, CONF_DURATION))
+        ] = DurationSelector()
     if not generator:
         schema[
             vol.Optional(
@@ -1065,6 +1075,7 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
     }
     if kind is AlertKind.MANUAL:
         data[CONF_USER_DISMISSABLE] = user_input[CONF_USER_DISMISSABLE]
+        data[CONF_ENDS_BY_ITSELF] = user_input[CONF_ENDS_BY_ITSELF]
     elif kind is AlertKind.STATE:
         data[CONF_ENTITY_ID] = user_input[CONF_ENTITY_ID]
         data[CONF_TARGET_STATE] = user_input[CONF_TARGET_STATE].strip()
@@ -1108,6 +1119,8 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         optional += [CONF_CONDITION, CONF_DURATION]
         if kind is AlertKind.EVENT:
             optional.append(CONF_EVENT_DATA)
+    elif kind is AlertKind.MANUAL:
+        optional.append(CONF_DURATION)
     for key in optional:
         value = user_input.get(key)
         if isinstance(value, str):

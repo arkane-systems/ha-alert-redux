@@ -109,6 +109,7 @@ from .const import (
     CONF_DISPLAY_MESSAGE,
     CONF_DONE_MESSAGE,
     CONF_DURATION,
+    CONF_ENDS_BY_ITSELF,
     CONF_ENTITY_ID,
     CONF_EVENT_DATA,
     CONF_EVENT_TYPE,
@@ -304,6 +305,9 @@ class AlertEntity(Entity):
         self._reminder_held: datetime | None = None
         self._snooze_timer = PointTimer(self._async_snooze_due)
         self._suspension_timer = PointTimer(self._async_suspension_due)
+        # When a duration runs out: event alerts, and manual alerts that end by
+        # themselves (spec §4.2, §4.3).
+        self._expiry_timer = PointTimer(self._async_expired)
         # Supersession (spec §8): the on notification waiting out the debounce,
         # and done notifications held for the done window (§9.7).
         self._on_debounce_timer = PointTimer(self._async_on_debounce_due)
@@ -333,6 +337,12 @@ class AlertEntity(Entity):
         self._priority = Priority(data[CONF_PRIORITY])
         self._acknowledgeable: bool = data[CONF_ACKNOWLEDGEABLE]
         self._user_dismissable: bool = data.get(CONF_USER_DISMISSABLE, False)
+        # A duration, for event alerts and self-ending manual alerts (§4.2, §4.3):
+        # the alert's own, if it has one, and whether it has a duration at all.
+        self._own_duration = to_timedelta(data.get(CONF_DURATION))
+        self._has_duration = self._kind in EVENT_KINDS or (
+            self._kind is AlertKind.MANUAL and data.get(CONF_ENDS_BY_ITSELF, False)
+        )
         self._explicit_subject: str | None = data.get(CONF_SUBJECT_ENTITY) or None
         self._message: str | None = data.get(CONF_MESSAGE) or None
         self._display_message: str | None = data.get(CONF_DISPLAY_MESSAGE) or None
@@ -442,11 +452,35 @@ class AlertEntity(Entity):
         return self.hass.data[DOMAIN][DATA_SUMMARY]
 
     @property
+    def _duration(self) -> timedelta | None:
+        """Return the duration a firing runs for, if this alert has one.
+
+        Event alerts always have one; a manual alert has one only if it's set to
+        end by itself (spec §4.2, §4.3). Either way it's the alert's own, or else
+        its priority's default.
+        """
+        if not self._has_duration:
+            return None
+        return self._own_duration or self._settings.event_durations[self._priority]
+
+    @property
     def _reminder_schedule(self) -> tuple[float, ...]:
-        """Return the reminder schedule: the alert's own, or else the default."""
+        """Return the reminder schedule: the alert's own, or else the default.
+
+        An alert with a duration that doesn't outlast the first interval sends no
+        reminders: it just fires and expires (spec §9.6).
+        """
         if self._own_schedule is not None:
-            return tuple(self._own_schedule)
-        return self._settings.reminder_schedule
+            schedule = tuple(self._own_schedule)
+        else:
+            schedule = self._settings.reminder_schedule
+        if (
+            self._has_duration
+            and schedule
+            and self._duration <= timedelta(minutes=schedule[0])
+        ):
+            return ()
+        return schedule
 
     @property
     def _throttle(self) -> Throttle | None:
@@ -516,6 +550,9 @@ class AlertEntity(Entity):
         if self._kind is AlertKind.MANUAL:
             attributes[ATTR_USER_DISMISSABLE] = self._user_dismissable
             attributes[ATTR_FIRE_DATA] = runtime.fire_data
+        if (duration := self._duration) is not None:
+            attributes[ATTR_DURATION] = duration.total_seconds()
+            attributes[ATTR_EVENT_EXPIRES] = runtime.event_expires
         return attributes
 
     async def async_added_to_hass(self) -> None:
@@ -538,6 +575,17 @@ class AlertEntity(Entity):
         if self._runtime.state is AlertState.ACTIVE and not self._runtime.next_reminder:
             # E.g. an alert that was firing before reminders existed.
             self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
+        if self._has_duration and self._runtime.firing:
+            if self._runtime.event_expires is None:
+                # Shouldn't happen, but a firing must always run out.
+                self._runtime.event_expires = (
+                    self._runtime.last_fired or dt_util.utcnow()
+                ) + self._duration
+            # A duration that ran out while Home Assistant was down ends now, with
+            # the done notification (spec §15.1).
+            now = dt_util.utcnow()
+            if self._runtime.event_expires <= now:
+                self._async_expired(now)
         # A reminder that fell due, or a snooze that ran out, while Home Assistant
         # was down is dealt with now (spec §15.1).
         self._async_update_timers()
@@ -923,7 +971,8 @@ class AlertEntity(Entity):
 
     @callback
     def _async_update_timers(self) -> None:
-        """Set the timers to the runtime's deadlines: reminder, snooze, suspension."""
+        """Set the timers to the runtime's deadlines: reminder, snooze, suspension,
+        and, if this alert has a duration, its expiry."""
         self._reminder_timer.at(self.hass, self._runtime.next_reminder)
         self._snooze_timer.at(self.hass, self._runtime.snoozed_until)
         self._suspension_timer.at(self.hass, self._runtime.disabled_until)
@@ -931,6 +980,7 @@ class AlertEntity(Entity):
         self._throttle_timer.at(
             self.hass, self._runtime.throttle_end_due(self._throttle)
         )
+        self._expiry_timer.at(self.hass, self._runtime.event_expires)
 
     @callback
     def _async_cancel_timers(self) -> None:
@@ -941,6 +991,20 @@ class AlertEntity(Entity):
         self._done_timer.cancel()
         self._pre_ack_timer.cancel()
         self._throttle_timer.cancel()
+        self._expiry_timer.cancel()
+
+    @callback
+    def _async_expired(self, _now: datetime) -> None:
+        """End the firing: its duration has run out.
+
+        It ended at its expiry, even if that passed while Home Assistant was down.
+        """
+        self._context = None
+        ended = self._runtime.event_expires or dt_util.utcnow()
+        if (transition := self._runtime.end(ended, EndReason.RESOLVED)) is None:
+            return
+        self._apply(EVENT_ENDED, transition, _ended_data(transition))
+        self._async_notify_done(transition)
 
     @callback
     def _async_throttle_changed(self) -> None:
@@ -1131,8 +1195,15 @@ class AlertEntity(Entity):
 
     @callback
     def async_update_config(self, definition: AlertDefinition) -> None:
-        """Apply an edited definition in place, keeping the alert's state."""
+        """Apply an edited definition in place, keeping the alert's state.
+
+        A running firing keeps its expiry: a new duration applies from the next
+        fire (spec §4.2). But if the alert no longer has a duration at all, any
+        pending expiry is cleared, or it would still end the firing unannounced.
+        """
         self._configure(definition)
+        if not self._has_duration:
+            self._runtime.event_expires = None
         self._async_replan_reminder()
         self.async_write_ha_state()
         self._persist()
@@ -1152,7 +1223,10 @@ class AlertEntity(Entity):
             _LOGGER.debug("%s: fire ignored; disabled", self.entity_id)
             return
         now = dt_util.utcnow()
-        transition = self._runtime.fire(now, data)
+        if (duration := self._duration) is not None:
+            transition = self._runtime.fire_event(now, data, duration)
+        else:
+            transition = self._runtime.fire(now, data)
         pre_acked = None
         if transition.fire_count == 1:
             pre_acked = self._pre_ack_new_firing(now)
@@ -1164,7 +1238,7 @@ class AlertEntity(Entity):
         )
         self._announce_pre_ack(pre_acked)
         # Firing again sends the on message again, unless it's been acknowledged:
-        # the acknowledgement is kept so that repeats don't nag (spec §4.2). A
+        # the acknowledgement is kept so that repeats don't nag (spec §4.2, §4.3). A
         # pre-acknowledged firing sends none either (§8.3).
         if self._runtime.state is AlertState.ACTIVE:
             self._async_notify_on()
@@ -1831,7 +1905,6 @@ class EventAlertEntity(AlertEntity):
     ) -> None:
         """Initialize the alert from its definition."""
         self._watcher: TriggerWatcher | None = None
-        self._expiry_timer = PointTimer(self._async_expired)
         super().__init__(definition, store, settings)
 
     def _configure(self, definition: AlertDefinition) -> None:
@@ -1845,29 +1918,10 @@ class EventAlertEntity(AlertEntity):
         else:
             self._triggers = list(data[CONF_TRIGGERS])
         self._condition: str | None = data.get(CONF_CONDITION) or None
-        self._own_duration = to_timedelta(data.get(CONF_DURATION))
-
-    @property
-    def _duration(self) -> timedelta:
-        """Return the alert's duration: its own, or its priority's default."""
-        if self._own_duration:
-            return self._own_duration
-        return self._settings.event_durations[self._priority]
-
-    @property
-    def _reminder_schedule(self) -> tuple[float, ...]:
-        """Return no reminders unless the duration outlasts the first interval.
-
-        Short event alerts just fire and expire (spec §9.6).
-        """
-        schedule = super()._reminder_schedule
-        if schedule and self._duration <= timedelta(minutes=schedule[0]):
-            return ()
-        return schedule
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Add the trigger configuration, the duration, and the latest trigger."""
+        """Add the trigger configuration, and the latest trigger."""
         attributes = super().extra_state_attributes
         if self._kind is AlertKind.EVENT:
             attributes[ATTR_EVENT_TYPE] = self._event_type
@@ -1876,28 +1930,13 @@ class EventAlertEntity(AlertEntity):
             attributes[ATTR_TRIGGERS] = self._triggers
         attributes |= {
             ATTR_CONDITION: self._condition,
-            ATTR_DURATION: self._duration.total_seconds(),
-            ATTR_EVENT_EXPIRES: self._runtime.event_expires,
             ATTR_TRIGGER_DATA: self._runtime.fire_data,
         }
         return attributes
 
     async def async_added_to_hass(self) -> None:
-        """Resume or end a restored firing, and start watching the triggers."""
+        """Resume the restored firing (spec §15.1), and start watching the triggers."""
         await super().async_added_to_hass()
-        runtime = self._runtime
-        if runtime.firing and runtime.event_expires is None:
-            # Shouldn't happen, but a firing must always run out.
-            runtime.event_expires = (
-                runtime.last_fired or dt_util.utcnow()
-            ) + self._duration
-        # A duration that ran out while Home Assistant was down ends now, with the
-        # done notification (spec §15.1).
-        now = dt_util.utcnow()
-        if runtime.event_expires is not None and runtime.event_expires <= now:
-            self._async_expired(now)
-        else:
-            self._async_update_timers()
         self._async_inputs_started()
 
     async def async_will_remove_from_hass(self) -> None:
@@ -1957,7 +1996,9 @@ class EventAlertEntity(AlertEntity):
         # The firing is the alert's own doing, not the last user action's.
         self._context = None
         now = dt_util.utcnow()
-        transition = self._runtime.fire_event(now, trigger, self._duration)
+        # Event alerts always have a duration.
+        assert (duration := self._duration) is not None
+        transition = self._runtime.fire_event(now, trigger, duration)
         pre_acked = None
         if transition.fire_count == 1:
             pre_acked = self._pre_ack_new_firing(now)
@@ -1994,30 +2035,6 @@ class EventAlertEntity(AlertEntity):
             )
             return True
         return value
-
-    @callback
-    def _async_update_timers(self) -> None:
-        """Add the duration's timer."""
-        super()._async_update_timers()
-        self._expiry_timer.at(self.hass, self._runtime.event_expires)
-
-    @callback
-    def _async_cancel_timers(self) -> None:
-        super()._async_cancel_timers()
-        self._expiry_timer.cancel()
-
-    @callback
-    def _async_expired(self, _now: datetime) -> None:
-        """End the firing: its duration has run out.
-
-        It ended at its expiry, even if that passed while Home Assistant was down.
-        """
-        self._context = None
-        ended = self._runtime.event_expires or dt_util.utcnow()
-        if (transition := self._runtime.end(ended, EndReason.RESOLVED)) is None:
-            return
-        self._apply(EVENT_ENDED, transition, _ended_data(transition))
-        self._async_notify_done(transition)
 
 
 def _ended_data(transition: Transition) -> dict[str, Any]:

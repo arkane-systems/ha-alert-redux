@@ -40,6 +40,8 @@
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
             "user_dismissable": "Dismissable from the card",
+            "ends_by_itself": "End by itself after",
+            "duration": "Duration",
             "subject_entity": "Subject entity"
           },
           "data_description": {
@@ -48,6 +50,8 @@
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
+            "ends_by_itself": "If on, the alert stops firing by itself after its duration, like an event alert. It can still be dismissed early.",
+            "duration": "How long the alert keeps firing after being fired. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           },
           "sections": {
@@ -256,6 +260,8 @@
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
             "user_dismissable": "Dismissable from the card",
+            "ends_by_itself": "End by itself after",
+            "duration": "Duration",
             "subject_entity": "Subject entity"
           },
           "data_description": {
@@ -264,6 +270,8 @@
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
+            "ends_by_itself": "If on, the alert stops firing by itself after its duration, like an event alert. It can still be dismissed early.",
+            "duration": "How long the alert keeps firing after being fired. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           },
           "sections": {
