@@ -182,7 +182,7 @@ async def test_reconfigure_keeps_state(
 async def test_ends_by_itself_saved_and_prefilled(
     hass: HomeAssistant, setup_alerts: SetupAlerts
 ) -> None:
-    """A manual alert's self-ending option and duration save and reload (1.1.0)."""
+    """A manual alert's self-ending option and duration save and reload (1.0.0)."""
     entry = await setup_alerts()
     result = await _start(hass, entry, "manual")
     result = await hass.config_entries.subentries.async_configure(

@@ -1,4 +1,4 @@
-"""Tests for manual alerts that end by themselves (spec §4.3, 1.1.0)."""
+"""Tests for manual alerts that end by themselves (spec §4.3, 1.0.0)."""
 
 from __future__ import annotations
 

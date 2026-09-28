@@ -157,7 +157,7 @@ no ad-hoc alerts [Decided, R4].
   dismiss any manual alert. The setting is exposed as the `user_dismissable`
   attribute. [Decided] It defaults to *off*: a dismiss button is then something you
   opt into deliberately, and it's less likely to be turned on by accident.
-- [Decided; 1.1.0] **End by itself after.** A manual alert can optionally end by
+- [Decided; 1.0.0] **End by itself after.** A manual alert can optionally end by
   itself, like an event alert (§4.2): fired by `alert_redux.fire`, it then stays
   firing for a duration. This fills the gap between manual alerts, which stay until
   dismissed, and event alerts, which can't be fired by action. (Today that needs a
@@ -1718,6 +1718,7 @@ all" action.
 | ~~Q10~~ | ~~Create/edit/delete by action?~~ Resolved: export/import actions, with overwrite protection (§16). | §16 |
 | ~~Q11~~ | ~~Remaining §9.9 details~~ Resolved: per-group threshold override; members that can't soften hold instead (§9.9). | §9.9 |
 | ~~Q12~~ | ~~Done notifications while throttled~~ Resolved: held, and covered by the throttling summary (§9.7). | §9.7, §9.8 |
+| Q13 | [Deferred] When should the condition alert kinds get a class or strategy object each? Not yet: the five kinds share one condition alert class, which branches on the kind in a few places (attributes, sources, judging, on/off edges), and the sources hide most of the differences. If more condition kinds are added, split it then. Event kinds are less likely to need this: a bus event alert is already just a trigger alert with an event trigger, so a new event kind would more likely be another trigger shape. | F23 |
 
 ## 19. Decision log
 
@@ -1848,6 +1849,7 @@ Decisions with their reasons, in the order they were made.
 | A superseded alert's reminder waits for a superseding alert about to fire; sent late if it doesn't | A reminder and the superseding on notification arriving together is noise, and no setting should be needed to avoid it; a lost reminder would fail quiet [§8.1]. |
 | Logbook messages are capitalised | They sit beside the translated states, which are [§11.4]. |
 | Manual alerts can end by themselves after a duration, as an option, not a new kind | Fills the gap between manual and event alerts without a ninth kind, and without overturning R2 or R3 [§4.3]. |
+| 1.0.0 is 0.11.1 plus self-ending manual alerts and an entity refactor, after a shorter soak of its own | The 0.11.1 soak found only trivia, and a 1.0.0 identical to it would add nothing; the refactor keeps manual-only code out of the base class every kind shares [§20]. |
 
 ## 20. Phase plan
 
@@ -2123,15 +2125,21 @@ Live testing waits for the next real-HA run.
   [weather_alerts_card](https://github.com/seevee/weather_alerts_card) for their
   inspiration (moved from phase 13).
 
-### After 1.0.0 — Manual alerts that end by themselves (1.1.0)
+### 1.0.0 — Manual alerts that end by themselves, and a tidier alert entity
 
 - The *End by itself after* option for manual alerts (§4.3). The duration handling
   moves out of the event alerts into a part both kinds share: the expiry timer,
   restoring the expiry after a restart, gating reminders, and the attributes.
 - The option and its duration on the manual alert form.
+- A refactor of the alert entity, with no change in behaviour: manual alerts get
+  their own class, leaving the shared base class with only what every kind uses;
+  manual and event alerts share one path for starting a firing; and the alert
+  state kind's watched alert moves to the condition alerts.
 
-It's small and self-contained, so it comes first after 1.0.0, ahead of phase 12,
-and leaves the daily-use soak before 1.0.0 undisturbed.
+Planned as 1.1.0, to leave the daily-use soak of 0.11.1 undisturbed. The soak
+found only trivia, and a 1.0.0 identical to 0.11.1 would add nothing, so this
+became 1.0.0 instead [Decided]. As it wasn't part of that soak, it gets a
+shorter soak of its own on the real instance before release.
 
 ### Phase 12 — Voice control (0.12.0)
 
@@ -2161,4 +2169,5 @@ and leaves the daily-use soak before 1.0.0 undisturbed.
   - Alert2 alerts.
 
 **1.0.0** comes after phase 11, once the core feature set is proven in daily use,
-with phases 12–14 as 1.x releases [Decided, provisionally].
+with phases 12–14 as 1.x releases [Decided, provisionally]. It adds self-ending
+manual alerts and the entity refactor to 0.11.1 (above).

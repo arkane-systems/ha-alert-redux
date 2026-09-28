@@ -231,6 +231,19 @@ install restart. `docs/restart-checks.md` is the ledger of pending and done chec
 with a note on this instance's restart timing. Read it at the start of every
 real-HA run.
 
+The real instance has a permanent alerting and notification test rig, older than
+Alert Redux and moved over to it unchanged:
+
+- **Test Alert** (`alert_redux.test_alert`): a state alert, firing while
+  `input_boolean.test_alert` is on.
+- **Test Event Alert** (`alert_redux.test_event_alert`): a bus event alert, fired
+  by pressing `input_button.test_event_alert`.
+
+Both send to the Quiet and Office Only groups. Use them freely in real-HA runs,
+but don't change their configuration permanently (restore anything a test
+changes), and never delete them or their helpers when cleaning up a run's test
+entities.
+
 ## Versioning
 
 `manifest.json` `version` is the release version (semantic; bump on release, then
