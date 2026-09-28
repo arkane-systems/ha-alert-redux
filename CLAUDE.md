@@ -21,7 +21,8 @@ alert state kind, dangling references, and the card's superseded alerts), and
 phase 8 (the summary sensors, the logbook platform, and the `_data_restored`
 event), and phase 9 (replacing and clearing notifications, and notification
 buttons), and phase 10 (throttling and quiet hours), and phase 11 (generators,
-including generated supersession).
+including generated supersession), and, for 1.0.0, manual alerts that end by
+themselves (spec §4.3).
 
 ## Specification
 
@@ -69,11 +70,18 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `config_subentry_id`, and kept in `DATA_ENTITIES` by unique ID like the
     fixed ones. Also `async_forget_alert`, which drops a deleted alert's record
     and announces it.
-  - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
-    persistence, and the rendered messages while firing; snoozing, disabling, and
-    suspending, for every kind; supersession's on debounce, skipped and held reminders,
-    and held done notifications; throttling on and done notifications, and the
-    throttling summary), `ConditionAlertEntity`
+  - `entity.py` — `AlertEntity`, the base every kind shares and never used on its
+    own (state, attributes, actions, events, persistence, and the rendered messages
+    while firing; snoozing, disabling, and suspending; durations and their expiry,
+    for event alerts and self-ending manual alerts; starting a manual or event
+    alert's firing; supersession's on debounce, skipped and held reminders, and
+    held done notifications; throttling on and done notifications, and the
+    throttling summary). Differences between kinds are class attributes
+    (`_awaits_data`, `_has_duration`, `_fire_data_is_trigger`) and overridden
+    hooks, not checks on the kind; `fire` and `dismiss` are stubs raising
+    `not_manual`, since HA calls entity actions by name on every entity.
+    `ManualAlertEntity` (fire, dismiss, and the manual settings),
+    `ConditionAlertEntity`
     (state, on/off, threshold, template, and alert state kinds: watches its sources,
     judges them
     by the kind's rule in `_judge`, and runs the delays and no-data grace period on
