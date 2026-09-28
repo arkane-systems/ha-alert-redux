@@ -2160,6 +2160,8 @@ shorter soak of its own on the real instance before release.
 - Consider recognising displayed state names in a state alert's target state,
   e.g. "open" for a door binary sensor's `on`, and storing the real state
   (§4.1; assessment in `docs/spec-notes.md`, N38).
+- Allow setting of area and labels for an alert from the config flow during
+  creation or editing.
 
 ### Phase 14 — Converter utilities
 
