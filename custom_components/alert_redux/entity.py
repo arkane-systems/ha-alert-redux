@@ -1222,26 +1222,7 @@ class AlertEntity(Entity):
             # A disabled alert can't fire (spec §6.3).
             _LOGGER.debug("%s: fire ignored; disabled", self.entity_id)
             return
-        now = dt_util.utcnow()
-        if (duration := self._duration) is not None:
-            transition = self._runtime.fire_event(now, data, duration)
-        else:
-            transition = self._runtime.fire(now, data)
-        pre_acked = None
-        if transition.fire_count == 1:
-            pre_acked = self._pre_ack_new_firing(now)
-            self._runtime.plan_reminder(self._reminder_schedule, now)
-        self._apply(
-            EVENT_FIRED,
-            transition,
-            {ATTR_FIRE_COUNT: transition.fire_count, ATTR_FIRE_DATA: data},
-        )
-        self._announce_pre_ack(pre_acked)
-        # Firing again sends the on message again, unless it's been acknowledged:
-        # the acknowledgement is kept so that repeats don't nag (spec §4.2, §4.3). A
-        # pre-acknowledged firing sends none either (§8.3).
-        if self._runtime.state is AlertState.ACTIVE:
-            self._async_notify_on()
+        self._async_start_firing(data, ATTR_FIRE_DATA)
 
     async def async_dismiss(self) -> None:
         """Dismiss a firing manual alert."""
@@ -1377,6 +1358,34 @@ class AlertEntity(Entity):
             _LOGGER.warning(
                 "%s: the %s button's action failed: %s", self.entity_id, label, err
             )
+
+    @callback
+    def _async_start_firing(self, data: dict[str, Any] | None, data_attr: str) -> None:
+        """Fire a manual or event alert, or fire it again if it is already firing.
+
+        With a duration, the firing runs for it from now. data is the firing's
+        fire data, and goes in the fired event as data_attr.
+        """
+        now = dt_util.utcnow()
+        if (duration := self._duration) is not None:
+            transition = self._runtime.fire_event(now, data, duration)
+        else:
+            transition = self._runtime.fire(now, data)
+        pre_acked = None
+        if transition.fire_count == 1:
+            pre_acked = self._pre_ack_new_firing(now)
+            self._runtime.plan_reminder(self._reminder_schedule, now)
+        self._apply(
+            EVENT_FIRED,
+            transition,
+            {ATTR_FIRE_COUNT: transition.fire_count, data_attr: data},
+        )
+        self._announce_pre_ack(pre_acked)
+        # Firing again sends the on message again, unless it's been acknowledged:
+        # the acknowledgement is kept so that repeats don't nag (spec §4.2, §4.3). A
+        # pre-acknowledged firing sends none either (§8.3).
+        if self._runtime.state is AlertState.ACTIVE:
+            self._async_notify_on()
 
     def _announce_pre_ack(self, pre_acked: list[str] | None) -> None:
         """Fire _acked for a firing that started pre-acknowledged (spec §11.3)."""
@@ -1995,23 +2004,7 @@ class EventAlertEntity(AlertEntity):
             return
         # The firing is the alert's own doing, not the last user action's.
         self._context = None
-        now = dt_util.utcnow()
-        # Event alerts always have a duration.
-        assert (duration := self._duration) is not None
-        transition = self._runtime.fire_event(now, trigger, duration)
-        pre_acked = None
-        if transition.fire_count == 1:
-            pre_acked = self._pre_ack_new_firing(now)
-            self._runtime.plan_reminder(self._reminder_schedule, now)
-        self._apply(
-            EVENT_FIRED,
-            transition,
-            {ATTR_FIRE_COUNT: transition.fire_count, ATTR_TRIGGER_DATA: trigger},
-        )
-        self._announce_pre_ack(pre_acked)
-        # As for manual alerts, firing again only speaks up while unacknowledged.
-        if self._runtime.state is AlertState.ACTIVE:
-            self._async_notify_on()
+        self._async_start_firing(trigger, ATTR_TRIGGER_DATA)
 
     def _condition_allows(self, trigger: dict[str, Any]) -> bool:
         """Judge the condition at the moment of the trigger.
