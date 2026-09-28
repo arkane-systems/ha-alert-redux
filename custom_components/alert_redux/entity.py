@@ -363,8 +363,6 @@ class AlertEntity(Entity):
         self._supersedes: list[dict[str, Any]] = [
             dict(rel) for rel in data.get(CONF_SUPERSEDES) or []
         ]
-        # The alert state kind's watched alert.
-        self._watched_alert: str | None = data.get(CONF_ALERT) or None
         self._attr_name = definition.name
         self._attr_icon = data.get(CONF_ICON) or DEFAULT_PRIORITY_ICONS[self._priority]
 
@@ -429,15 +427,12 @@ class AlertEntity(Entity):
 
     @property
     def references(self) -> list[str]:
-        """Return the alerts this one refers to: superseded, or watched (§12.4).
+        """Return the alerts this one refers to: those it supersedes (§12.4).
 
         A generator's alert for the same target isn't one: its absence is
         normal, not a broken reference.
         """
-        targets = relationship_targets(self._supersedes)
-        if self._watched_alert:
-            targets.append(self._watched_alert)
-        return targets
+        return relationship_targets(self._supersedes)
 
     @property
     def context(self) -> Context | None:
@@ -1591,6 +1586,14 @@ class ConditionAlertEntity(AlertEntity):
     def subject_entity(self) -> str | None:
         """Return the explicit subject, or else the state, value, or alert entity."""
         return self._explicit_subject or self._source_entity
+
+    @property
+    def references(self) -> list[str]:
+        """Add the alert state kind's watched alert (§12.4)."""
+        references = super().references
+        if self._kind is AlertKind.ALERT_STATE and self._source_entity:
+            references.append(self._source_entity)
+        return references
 
     @property
     def _timing(self) -> Timing:
