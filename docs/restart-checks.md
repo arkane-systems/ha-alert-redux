@@ -24,9 +24,32 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-None.
+The 1.0.0 entity refactor moved the expiry-on-restore code into the shared base
+class, so these check it for both kinds that use it. Set them up just before the
+restart that installs the next build. Test Alert and Test Event Alert are
+permanent (see CLAUDE.md): use them, but leave their settings as they are.
+
+- **A self-ending manual alert's duration runs out while HA is down** (1.0.0).
+  Create a temporary manual alert, "Test Manual Ending", ending by itself after
+  1 minute, sending to Quiet. Fire it with `alert_redux.fire`, then request the
+  restart 20 to 25 seconds later. Expect it back `idle`, with `last_ended` at its
+  old `event_expires` (not the set-up time), a `_ended` event with reason
+  `resolved`, and the done notification on Quiet. Delete the alert afterwards.
+- **A self-ending manual alert still firing across the restart** (1.0.0). A
+  second temporary manual alert, "Test Manual Long", ending by itself after 15
+  minutes, fired just before the restart. Expect it back `active` with the same
+  `firing_since` and `event_expires`, no new on notification, and then `idle` at
+  that expiry. Delete it afterwards.
+- **An event alert still firing across the restart** (1.0.0). Press
+  `input_button.test_event_alert` just before the restart (5-minute duration).
+  Expect Test Event Alert back `active` with the same `event_expires` and
+  `trigger_data`, then `idle` at that expiry.
 
 ## Done
+
+- **2026-09-28, 1.0.0 refactor install restart.** No checks were pending. All
+  26 alerts, of every kind and including generated ones, came back `idle` with
+  their attributes as before, and nothing from Alert Redux in the log. Passed.
 
 - **2026-09-26, v0.11.0 install restart. Generated supersession across the
   restart** (phase 11b). Test Switch Still On's alert came back `ack`, firing
