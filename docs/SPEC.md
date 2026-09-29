@@ -1242,6 +1242,9 @@ up labels you want for other things, and areas stay free.
 - Only alert entities get it. Summary sensors (§11.2), generator entities (§12.3), and
   voice proxy switches (§14) don't. The summary sensors in particular change
   constantly and would flood an Activity card.
+- [Decided, phase 12 design] By the same rule, each alert is **exposed to
+  Assist** once, and never forced back (§14.1). Its stored record remembers
+  that as well.
 - Built as release 0.3.1, between phases 3 and 4.
 
 **Why not a device.** A single virtual "alerts" device was tried first and rejected.
@@ -1610,8 +1613,10 @@ To make sure it gets fixed:
 - **Assist:** the integration registers its own voice commands for acknowledging,
   removing an acknowledgement, and snoozing (with a duration), matching alerts by
   name. For example: "acknowledge the back door alert", "snooze the server room
-  alert for 30 minutes". No extra entities are needed.
-- **Alexa (and other limited assistants):** each alert can optionally expose a
+  alert for 30 minutes". No extra entities are needed. [Decided, phase 12
+  design] Also a read-only query, "what alerts are firing?". Designed in §14.1.
+- **Alexa (and other limited assistants):** [Deferred: the design follows, as the
+  second part of phase 12's design.] each alert can optionally expose a
   **proxy switch**: turning it on acknowledges the alert, and turning it off removes
   the acknowledgement. Optionally, a second switch per alert, or a per-alert setting,
   gives a fixed-duration snooze. The switches are opt-in per alert so that entities
@@ -1623,6 +1628,101 @@ To make sure it gets fixed:
   through HA's Google Assistant integration (Nabu Casa or manual), but this needs
   checking when the phase is built.
 - Proxy switches take their alert's area and labels (§11.6).
+
+### 14.1 Assist
+
+[Decided, phase 12 design] Researched against HA 2026.9. It needs no new
+entities and no files in the user's configuration directory.
+
+**One implementation, several ways in.** Four intents carry the behaviour:
+`AlertReduxAcknowledge`, `AlertReduxUnacknowledge`, `AlertReduxSnooze`, and
+`AlertReduxListFiring`. They're registered (`intent.async_register`) when the
+config entry is set up, and removed when it's unloaded. Each has a description
+and a slot schema: an optional `name`, and for snoozing an optional `duration`.
+Each also has `platforms` set to `alert_redux`, so it's only offered where alerts
+are exposed. They're reached through:
+
+- **Sentence triggers.** Alert Redux attaches HA's own `conversation` trigger,
+  the one automations use, with its English sentences, once HA has started. The
+  built-in agent checks sentence triggers before its intents, and an Assist
+  pipeline checks them before **any** conversation agent, LLM agents included,
+  whatever "prefer handling commands locally" is set to. The trigger hands its
+  sentence to the matching intent, with the speaker's context (so acknowledgements
+  record who made them, R18), and returns the intent's reply as the spoken
+  response.
+- **LLM agents.** From HA 2026.6, integrations offer LLM tools through an
+  `llm.py` platform. Alert Redux offers the four intents as tools (named
+  `alert_redux__…`), when at least one alert is exposed, with a short prompt
+  saying that alerts are acknowledged and snoozed with these tools, not by turning
+  them off. Before 2026.6, HA offered every registered intent to LLM agents by
+  itself, so older versions get the same tools with no extra code.
+- **Custom sentences.** Anyone can write custom sentences for the intents by
+  name, in any language. That's how languages other than English are covered for
+  now; the README gives an example.
+
+**Acting.** The intents call the existing actions (`alert_redux.ack`, `unack`,
+`snooze`) with the speaker's context. §6 and §16 therefore apply unchanged: an
+unacknowledgeable alert's refusal becomes the spoken reply. An action that
+doesn't apply to the alert's state still does nothing (§16), but the intent
+checks the state first, so the reply says why ("… isn't firing").
+
+**Which alerts.** Voice acts only on alerts **exposed to Assist**, as HA does
+everywhere. Alerts aren't among the domains HA exposes by default, so Alert
+Redux exposes each alert to Assist (only to Assist, never to Alexa or Google)
+**once**, by the rule the alerts label follows (§11.5): a new alert when it's
+first added, and an existing alert the first time phase 12 runs. The alert's
+stored record remembers that it's been done. It's never forced back: an alert
+unexposed stays unexposed, and voice can't reach it.
+
+**Matching names.** A spoken name is matched against the exposed alerts' names
+and their entity aliases, ignoring case, punctuation, a leading "the", and a
+trailing "alert". An exact match wins; failing that, a name that contains the
+spoken words, if only one does. When several alerts match, the reply names them
+and asks which.
+
+**Commands with no name** ("acknowledge the alert") act only when exactly one
+alert could take the action: the one unacknowledged alert for acknowledging, the
+one acknowledged alert for removing it, and the one acknowledgeable firing alert
+for snoozing. Otherwise the reply names the candidates and asks for one. No voice
+command ever acts on more than one alert (principle 6).
+
+**Snooze duration.** Without a duration, the **Snooze button duration** (§9.11)
+is used. Spoken durations are digits or English number words with seconds,
+minutes, or hours, plus "an hour", "half an hour", and "an hour and a half". The
+LLM tool takes minutes. A duration that can't be understood snoozes nothing, and
+the reply asks how long.
+
+**The query** lists the firing alerts, highest priority first, saying which are
+acknowledged or snoozed (and until when). Past a number that's reasonable to
+hear, it ends "and N more". It doesn't list alerts that aren't exposed.
+
+**Replies** say what happened, by name: "Acknowledged Back Door Open", "Snoozed
+Back Door Open for 30 minutes", "Back Door Open isn't firing", "Server Room
+Overheated can't be acknowledged", "Which one: Back Door Open or Garage Door
+Open?".
+
+**Sentences** (English; the final wording is settled when it's built and tried
+by voice):
+
+- `(acknowledge|ack) [the] {alert}`
+- `(unacknowledge|un-acknowledge|unack) [the] {alert}`
+- `remove [the] acknowledgement (from|for|on) [the] {alert}`
+- `snooze [the] {alert} [for {duration}]`
+- `(acknowledge|unacknowledge|snooze) [the] alert`, the forms with no name
+- `(what|which) alerts are (firing|active|on)`, `are there any [active|firing]
+  alerts`, `list [the] [active|firing] alerts`
+
+In a sentence trigger, every `{…}` is a wildcard: it captures whatever was said,
+and Alert Redux does the matching.
+
+**Limitations.**
+
+- **Speech-to-Phrase**, HA's local speech-to-text, recognises only sentences it
+  was trained on, and can't be taught these wildcards by an integration. The
+  sentences need a general-purpose speech-to-text (Whisper, Home Assistant Cloud,
+  and so on). The README says so.
+- Text sent straight to an LLM agent (the `conversation.process` action, rather
+  than a pipeline) skips sentence triggers. The LLM tools still work.
 
 ## 15. Startup, resilience, persistence
 
@@ -1642,7 +1742,8 @@ counters, held quiet-hours notifications, the retry queue) doesn't belong to any
 entity, so a Store is needed anyway. Per-alert records are keyed by the entity's
 unique ID, which also covers generated alerts. The records also tell Alert Redux
 which alerts are new or deleted since the last run (for `_created`/`_deleted`,
-§11.3).
+§11.3), and whether an alert has been given the alerts label (§11.5) and
+[phase 12] exposed to Assist (§14.1).
 
 After a restart:
 
@@ -1781,6 +1882,7 @@ all" action.
 | ~~Q11~~ | ~~Remaining §9.9 details~~ Resolved: per-group threshold override; members that can't soften hold instead (§9.9). | §9.9 |
 | ~~Q12~~ | ~~Done notifications while throttled~~ Resolved: held, and covered by the throttling summary (§9.7). | §9.7, §9.8 |
 | Q13 | [Deferred] When should the condition alert kinds get a class or strategy object each? Not yet: the five kinds share one condition alert class, which branches on the kind in a few places (attributes, sources, judging, on/off edges), and the sources hide most of the differences. If more condition kinds are added, split it then. Event kinds are less likely to need this: a bus event alert is already just a trigger alert with an event trigger, so a new event kind would more likely be another trigger shape. | F23 |
+| Q14 | [Open until phase 12 is built] Should phase 12 raise the minimum HA version (now 2025.3)? Assist doesn't need it: sentence triggers and intents work from 2025.3, and HA before 2026.6 offers intents to LLM agents by itself. Raising it to 2026.6 would remove that older, untested path; to 2026.9, also the fallback for `admin_only` actions (§20, phase 6). Decide once the proxy design is settled, since Alexa and Google may have version needs of their own. | §14 |
 
 ## 19. Decision log
 
@@ -1917,6 +2019,12 @@ Decisions with their reasons, in the order they were made.
 | Card filters are either scope, in the card's configuration (area, label), or view, on the card (hide acknowledged, priorities) | Scope is set once per placement, e.g. a card per room page; the view is what you change while looking at the card [§13.1]. |
 | The admin card can be paged; the main card isn't | The admin card lists every alert and gets long; the main card shows only firing alerts, which must never be hidden on another page [§13.2]. |
 | Custom buttons show on the main card too, from the same definitions | A *Close door* button is as useful on the dashboard as on the phone, and one definition can't drift apart from another [§13.1]. |
+| Assist sentences are HA's conversation triggers, attached by the integration | The one public way for an integration to add sentences; custom sentence files would mean writing into the user's configuration (R21), and pipelines check triggers before any agent, LLM agents included [§14.1]. |
+| Four intents carry the voice behaviour; sentences, LLM tools, and custom sentences all reach them | One implementation, whichever way the command arrives, and other languages can be added without code [§14.1]. |
+| Voice acts only on alerts exposed to Assist; each alert is exposed once, never forced back | Follows HA's convention and leaves the user in control, without making every alert need exposing by hand [§14.1, §11.5]. |
+| Voice can ask which alerts are firing | You can find out what's wrong before acknowledging it, and LLM agents learn the alerts' names from it [§14.1]. |
+| A command with no name acts only if exactly one alert fits | Convenient when one thing is wrong, and never acts on several alerts at once (principle 6) [§14.1]. |
+| Phase 12 is 1.1.0 | It follows 1.0.0, so it's a 1.x release [§20]. |
 
 ## 20. Phase plan
 
@@ -2208,10 +2316,28 @@ found only trivia, and a 1.0.0 identical to 0.11.1 would add nothing, so this
 became 1.0.0 instead [Decided]. As it wasn't part of that soak, it gets a
 shorter soak of its own on the real instance before release.
 
-### Phase 12 — Voice control (0.12.0)
+### Phase 12 — Voice control (1.1.0)
 
-- Assist intents for acknowledge, unacknowledge, and snooze (§14).
-- Optional per-alert proxy switches, checked with Alexa and Google Home.
+- **First, a spike** in real HA: a conversation trigger attached by the
+  integration, whose action's reply is spoken, through both the built-in agent
+  and an LLM agent's pipeline. Everything else in §14.1 rests on it.
+- Assist (§14.1): the four intents (acknowledge, unacknowledge, snooze, and the
+  firing-alerts query); the English sentence triggers; the `llm.py` tools; name
+  matching, commands with no name, and spoken durations; each alert exposed to
+  Assist once; and the README's notes on custom sentences and Speech-to-Phrase.
+- Optional per-alert proxy switches, checked with Alexa and Google Home (design
+  to follow).
+- Testing notes: `conversation` and `llm` go in `after_dependencies`, not
+  `dependencies`. Tests that load `conversation` need the core `homeassistant`
+  component set up first, and a pinned HA's matching `hassil` and intents
+  packages.
+
+*Done when* acknowledging, unacknowledging, snoozing, and the query work by
+voice through a pipeline with an LLM agent and through the built-in agent, an
+LLM agent can use the tools on its own, and the proxies work with Alexa and
+Google Home.
+
+It was planned as 0.12.0, before 1.0.0 came first; it's now 1.1.0 [Decided].
 
 ### Phase 13 — Late features (0.13.0 onwards; may be split)
 
