@@ -1240,7 +1240,7 @@ up labels you want for other things, and areas stay free.
 - It's never forced back. If you remove it from an alert, it stays removed. If you
   delete the label, it isn't recreated.
 - Only alert entities get it. Summary sensors (§11.2), generator entities (§12.3), and
-  voice proxy switches (§14) don't. The summary sensors in particular change
+  voice proxies (§14.2) don't. The summary sensors in particular change
   constantly and would flood an Activity card.
 - [Decided, phase 12 design] By the same rule, each alert is **exposed to
   Assist** once, and never forced back (§14.1). Its stored record remembers
@@ -1277,7 +1277,7 @@ card filters (§13.1) and anything else that selects entities by area or label.
   target**: the target entity's area, or else its device's. The target's area is
   the default. Each door's *Left Open* alert then lands in that door's area,
   though the doors are all in different areas.
-- **Voice proxy switches** (§14) copy their alert's area and labels, and follow
+- **Voice proxies** (§14.2) copy their alert's area and labels, and follow
   changes to them however they're made, except for the alerts label, which
   proxies don't get (§11.5).
 
@@ -1615,19 +1615,19 @@ To make sure it gets fixed:
   name. For example: "acknowledge the back door alert", "snooze the server room
   alert for 30 minutes". No extra entities are needed. [Decided, phase 12
   design] Also a read-only query, "what alerts are firing?". Designed in §14.1.
-- **Alexa (and other limited assistants):** [Deferred: the design follows, as the
-  second part of phase 12's design.] each alert can optionally expose a
-  **proxy switch**: turning it on acknowledges the alert, and turning it off removes
-  the acknowledgement. Optionally, a second switch per alert, or a per-alert setting,
-  gives a fixed-duration snooze. The switches are opt-in per alert so that entities
-  aren't doubled across the board.
+- **Alexa (and other limited assistants):** each alert can optionally expose a
+  **proxy switch** and a snooze button, designed in §14.2. They're opt-in per
+  alert so that entities aren't doubled across the board. [Changed, phase 12
+  design] This originally said that turning the switch on acknowledges the alert;
+  it now follows the built-in `alert`, where the switch is on while the alert
+  needs attention, and turning it off acknowledges.
 - The design must allow for this from the start: anything the card can do must also
   be available as an action, and alerts need names that make sense when spoken.
 - [Decided, to verify] The limited-assistant solution must also work with **Google
   Assistant / Google Home**, not just Alexa. Proxy switches should work there too,
   through HA's Google Assistant integration (Nabu Casa or manual), but this needs
   checking when the phase is built.
-- Proxy switches take their alert's area and labels (§11.6).
+- Proxies take their alert's area and labels (§11.6).
 
 ### 14.1 Assist
 
@@ -1686,8 +1686,8 @@ one acknowledged alert for removing it, and the one acknowledgeable firing alert
 for snoozing. Otherwise the reply names the candidates and asks for one. No voice
 command ever acts on more than one alert (principle 6).
 
-**Snooze duration.** Without a duration, the **Snooze button duration** (§9.11)
-is used. Spoken durations are digits or English number words with seconds,
+**Snooze duration.** Without a duration, the alert's Snooze button duration
+(§9.11) is used: its own, or else the **Snooze button duration** option. Spoken durations are digits or English number words with seconds,
 minutes, or hours, plus "an hour", "half an hour", and "an hour and a half". The
 LLM tool takes minutes. A duration that can't be understood snoozes nothing, and
 the reply asks how long.
@@ -1724,6 +1724,98 @@ and Alert Redux does the matching.
 - Text sent straight to an LLM agent (the `conversation.process` action, rather
   than a pipeline) skips sentence triggers. The LLM tools still work.
 
+### 14.2 Proxies for Alexa and Google Home
+
+[Decided, phase 12 design] Researched against HA 2026.9's Alexa and Google
+Assistant integrations, and built on the user's earlier design for Alert2.
+
+**What the assistants can represent.** Neither supports a custom domain such as
+`alert_redux`, so proxies are unavoidable.
+
+- **Alexa:**
+  - A `switch` gets on/off, and **also** a contact sensor that reads open while
+    the switch is on, reported as it changes.
+  - A `button` becomes a scene.
+  - Binary sensors come through only as contact, motion, or presence sensors,
+    which would make a firing alert "open".
+  - A `number` is a bare range with no time units.
+  - Devices, scenes, and groups share one namespace, so two with the same name
+    confuse it.
+- **Google:**
+  - A `switch` gets on/off.
+  - A `button` becomes a scene.
+  - Binary sensors come through only as doors, windows, smoke detectors, and
+    the like.
+- Both work through Home Assistant Cloud (Nabu Casa) or the manual setups.
+  Gemini for Home reportedly supports what Google Assistant did.
+
+**Rejected alternatives.**
+
+- **A binary sensor for the state** would be asked "is X open?".
+- **Separate entities for firing and acknowledging** would each need a different
+  name, because of Alexa's shared namespace. That means longer utterances ("turn
+  off workshop door left open acknowledgement").
+- **Acknowledge and unacknowledge buttons** ("acknowledge workshop door left
+  open") read well, but add two more entities per alert.
+- **Snooze** by one button per duration multiplies entities. By a number entity
+  plus a button, it needs two utterances and a bare number of seconds.
+
+**The proxy switch.** An opt-in per alert. It emulates the built-in `alert`
+entity, which Alexa could already handle:
+
+| Alert state | Switch | Turning it off | Turning it on |
+|---|---|---|---|
+| `active` | on | acknowledges the alert | nothing changes |
+| `ack`, including snoozed | off | nothing changes | removes the acknowledgement, and any snooze |
+| `idle`, `no_data`, `disabled` | off | nothing changes | refused with an error |
+
+- "Is *X* on?" asks whether the alert needs attention.
+- When a snooze runs out, the switch comes back on.
+- An unacknowledgeable alert's switch still shows its state, but turning it off
+  is refused (§6.1).
+- On Alexa, the switch's contact sensor opens whenever the switch turns on. Alexa
+  routines can start from a contact sensor, though not from a switch, so a routine
+  can announce an alert as it fires, and again when a snooze runs out.
+- The acknowledgements go through the existing actions, with the assistant's
+  context, so §6 and §16 apply unchanged.
+
+**The snooze button.** A second opt-in per alert, called "Snooze *name*". It
+becomes a scene in both assistants. Pressing it snoozes the alert for its Snooze
+button duration (§9.11): the alert's own, or else the **Snooze button duration**
+option. The duration isn't in the name, so the name doesn't change when the
+duration does, and Alexa needn't rediscover it. The button's attributes show the
+duration. A press on an alert that can't be snoozed (not firing, or
+unacknowledgeable) is refused with an error. Unsnoozing is the switch's turning
+on.
+
+**The proxies themselves.**
+
+- They're a `switch` with the alert's exact name and a `button` named "Snooze
+  *name*", both following the alert's renames. Their entity IDs follow the
+  alert's object ID (`switch.workshop_door_left_open`,
+  `button.snooze_workshop_door_left_open`).
+- They have no device (§11.5, "Why not a device").
+- They copy the alert's area and labels (§11.6), but aren't given the alerts
+  label (§11.5).
+- Their options are in the alert's form. Generators have the same options, and
+  apply them to each alert they make.
+- Turning an option off removes that proxy.
+- **Exposure:** when a proxy is created, it's exposed to Alexa and Google once,
+  and **hidden from Assist** once, where it would clash with the alert's own
+  name. Assist has better commands anyway (§14.1). The rule is the alerts
+  label's: done once, never forced back. Manual (non-cloud) Alexa and Google
+  setups choose entities with their own filters; the README explains.
+
+**To check in real HA** (Alexa and Google Home, Nabu Casa):
+
+- **The phrases:** "Alexa, turn off *X*", "Alexa, is *X* on?", "Alexa, turn on
+  Snooze *X*" (or simply "Alexa, snooze *X*"), and "Hey Google, activate Snooze
+  *X*".
+- **Refusals:** what each assistant says when an action is refused.
+- **Routines:** whether the Alexa routine trigger is reliable (some community
+  reports say contact-sensor triggers are occasionally flaky).
+- **Newer assistants:** how Gemini for Home and Alexa+ handle all of the above.
+
 ## 15. Startup, resilience, persistence
 
 ### 15.1 Restoring state
@@ -1743,7 +1835,8 @@ entity, so a Store is needed anyway. Per-alert records are keyed by the entity's
 unique ID, which also covers generated alerts. The records also tell Alert Redux
 which alerts are new or deleted since the last run (for `_created`/`_deleted`,
 §11.3), and whether an alert has been given the alerts label (§11.5) and
-[phase 12] exposed to Assist (§14.1).
+[phase 12] exposed to Assist (§14.1), and whether its proxies' exposure
+has been set (§14.2).
 
 After a restart:
 
@@ -1882,7 +1975,7 @@ all" action.
 | ~~Q11~~ | ~~Remaining §9.9 details~~ Resolved: per-group threshold override; members that can't soften hold instead (§9.9). | §9.9 |
 | ~~Q12~~ | ~~Done notifications while throttled~~ Resolved: held, and covered by the throttling summary (§9.7). | §9.7, §9.8 |
 | Q13 | [Deferred] When should the condition alert kinds get a class or strategy object each? Not yet: the five kinds share one condition alert class, which branches on the kind in a few places (attributes, sources, judging, on/off edges), and the sources hide most of the differences. If more condition kinds are added, split it then. Event kinds are less likely to need this: a bus event alert is already just a trigger alert with an event trigger, so a new event kind would more likely be another trigger shape. | F23 |
-| Q14 | [Open until phase 12 is built] Should phase 12 raise the minimum HA version (now 2025.3)? Assist doesn't need it: sentence triggers and intents work from 2025.3, and HA before 2026.6 offers intents to LLM agents by itself. Raising it to 2026.6 would remove that older, untested path; to 2026.9, also the fallback for `admin_only` actions (§20, phase 6). Decide once the proxy design is settled, since Alexa and Google may have version needs of their own. | §14 |
+| ~~Q14~~ | ~~Raise the minimum HA version for phase 12?~~ Resolved: no, it stays 2025.3. Neither Assist nor the proxies need a newer version. The paths only older versions take (LLM tools before 2026.6, the `admin_only` fallback before 2026.9) are tested locally against an older HA, apart from CI (§20). | §14 |
 
 ## 19. Decision log
 
@@ -2025,6 +2118,10 @@ Decisions with their reasons, in the order they were made.
 | Voice can ask which alerts are firing | You can find out what's wrong before acknowledging it, and LLM agents learn the alerts' names from it [§14.1]. |
 | A command with no name acts only if exactly one alert fits | Convenient when one thing is wrong, and never acts on several alerts at once (principle 6) [§14.1]. |
 | Phase 12 is 1.1.0 | It follows 1.0.0, so it's a 1.x release [§20]. |
+| The proxy switch emulates the built-in `alert`: on while active, off to acknowledge | "Is X on?" asks whether it needs attention, and on Alexa the switch's contact sensor can start a routine as the alert fires; separate firing and acknowledgement entities would need longer names [§14.2]. |
+| One optional snooze button per alert, "Snooze *name*", for the alert's snooze button duration | One utterance; more durations would multiply entities, and a number entity needs two utterances and bare seconds; the name stays put when the duration changes [§14.2]. |
+| Proxies are exposed to Alexa and Google once, and hidden from Assist once | Opting in means wanting them there; in Assist they'd clash with the alerts' own names [§14.2]. |
+| The minimum HA version stays 2025.3 for phase 12 | Nothing in phase 12 needs a newer one; older paths are tested locally instead [§18, Q14]. |
 
 ## 20. Phase plan
 
@@ -2325,8 +2422,11 @@ shorter soak of its own on the real instance before release.
   firing-alerts query); the English sentence triggers; the `llm.py` tools; name
   matching, commands with no name, and spoken durations; each alert exposed to
   Assist once; and the README's notes on custom sentences and Speech-to-Phrase.
-- Optional per-alert proxy switches, checked with Alexa and Google Home (design
-  to follow).
+- Proxies (§14.2): the optional per-alert proxy switch and snooze button, their
+  options in the alert and generator forms, and their exposure (Alexa and Google
+  once, hidden from Assist once); the real-HA checks listed in §14.2.
+- The paths only older HA takes (LLM tools before 2026.6, the `admin_only`
+  fallback before 2026.9) tested locally against an older HA, apart from CI (Q14).
 - Testing notes: `conversation` and `llm` go in `after_dependencies`, not
   `dependencies`. Tests that load `conversation` need the core `homeassistant`
   component set up first, and a pinned HA's matching `hassil` and intents
