@@ -1500,7 +1500,22 @@ To make sure it gets fixed:
   [Decided, 0.11.1] The card's visual editor sets the durations too, as a list
   of numbers of minutes (HA's multiple text selector). It stores them as
   strings, which the card reads just as well as numbers.
-- Filters (hide acknowledged; per priority) [Decided, R22, late phase].
+- **Filters** [Decided, R22; phase 13]. There are two sorts, set in different
+  places:
+  - **Scope, set once in the card's configuration** (and its visual editor):
+    which alerts the card is for at all, by **area** and by **label** (§11.6).
+    For example, a card on each room's page that shows only that room's alerts,
+    or a card on a network dashboard that shows only the alerts labelled
+    *Network*. As for generator targets (§12.3), an alert must match each of
+    the two that's set, and any one value within each. Alerts outside the scope
+    are left out of the whole card, including the no-data section and the
+    disabled count. How scope and supersession interact (a superseded alert in
+    scope under a root that isn't, or the other way round) is settled when it's
+    built.
+  - **View, changed on the card itself**: hide acknowledged alerts, and show
+    only some priorities. These are for changing while looking at the card, so
+    they're controls on the card; the card's configuration only sets their
+    starting values.
 - Styling follows [weather_alerts_card](https://github.com/seevee/weather_alerts_card)
   [Decided, N31].
 - **Priority colours** [Decided]. Used for the sub-cards, the admin card, and the
@@ -1565,6 +1580,12 @@ To make sure it gets fixed:
   highest-priority superseder and counting any others ("+1"), with all of them
   in the tooltip. An alert that isn't firing isn't marked, since supersession
   only affects its notifications.
+- [Decided; phase 13] **Paging.** The admin card lists every alert, firing or
+  not, so it gets long and hard to fit on a dashboard. A card option sets how
+  many alerts a page shows, with controls to move between pages; unset, it
+  shows them all, as now. Pages keep the grouping by priority. The main card
+  isn't paged: it shows only firing alerts, and hiding one on another page
+  would defeat it.
 - [Deferred, phase 13] On request (a click, not shown all the time), show a
   **copyable text summary** of an alert's settings. That's useful when setting up a
   matching alert.
@@ -1879,6 +1900,8 @@ Decisions with their reasons, in the order they were made.
 | 1.0.0 is 0.11.1 plus self-ending manual alerts and an entity refactor, after a shorter soak of its own | The 0.11.1 soak found only trivia, and a 1.0.0 identical to it would add nothing; the refactor keeps manual-only code out of the base class every kind shares [§20]. |
 | An alert's area and labels live in the entity registry; the form edits them there | One place for the values, so edits on the entity's settings page aren't overwritten, and proxies can follow the alert whichever way it was edited [§11.6]. |
 | Generated alerts default to their target's area (provisionally) | The alerts a generator makes are usually about entities in different areas, e.g. each door's *Left Open* alert [§11.6]. |
+| Card filters are either scope, in the card's configuration (area, label), or view, on the card (hide acknowledged, priorities) | Scope is set once per placement, e.g. a card per room page; the view is what you change while looking at the card [§13.1]. |
+| The admin card can be paged; the main card isn't | The admin card lists every alert and gets long; the main card shows only firing alerts, which must never be hidden on another page [§13.2]. |
 
 ## 20. Phase plan
 
@@ -2178,7 +2201,9 @@ shorter soak of its own on the real instance before release.
 ### Phase 13 — Late features (0.13.0 onwards; may be split)
 
 - The acknowledgement queue (§10).
-- Card filters (§13.1).
+- Card filters: scope by area and label in the card's configuration, and
+  hide-acknowledged and per-priority controls on the card (§13.1).
+- Paging for the admin card (§13.2).
 - Creating and editing alerts from the admin card (§13.2).
 - The export and import actions and admin-card controls (§13.2, §16).
 - The admin card shows a copyable summary of an alert's settings on request
