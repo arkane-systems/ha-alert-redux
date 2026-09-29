@@ -985,6 +985,7 @@ keyboards could be added later. Other members leave the buttons out.
   notification on the phone, which was confusing next to our button. They're
   left alone, since people may want them, and ours is called **Snooze Alert**
   instead, so the two are told apart.
+- [Decided; phase 13] Custom buttons also show **on the main card** (§13.1).
 
 ## 10. Acknowledgement queue
 
@@ -1500,6 +1501,18 @@ To make sure it gets fixed:
   [Decided, 0.11.1] The card's visual editor sets the durations too, as a list
   of numbers of minutes (HA's multiple text selector). It stores them as
   strings, which the card reads just as well as numbers.
+- **Custom buttons** [Decided; phase 13]. An alert's custom buttons (§9.11)
+  show on its box too, beside the controls, so *Garage Door Left Open* has
+  *Close door* on the dashboard as well as on the phone. They're the same
+  buttons, defined once; there's no separate set for the card.
+  - Pressing one runs **only that button's configured action**, as the user who
+    pressed it, through a new `alert_redux.press_button` action (§16), keeping
+    to the rule that anything the card does is also an action (§14).
+  - The card doesn't have the phones' limit of three buttons.
+  - Settled when it's built: the layout; whether a button can be limited to the
+    card or to notifications; and what a **Require unlock** button (§9.11), which
+    only means something on iOS, does on a dashboard anyone can reach: ask for
+    confirmation, or not appear on the card at all.
 - **Filters** [Decided, R22; phase 13]. There are two sorts, set in different
   places:
   - **Scope, set once in the card's configuration** (and its visual editor):
@@ -1693,6 +1706,7 @@ area, label, …):
 | `alert_redux.disable` / `alert_redux.enable` | Disable or enable. Admin only (phase 6). |
 | `alert_redux.suspend` | Suspend for a `duration`, or `until` a time. Admin only (phase 6). |
 | `alert_redux.fire` / `alert_redux.dismiss` | Fire or dismiss a manual alert; `fire` can take `data`. |
+| `alert_redux.press_button` | Run one of an alert's custom buttons (§9.11), as the main card does (§13.1). Takes the button's `label`. [Decided; phase 13] Labels are unique within an alert, so the label is enough. |
 | `alert_redux.refresh_generator` | Re-evaluate a generator's targets now (debugging; §12.3). [Decided, phase 11] Takes the generators' sensors as `entity_id`. |
 | `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off). |
 
@@ -1902,6 +1916,7 @@ Decisions with their reasons, in the order they were made.
 | Generated alerts default to their target's area (provisionally) | The alerts a generator makes are usually about entities in different areas, e.g. each door's *Left Open* alert [§11.6]. |
 | Card filters are either scope, in the card's configuration (area, label), or view, on the card (hide acknowledged, priorities) | Scope is set once per placement, e.g. a card per room page; the view is what you change while looking at the card [§13.1]. |
 | The admin card can be paged; the main card isn't | The admin card lists every alert and gets long; the main card shows only firing alerts, which must never be hidden on another page [§13.2]. |
+| Custom buttons show on the main card too, from the same definitions | A *Close door* button is as useful on the dashboard as on the phone, and one definition can't drift apart from another [§13.1]. |
 
 ## 20. Phase plan
 
@@ -2204,6 +2219,8 @@ shorter soak of its own on the real instance before release.
 - Card filters: scope by area and label in the card's configuration, and
   hide-acknowledged and per-priority controls on the card (§13.1).
 - Paging for the admin card (§13.2).
+- Custom notification buttons on the main card, and the `alert_redux.press_button`
+  action (§13.1, §16).
 - Creating and editing alerts from the admin card (§13.2).
 - The export and import actions and admin-card controls (§13.2, §16).
 - The admin card shows a copyable summary of an alert's settings on request
