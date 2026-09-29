@@ -1251,6 +1251,32 @@ would have become "Alert Redux alerts Back Door Open", with an entity ID to matc
 One device per alert would keep the names, but brings back the problem the device
 was meant to solve.
 
+### 11.6 Area and labels
+
+[Decided; phase 13] An alert's area and labels can be set in its configuration
+form (§12.1), as well as on the entity's settings page as now. They're meant for
+card filters (§13.1) and anything else that selects entities by area or label.
+
+- **The entity registry is where they live.** The form is an editor for the
+  registry's values, not a second copy: editing an alert pre-fills them from the
+  registry, and saving writes them back. Changes made on the entity's settings
+  page stay, and the form shows them the next time it's opened.
+- **A new alert** has no entity while its form is open, so the values travel in
+  the subentry and are applied once, when the entity is first added, as the alerts
+  label is (§11.5). They're kept apart from the alert's configuration proper: a
+  change to them isn't a configuration change, and doesn't restart a condition
+  alert's pending delays.
+- **The alerts label** keeps its own rule (§11.5): given once, never forced back.
+  The form shows it like any other label, and removing it there removes it.
+- **Generators** (§12.3) [Decided, provisionally]: a generator's form sets labels
+  for all its alerts, and an area that's either a fixed area or **the same as the
+  target**: the target entity's area, or else its device's. The target's area is
+  the default. Each door's *Left Open* alert then lands in that door's area,
+  though the doors are all in different areas.
+- **Voice proxy switches** (§14) copy their alert's area and labels, and follow
+  changes to them however they're made, except for the alerts label, which
+  proxies don't get (§11.5).
+
 ## 12. Configuration
 
 ### 12.1 Structure
@@ -1562,6 +1588,7 @@ To make sure it gets fixed:
   Assistant / Google Home**, not just Alexa. Proxy switches should work there too,
   through HA's Google Assistant integration (Nabu Casa or manual), but this needs
   checking when the phase is built.
+- Proxy switches take their alert's area and labels (§11.6).
 
 ## 15. Startup, resilience, persistence
 
@@ -1850,6 +1877,8 @@ Decisions with their reasons, in the order they were made.
 | Logbook messages are capitalised | They sit beside the translated states, which are [§11.4]. |
 | Manual alerts can end by themselves after a duration, as an option, not a new kind | Fills the gap between manual and event alerts without a ninth kind, and without overturning R2 or R3 [§4.3]. |
 | 1.0.0 is 0.11.1 plus self-ending manual alerts and an entity refactor, after a shorter soak of its own | The 0.11.1 soak found only trivia, and a 1.0.0 identical to it would add nothing; the refactor keeps manual-only code out of the base class every kind shares [§20]. |
+| An alert's area and labels live in the entity registry; the form edits them there | One place for the values, so edits on the entity's settings page aren't overwritten, and proxies can follow the alert whichever way it was edited [§11.6]. |
+| Generated alerts default to their target's area (provisionally) | The alerts a generator makes are usually about entities in different areas, e.g. each door's *Left Open* alert [§11.6]. |
 
 ## 20. Phase plan
 
@@ -2160,8 +2189,9 @@ shorter soak of its own on the real instance before release.
 - Consider recognising displayed state names in a state alert's target state,
   e.g. "open" for a door binary sensor's `on`, and storing the real state
   (§4.1; assessment in `docs/spec-notes.md`, N38).
-- Allow setting of area and labels for an alert from the config flow during
-  creation or editing.
+- Setting an alert's area and labels in its configuration form, when it's created
+  or edited, with the registry as where they live; and for generators, labels and
+  a fixed area or the target's area (§11.6).
 
 ### Phase 14 — Converter utilities
 
