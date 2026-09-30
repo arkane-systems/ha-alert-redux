@@ -24,7 +24,13 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-None.
+- **The logbook shows an ending while HA was down** (1.0.0). Set up just
+  before the restart that installs the build with the fix. Create a temporary
+  manual alert, "Test Manual Ending", ending by itself after 1 minute, sending
+  to Quiet. Fire it, then request the restart 20 to 25 seconds later. Expect it
+  back `idle` with `last_ended` at its old `event_expires`, the done
+  notification on Quiet, and in its logbook an "Idle" row after the "Active"
+  one, from just after Alert Redux set up. Delete the alert afterwards.
 
 ## Done
 
@@ -33,9 +39,9 @@ None.
   requested at 15:11:03, and Alert Redux set up at 15:11:48.
   - *Duration ran out while HA was down:* Test Manual Ending (1 minute) came
     back `idle` with `last_ended` 15:11:42.148, its old `event_expires`, and the
-    done notification arrived on Quiet. Passed. Its logbook shows no row for the
-    end: HA's logbook drops an entity's first state after a restart, and `_ended`
-    isn't described (see §11.4).
+    done notification arrived on Quiet. Passed. Its logbook showed no row for the
+    end: HA's logbook drops an entity's first state after a restart, and it had
+    ended before that. Fixed for 1.0.0 (spec §15.1), with a check below.
   - *Manual alert firing across the restart:* Test Manual Long (15 minutes) came
     back `active` with the same `firing_since`, `event_expires`, `fire_data`, and
     `next_reminder`. Its reminder arrived on Quiet at 15:20:42 as planned before

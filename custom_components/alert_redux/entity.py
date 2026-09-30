@@ -568,20 +568,24 @@ class AlertEntity(Entity):
         if self._runtime.state is AlertState.ACTIVE and not self._runtime.next_reminder:
             # E.g. an alert that was firing before reminders existed.
             self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
+        expired = False
         if self._has_duration and self._runtime.firing:
             if self._runtime.event_expires is None:
                 # Shouldn't happen, but a firing must always run out.
                 self._runtime.event_expires = (
                     self._runtime.last_fired or dt_util.utcnow()
                 ) + self._duration
+            expired = self._runtime.event_expires <= dt_util.utcnow()
+        if expired:
             # A duration that ran out while Home Assistant was down ends now, with
-            # the done notification (spec §15.1).
-            now = dt_util.utcnow()
-            if self._runtime.event_expires <= now:
-                self._async_expired(now)
-        # A reminder that fell due, or a snooze that ran out, while Home Assistant
-        # was down is dealt with now (spec §15.1).
-        self._async_update_timers()
+            # the done notification (spec §15.1): on its timer, just after the
+            # first state is written, so the logbook shows an ordinary ending
+            # (§11.4). Its other deadlines wait: ending clears or resets them.
+            self._expiry_timer.at(self.hass, self._runtime.event_expires)
+        else:
+            # A reminder that fell due, or a snooze that ran out, while Home
+            # Assistant was down is dealt with now (spec §15.1).
+            self._async_update_timers()
         self._persist()
         if record is None:
             self._fire_event(EVENT_CREATED, None)

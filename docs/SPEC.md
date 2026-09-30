@@ -1210,7 +1210,11 @@ triggers:
   | `_created`, `_deleted` | "Created", "Deleted" |
 
   An end's reason is still clear without `_ended`: an end for lack of data
-  follows its `_no_data` row, and a dismissal's state row carries the user. The
+  follows its `_no_data` row, and a dismissal's state row carries the user.
+  [Decided, 1.0.0] HA's logbook leaves out an entity's first state after a
+  restart, so a change made while restoring would have no row. A duration that
+  ran out while HA was down therefore ends just after the first state is written
+  (§15.1). The
   messages are English, like the cards (§13.1).
 - [Decided, 0.11.1] The messages are **capitalised**, like the translated
   states on the state rows beside them ("Acknowledged", "Idle"), so the
@@ -1843,6 +1847,13 @@ After a restart:
 - An alert that was firing and still is resumes quietly: **no** new on notification
   [Decided, R16 response].
 - An alert that was firing and no longer is ends normally, with a done notification.
+  [Decided, 1.0.0] When a firing's duration ran out during the restart, it ends
+  just **after** the alert's first state is written, not before. HA's logbook
+  leaves out an entity's first state after a restart, so an alert already idle
+  by then showed "active" as its last row. Ending afterwards makes an ordinary
+  active → idle row (§11.4). Its other deadlines wait for the ending, which
+  clears or resets them, so a reminder that fell due before it ran out isn't
+  sent just ahead of the done notification.
 - A snooze or suspension that ran out during the restart ends as soon as HA is back.
 - [Decided, phase 4] A reminder that fell due during the restart is sent as soon as
   HA is back. It isn't an on notification, so it doesn't break "resumes quietly".
@@ -2122,6 +2133,7 @@ Decisions with their reasons, in the order they were made.
 | One optional snooze button per alert, "Snooze *name*", for the alert's snooze button duration | One utterance; more durations would multiply entities, and a number entity needs two utterances and bare seconds; the name stays put when the duration changes [§14.2]. |
 | Proxies are exposed to Alexa and Google once, and hidden from Assist once | Opting in means wanting them there; in Assist they'd clash with the alerts' own names [§14.2]. |
 | The minimum HA version stays 2025.3 for phase 12 | Nothing in phase 12 needs a newer one; older paths are tested locally instead [§18, Q14]. |
+| A duration that ran out while HA was down ends just after the first state is written | HA's logbook leaves out an entity's first state after a restart, so an ending before it had no row [§11.4, §15.1]. |
 
 ## 20. Phase plan
 

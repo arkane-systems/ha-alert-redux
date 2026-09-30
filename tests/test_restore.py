@@ -6,7 +6,8 @@ from datetime import timedelta
 from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import CoreState, HomeAssistant
+from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.core import CoreState, Event, EventStateChangedData, HomeAssistant
 from pytest_homeassistant_custom_component.common import (
     async_capture_events,
     async_fire_time_changed,
@@ -305,12 +306,70 @@ async def test_event_alert_expired_during_restart(
     await hass.async_block_till_done()
     freezer.tick(timedelta(minutes=15))
     ended = async_capture_events(hass, EVENT_ENDED)
+    changes = async_capture_events(hass, EVENT_STATE_CHANGED)
     assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass)
     await hass.async_block_till_done()
 
     assert hass.states.get(DOORBELL).state == "idle"
     assert [event.data["reason"] for event in ended] == ["resolved"]
     assert calls[-1].data["message"] == "Doorbell stopped firing after 10 minutes."
+    # It ends after its first state is written, so the logbook, which leaves out
+    # an entity's first state after a restart, shows the ending (§11.4).
+    assert _transitions(changes, DOORBELL)[-1] == ("active", "idle")
+
+
+async def test_manual_alert_expired_during_restart(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A self-ending manual alert that ran out while HA was down just ends.
+
+    A reminder that fell due before it ran out isn't sent: the ending comes
+    first (spec §15.1).
+    """
+    calls = async_mock_service(hass, "notify", "phone")
+    entry = await setup_alerts(
+        alert_subentry(
+            "Back Door Open",
+            ends_by_itself=True,
+            duration={"hours": 0, "minutes": 30, "seconds": 0},
+        ),
+        group_subentry("Phones", "phones", actions=[{"action": "notify.phone"}]),
+        options={"default_groups": ["phones"]},
+    )
+    await hass.services.async_call(DOMAIN, "fire", {"entity_id": DOOR}, blocking=True)
+    assert hass.states.get(DOOR).attributes["next_reminder"] is not None
+    sent = len(calls)
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=45))
+    changes = async_capture_events(hass, EVENT_STATE_CHANGED)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert hass.states.get(DOOR).state == "idle"
+    assert [call.data["message"] for call in calls[sent:]] == [
+        "Back Door Open stopped firing after 30 minutes."
+    ]
+    assert _transitions(changes, DOOR)[-1] == ("active", "idle")
+
+
+def _transitions(
+    events: list[Event[EventStateChangedData]], entity_id: str
+) -> list[tuple[str | None, str | None]]:
+    """Return an entity's state changes as (old, new) state pairs."""
+    return [
+        (
+            (old := event.data["old_state"]) and old.state,
+            (new := event.data["new_state"]) and new.state,
+        )
+        for event in events
+        if event.data["entity_id"] == entity_id
+    ]
 
 
 async def test_snooze_resumes(
