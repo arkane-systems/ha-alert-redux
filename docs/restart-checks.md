@@ -17,35 +17,32 @@ Test alerts are the ones named "Test …", and send only to the Quiet group.
 **Timing on this instance:** the old process keeps running for at least 20
 seconds after a restart is requested: in 7a and 7b it still handled deadlines 10
 and 20 seconds after the request. Set-up of Alert Redux in the new process came
-50 seconds after the request in 9a and phase 8, 60 in 7b, 56 in 7a, and 25 in
-6b. So the real downtime is roughly 25 to 50 seconds after the request, and a
-deadline meant to fall *during* it should be about 35 to 40 seconds after: e.g.
+50 seconds after the request in 9a and phase 8, 60 in 7b, 56 in 7a, 45 in
+the 1.0.0 checks, and 25 in 6b. So the real downtime is roughly 25 to 50
+seconds after the request, and a deadline meant to fall *during* it should be about 35 to 40 seconds after: e.g.
 snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-The 1.0.0 entity refactor moved the expiry-on-restore code into the shared base
-class, so these check it for both kinds that use it. Set them up just before the
-restart that installs the next build. Test Alert and Test Event Alert are
-permanent (see CLAUDE.md): use them, but leave their settings as they are.
-
-- **A self-ending manual alert's duration runs out while HA is down** (1.0.0).
-  Create a temporary manual alert, "Test Manual Ending", ending by itself after
-  1 minute, sending to Quiet. Fire it with `alert_redux.fire`, then request the
-  restart 20 to 25 seconds later. Expect it back `idle`, with `last_ended` at its
-  old `event_expires` (not the set-up time), a `_ended` event with reason
-  `resolved`, and the done notification on Quiet. Delete the alert afterwards.
-- **A self-ending manual alert still firing across the restart** (1.0.0). A
-  second temporary manual alert, "Test Manual Long", ending by itself after 15
-  minutes, fired just before the restart. Expect it back `active` with the same
-  `firing_since` and `event_expires`, no new on notification, and then `idle` at
-  that expiry. Delete it afterwards.
-- **An event alert still firing across the restart** (1.0.0). Press
-  `input_button.test_event_alert` just before the restart (5-minute duration).
-  Expect Test Event Alert back `active` with the same `event_expires` and
-  `trigger_data`, then `idle` at that expiry.
+None.
 
 ## Done
+
+- **2026-09-30, restart for other updates. The expiry-on-restore code after the
+  1.0.0 refactor** (1.0.0). All three fired at 15:10:42 UTC; the restart was
+  requested at 15:11:03, and Alert Redux set up at 15:11:48.
+  - *Duration ran out while HA was down:* Test Manual Ending (1 minute) came
+    back `idle` with `last_ended` 15:11:42.148, its old `event_expires`, and the
+    done notification arrived on Quiet. Passed. Its logbook shows no row for the
+    end: HA's logbook drops an entity's first state after a restart, and `_ended`
+    isn't described (see §11.4).
+  - *Manual alert firing across the restart:* Test Manual Long (15 minutes) came
+    back `active` with the same `firing_since`, `event_expires`, `fire_data`, and
+    `next_reminder`. Its reminder arrived on Quiet at 15:20:42 as planned before
+    the restart, and it ended at 15:25:42. Passed.
+  - *Event alert firing across the restart:* Test Event Alert came back `active`
+    with the same `event_expires` and `trigger_data`, and ended at 15:15:42.
+    Passed.
 
 - **2026-09-28, 1.0.0 refactor install restart.** No checks were pending. All
   26 alerts, of every kind and including generated ones, came back `idle` with
