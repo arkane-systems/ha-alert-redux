@@ -227,6 +227,12 @@ class AlertReduxOptionsFlow(OptionsFlow):
             except ValueError:
                 errors["base"] = "invalid_throttle"
             if not errors:
+                # The supersession and quiet-hours sections are flattened into
+                # the top level on purpose, as each alert's notifications section
+                # is: the sections only group the form, and Settings.from_options
+                # reads those keys from the top level. The event durations are
+                # stored nested, as the section's own dict; both layouts are
+                # established, and changing either would need a migration.
                 return self.async_create_entry(
                     data={
                         CONF_NO_DATA_GRACE: user_input[CONF_NO_DATA_GRACE],
