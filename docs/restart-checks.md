@@ -24,15 +24,17 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-- **The logbook shows an ending while HA was down** (1.0.0). Set up just
-  before the restart that installs the build with the fix. Create a temporary
-  manual alert, "Test Manual Ending", ending by itself after 1 minute, sending
-  to Quiet. Fire it, then request the restart 20 to 25 seconds later. Expect it
-  back `idle` with `last_ended` at its old `event_expires`, the done
-  notification on Quiet, and in its logbook an "Idle" row after the "Active"
-  one, from just after Alert Redux set up. Delete the alert afterwards.
+None.
 
 ## Done
+
+- **2026-09-30, install restart for the logbook fix. The logbook shows an
+  ending while HA was down** (1.0.0). Test Manual Ending (1 minute) was fired
+  at 15:37:59 UTC and the restart requested at 15:38:21; Alert Redux set up at
+  15:39:09. It came back `idle` with `last_ended` 15:38:59.405, its old
+  `event_expires`, and its logbook now has an "Idle" row at 15:39:09 after the
+  "Active" one. The done notification arrived on Quiet. All other alerts came
+  back as before. Passed.
 
 - **2026-09-30, restart for other updates. The expiry-on-restore code after the
   1.0.0 refactor** (1.0.0). All three fired at 15:10:42 UTC; the restart was
