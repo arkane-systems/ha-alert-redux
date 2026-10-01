@@ -253,7 +253,7 @@
         },
         "reconfigure_manual": {
           "title": "Edit alert",
-          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
+          "description": "Alerts that refer to this one: {referrers}",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "priority": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::priority%]",
@@ -1765,7 +1765,7 @@
         },
         "reconfigure_state": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::state::data::name_template%]",
@@ -1859,7 +1859,7 @@
         },
         "reconfigure_on_off": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::on_off::data::name_template%]",
@@ -1959,7 +1959,7 @@
         },
         "reconfigure_threshold": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::threshold::data::name_template%]",
@@ -2061,7 +2061,7 @@
         },
         "reconfigure_template": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::template::data::name_template%]",
@@ -2155,7 +2155,7 @@
         },
         "reconfigure_alert_state": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "[%key:component::alert_redux::config_subentries::alert::step::state::data::name%]",
             "name_template": "[%key:component::alert_redux::config_subentries::generator::step::alert_state::data::name_template%]",

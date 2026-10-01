@@ -1253,7 +1253,18 @@ def _referrers(hass: HomeAssistant, entry: ConfigEntry, subentry_id: str) -> str
             or own in relationship_targets(other.data.get(CONF_SUPERSEDES, []))
         )
     )
-    return ", ".join(names) if names else "none"
+    return _referrers_text(
+        names, "Deleting this alert leaves their references to it broken."
+    )
+
+
+def _referrers_text(names: list[str], warning: str) -> str:
+    """Return an edit form's referrers: "none.", or their names and a warning.
+
+    Translations can't be conditional, so the warning about deleting, which
+    only makes sense when there are referrers, comes with their names.
+    """
+    return f"{', '.join(names)}. {warning}" if names else "none."
 
 
 def _alert_entity_id(hass: HomeAssistant, subentry_id: str) -> str | None:
@@ -1858,7 +1869,7 @@ def _generator_referrers(
             [],
         )
     )
-    return ", ".join(names) if names else "none"
+    return _referrers_text(names, "Deleting it leaves their references broken.")
 
 
 def _generator_targets(hass: HomeAssistant, subentry_id: str) -> str:

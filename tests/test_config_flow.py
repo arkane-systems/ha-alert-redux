@@ -1545,7 +1545,7 @@ async def test_reconfigure_generator(
     assert result["step_id"] == "reconfigure_state"
     assert result["description_placeholders"] == {
         "targets": "lock.front_door",
-        "referrers": "none",
+        "referrers": "none.",
     }
     targets = result["data_schema"].schema["targets"].schema.schema
     assert _suggested(targets) == {"domains": ["lock"]}
@@ -1658,7 +1658,9 @@ async def test_generator_supersession(
         (entry.entry_id, SUBENTRY_GENERATOR),
         context={"source": SOURCE_RECONFIGURE, "subentry_id": "open"},
     )
-    assert result["description_placeholders"]["referrers"] == "Left Open"
+    assert result["description_placeholders"]["referrers"] == (
+        "Left Open. Deleting it leaves their references broken."
+    )
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
         {
@@ -1722,7 +1724,9 @@ async def test_fixed_alert_cycle_through_generator(
         (entry.entry_id, SUBENTRY_ALERT),
         context={"source": SOURCE_RECONFIGURE, "subentry_id": "insecure"},
     )
-    assert result["description_placeholders"] == {"referrers": "Open"}
+    assert result["description_placeholders"] == {
+        "referrers": "Open. Deleting this alert leaves their references to it broken."
+    }
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
         {
