@@ -3,14 +3,15 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.11.1). Every alert kind works: manual, state,
-> on/off, threshold, template, alert state, trigger, and bus event alerts. The card
-> shows, acknowledges, and snoozes them, they send on, reminder, and done
-> notifications (with throttling, quiet hours, and buttons), the admin card
-> disables and suspends them, alerts can supersede each other, generators make
-> alerts for every matching entity, and summary sensors and the Activity card make
-> them easy to build on.
-> The rest arrives in later releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
+> **Status:** 1.0.0, the first stable release. Every alert kind works: manual
+> (optionally ending by itself), state, on/off, threshold, template, alert state,
+> trigger, and bus event alerts. The card shows, acknowledges, and snoozes them,
+> they send on, reminder, and done notifications (with throttling, quiet hours,
+> and buttons), the admin card disables and suspends them, alerts can supersede
+> each other, generators make alerts for every matching entity, summary sensors
+> and the Activity card make them easy to build on, and an agent skill lets AI
+> agents set them up for you. Voice control and more card features arrive in 1.x
+> releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
 > The design is in [docs/SPEC.md](docs/SPEC.md).
 
 ![The Alert Redux card, in Home Assistant's default light and dark themes](assets/screenshots/hero.png)
