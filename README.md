@@ -1,7 +1,8 @@
 # ![icon](assets/alert-redux-32px.png) Alert Redux
 
 A replacement alert system for Home Assistant, intended to take over from the
-now-deprecated built-in `alert` integration.
+built-in `alert` integration, which is
+[effectively deprecated](https://community.home-assistant.io/t/wth-are-alerts-not-configurable-through-the-ui/804195).
 
 > **Status:** 1.0.0, the first stable release. Every alert kind works: manual
 > (optionally ending by itself), state, on/off, threshold, template, alert state,
