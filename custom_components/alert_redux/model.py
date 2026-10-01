@@ -400,7 +400,8 @@ class AlertRuntime:
     delay_off_until: datetime | None = None
     # When the next reminder is due, while firing and unacknowledged (spec §9.6).
     next_reminder: datetime | None = None
-    # Event alerts: when the current firing's duration runs out (spec §4.2).
+    # When the current firing's duration runs out, for event alerts and for manual
+    # alerts that end by themselves (spec §4.2, §4.3).
     event_expires: datetime | None = None
     # On/off alerts' edges (spec §4.1). A template-only side counts only a
     # false-to-true change: it's armed once it has been seen false. Unknown counts
@@ -460,9 +461,11 @@ class AlertRuntime:
     def fire_event(
         self, now: datetime, data: dict[str, Any] | None, duration: timedelta
     ) -> Transition:
-        """Fire an event alert, or fire it again, running its duration from now.
+        """Fire an alert with a duration, or fire it again, running it from now.
 
-        Firing again restarts the duration and keeps the acknowledgement (§4.2).
+        Used by event alerts, and by manual alerts that end by themselves (spec
+        §4.2, §4.3). Firing again restarts the duration and keeps the
+        acknowledgement.
         """
         transition = self.fire(now, data)
         self.event_expires = now + duration

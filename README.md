@@ -3,14 +3,15 @@
 A replacement alert system for Home Assistant, intended to take over from the
 now-deprecated built-in `alert` integration.
 
-> **Status:** early development (0.11.1). Every alert kind works: manual, state,
-> on/off, threshold, template, alert state, trigger, and bus event alerts. The card
-> shows, acknowledges, and snoozes them, they send on, reminder, and done
-> notifications (with throttling, quiet hours, and buttons), the admin card
-> disables and suspends them, alerts can supersede each other, generators make
-> alerts for every matching entity, and summary sensors and the Activity card make
-> them easy to build on.
-> The rest arrives in later releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
+> **Status:** 1.0.0, the first stable release. Every alert kind works: manual
+> (optionally ending by itself), state, on/off, threshold, template, alert state,
+> trigger, and bus event alerts. The card shows, acknowledges, and snoozes them,
+> they send on, reminder, and done notifications (with throttling, quiet hours,
+> and buttons), the admin card disables and suspends them, alerts can supersede
+> each other, generators make alerts for every matching entity, summary sensors
+> and the Activity card make them easy to build on, and an agent skill lets AI
+> agents set them up for you. Voice control and more card features arrive in 1.x
+> releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
 > The design is in [docs/SPEC.md](docs/SPEC.md).
 
 ![The Alert Redux card, in Home Assistant's default light and dark themes](assets/screenshots/hero.png)
@@ -68,6 +69,14 @@ they update as the entities they read change.
 
 A manual alert is fired and dismissed by actions, e.g. from your automations. You can
 choose whether the card should offer to dismiss it.
+
+A manual alert can also **end by itself** after a duration, like an event alert:
+turn on **End by itself after**, and optionally set the duration (otherwise it's
+its priority's default event duration; see [Global defaults](#global-defaults)).
+Firing it again while it's firing restarts the duration and adds to the fire
+count, keeping the acknowledgement; the dismiss action still ends it early. The
+card shows its progress bar, and it only sends reminders if its duration outlasts
+the first reminder interval.
 
 ### Condition alerts: state, on/off, threshold, and template
 
@@ -136,6 +145,32 @@ the duration and adds to the fire count, but keeps the acknowledgement. An event
 alert only sends reminders if its duration is longer than the first reminder
 interval. Triggers start once Home Assistant has started (and after the startup
 delay), so entities loading at startup don't fire them.
+
+### Supersession
+
+An alert can **supersede** other alerts: while it's firing, they don't send on or
+reminder notifications, since it says all they would. The classic pair is *Back
+Door Open*, a state alert, and *Back Door Left Open*, the same with a 10-minute
+delay, which supersedes it: you hear that the door opened, and then that it was
+left open, without reminders about it merely being open in between. Add the
+alerts it supersedes in an alert's **Supersession** section.
+
+- A superseded alert keeps its own state, firing or not; its `superseded_by`
+  attribute lists the firing alerts superseding it, and on the card it folds under
+  the alert that supersedes it. Supersession is transitive: if A supersedes B and B
+  supersedes C, A supersedes C. The form refuses cycles.
+- When an alert that something supersedes starts firing, its on notification
+  waits a moment (the **supersession debounce**, half a second by default) in case
+  an alert superseding it fires too. Its done notification is dropped only if the
+  two stop firing together (within the **done window**, 5 seconds by default).
+- **Propagation:** each relationship can pass on acknowledgements. When you
+  acknowledge the superseded alert, the superseding one can be **acknowledged**
+  too, or **snoozed** for a while, or left alone (the default). If it isn't firing
+  yet, it's *pre-acknowledged*: it starts acknowledged (or snoozed) if it fires
+  while the superseded alert stays acknowledged. Its `pre_acked_by` and
+  `pre_snoozed_until` attributes show this. With *acknowledge*, acknowledging
+  *Back Door Open* also covers *Back Door Left Open*; with *snooze* for an hour,
+  *Left Open* still speaks up if you take that long.
 
 ### Generators
 
@@ -343,8 +378,8 @@ group**. A group can hold any mix of:
   `group: "{{ priority }}"`;
 - a **persistent notification**.
 
-(Groups also have a **loud** flag, for notifiers that make a noise. It's stored now,
-for quiet hours in a later release.)
+Turn on a group's **loud** flag if its notifiers make a noise, such as speaker
+announcements: quiet hours apply to loud groups (see [Quiet hours](#quiet-hours)).
 
 The notification's title is the alert's name. An alert sends:
 
@@ -378,6 +413,40 @@ because it was disabled.
   its on message again, with the new `fire_count`, unless it has been acknowledged.
 - **Restarts:** an alert that was firing resumes without a new on notification. A
   reminder that fell due while Home Assistant was down is sent when it's back.
+
+### Throttling
+
+An alert that flaps can be **throttled**: at most so many on notifications in any
+window of so many minutes. The one that reaches the limit is marked "[Throttling
+starts]", and later on and done notifications are held. Once the rate drops, one
+summary says what happened, e.g. "[Throttling ends] Fired 7× while throttled, most
+recently 12 minutes ago; stopped firing 3 minutes ago after 40 seconds." The alert's
+state isn't affected, and reminders aren't throttled; for flicker in the state
+itself, use a delay before ending. Each alert uses the default throttle (none
+unless set in the options), its own, or none (`throttled_since` shows when it's in
+force).
+
+### Quiet hours
+
+**Quiet hours** hold back notifications to **loud** groups for less important
+alerts while a quiet-hours entity is on: a Schedule helper, say, or an
+`input_boolean` your automations control. Set it in the options' **Quiet hours**
+section, with a priority **threshold**: quiet hours apply to alerts below it
+(Warning by default, so Notice and Informational alerts are held, and Warning and
+above always get through). A loud group can have its own quiet-hours entity and
+threshold, and quiet groups aren't affected.
+
+Each loud group either **holds** its notifications until quiet hours end (the
+default), or **softens** them: sends them anyway, with each legacy action's
+**quiet-hours data** in place of its data (a silent notification channel, say).
+Members with no quiet-hours data hold.
+
+When quiet hours end, each alert that's still firing and unacknowledged gets one
+reminder, with how long it's been firing, and the alerts that stopped firing
+during the night are listed in one **Quiet hours summary** per group, with when
+each started and stopped. A restart during quiet hours doesn't let notifications
+through: loud groups hold until Home Assistant has started and can tell. A
+quiet-hours entity that doesn't exist is raised as a Repairs issue.
 
 ### Replacing and clearing
 
@@ -443,7 +512,13 @@ The integration's **Configure** button sets:
   this long;
 - the **Snooze button duration** (1 hour by default) for notifications' Snooze
   Alert buttons;
-- the default event alert duration for each priority.
+- the default **throttle** (none by default);
+- the default event alert duration for each priority, also used by manual alerts
+  that end by themselves;
+- **quiet hours**: the quiet-hours entity, and the priority threshold below which
+  they apply;
+- **supersession**: the supersession debounce (0.5 seconds) and the done window
+  (5 seconds).
 
 ## Lovelace card
 
@@ -508,6 +583,27 @@ upgraded card isn't used until you refresh the page. Until then, a dashboard may
 a new card version needs a refresh, and a card that's older than the integration
 offers a **Reload** button. In the companion app, pull down to reload, or reset
 the frontend cache from the app's own settings.
+
+## Using Alert Redux from an AI agent
+
+An agent with access to your Home Assistant (for example through
+[HA-MCP](https://github.com/homeassistant-ai/ha-mcp)) can set up and manage
+alerts for you. This repository includes an **agent skill** that teaches it how:
+the configuration forms and their fields, the actions and events, building
+automations and dashboards on alerts, troubleshooting, and good habits such as
+testing quietly and checking what refers to an alert before deleting it.
+
+In Claude Code, add this repository as a plugin marketplace and install the
+plugin:
+
+```text
+/plugin marketplace add arkane-systems/ha-alert-redux
+/plugin install alert-redux@alert-redux
+```
+
+For other agents that support [Agent Skills](https://agentskills.io), copy the
+[`plugins/alert-redux/skills/alert-redux`](plugins/alert-redux/skills/alert-redux)
+folder into the agent's skills directory.
 
 ## Acknowledgements
 

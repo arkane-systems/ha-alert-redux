@@ -40,6 +40,8 @@
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
             "user_dismissable": "Dismissable from the card",
+            "ends_by_itself": "End by itself after",
+            "duration": "Duration",
             "subject_entity": "Subject entity"
           },
           "data_description": {
@@ -48,6 +50,8 @@
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
+            "ends_by_itself": "If on, the alert stops firing by itself after its duration, like an event alert. It can still be dismissed early.",
+            "duration": "How long the alert keeps firing after being fired. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           },
           "sections": {
@@ -249,13 +253,15 @@
         },
         "reconfigure_manual": {
           "title": "Edit alert",
-          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
+          "description": "Alerts that refer to this one: {referrers}",
           "data": {
             "name": "Name",
             "priority": "Priority",
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
             "user_dismissable": "Dismissable from the card",
+            "ends_by_itself": "End by itself after",
+            "duration": "Duration",
             "subject_entity": "Subject entity"
           },
           "data_description": {
@@ -264,6 +270,8 @@
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
+            "ends_by_itself": "If on, the alert stops firing by itself after its duration, like an event alert. It can still be dismissed early.",
+            "duration": "How long the alert keeps firing after being fired. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           },
           "sections": {
@@ -315,7 +323,7 @@
         },
         "reconfigure_state": {
           "title": "Edit alert",
-          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
+          "description": "Alerts that refer to this one: {referrers}",
           "data": {
             "name": "Name",
             "priority": "Priority",
@@ -391,7 +399,7 @@
         },
         "reconfigure_template": {
           "title": "Edit alert",
-          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
+          "description": "Alerts that refer to this one: {referrers}",
           "data": {
             "name": "Name",
             "priority": "Priority",
@@ -607,7 +615,7 @@
         },
         "reconfigure_trigger": {
           "title": "Edit alert",
-          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
+          "description": "Alerts that refer to this one: {referrers}",
           "data": {
             "name": "Name",
             "priority": "Priority",
@@ -677,7 +685,7 @@
         },
         "reconfigure_event": {
           "title": "Edit alert",
-          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
+          "description": "Alerts that refer to this one: {referrers}",
           "data": {
             "name": "Name",
             "priority": "Priority",
@@ -913,7 +921,7 @@
         },
         "reconfigure_on_off": {
           "title": "Edit alert",
-          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
+          "description": "Alerts that refer to this one: {referrers}",
           "data": {
             "name": "Name",
             "priority": "Priority",
@@ -993,7 +1001,7 @@
         },
         "reconfigure_threshold": {
           "title": "Edit alert",
-          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
+          "description": "Alerts that refer to this one: {referrers}",
           "data": {
             "name": "Name",
             "priority": "Priority",
@@ -1153,7 +1161,7 @@
         },
         "reconfigure_alert_state": {
           "title": "Edit alert",
-          "description": "Alerts that refer to this one: {referrers}. Deleting this alert leaves their references to it broken.",
+          "description": "Alerts that refer to this one: {referrers}",
           "data": {
             "name": "Name",
             "priority": "Priority",
@@ -1757,7 +1765,7 @@
         },
         "reconfigure_state": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",
@@ -1851,7 +1859,7 @@
         },
         "reconfigure_on_off": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",
@@ -1951,7 +1959,7 @@
         },
         "reconfigure_threshold": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",
@@ -2053,7 +2061,7 @@
         },
         "reconfigure_template": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",
@@ -2147,7 +2155,7 @@
         },
         "reconfigure_alert_state": {
           "title": "Edit generator",
-          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}. Deleting it leaves their references broken.\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
+          "description": "Current targets: {targets}.\n\nGenerators and alerts that refer to this generator or its alerts: {referrers}\n\nThe generator's alerts are updated in place; alerts for entities that stop matching are removed.",
           "data": {
             "name": "Name",
             "name_template": "Alert name template",

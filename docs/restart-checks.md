@@ -17,9 +17,9 @@ Test alerts are the ones named "Test …", and send only to the Quiet group.
 **Timing on this instance:** the old process keeps running for at least 20
 seconds after a restart is requested: in 7a and 7b it still handled deadlines 10
 and 20 seconds after the request. Set-up of Alert Redux in the new process came
-50 seconds after the request in 9a and phase 8, 60 in 7b, 56 in 7a, and 25 in
-6b. So the real downtime is roughly 25 to 50 seconds after the request, and a
-deadline meant to fall *during* it should be about 35 to 40 seconds after: e.g.
+50 seconds after the request in 9a and phase 8, 60 in 7b, 56 in 7a, 45 in
+the 1.0.0 checks, and 25 in 6b. So the real downtime is roughly 25 to 50
+seconds after the request, and a deadline meant to fall *during* it should be about 35 to 40 seconds after: e.g.
 snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
@@ -27,6 +27,34 @@ seconds after the request, and set-up came 11 seconds after them.
 None.
 
 ## Done
+
+- **2026-09-30, install restart for the logbook fix. The logbook shows an
+  ending while HA was down** (1.0.0). Test Manual Ending (1 minute) was fired
+  at 15:37:59 UTC and the restart requested at 15:38:21; Alert Redux set up at
+  15:39:09. It came back `idle` with `last_ended` 15:38:59.405, its old
+  `event_expires`, and its logbook now has an "Idle" row at 15:39:09 after the
+  "Active" one. The done notification arrived on Quiet. All other alerts came
+  back as before. Passed.
+
+- **2026-09-30, restart for other updates. The expiry-on-restore code after the
+  1.0.0 refactor** (1.0.0). All three fired at 15:10:42 UTC; the restart was
+  requested at 15:11:03, and Alert Redux set up at 15:11:48.
+  - *Duration ran out while HA was down:* Test Manual Ending (1 minute) came
+    back `idle` with `last_ended` 15:11:42.148, its old `event_expires`, and the
+    done notification arrived on Quiet. Passed. Its logbook showed no row for the
+    end: HA's logbook drops an entity's first state after a restart, and it had
+    ended before that. Fixed for 1.0.0 (spec §15.1), with a check below.
+  - *Manual alert firing across the restart:* Test Manual Long (15 minutes) came
+    back `active` with the same `firing_since`, `event_expires`, `fire_data`, and
+    `next_reminder`. Its reminder arrived on Quiet at 15:20:42 as planned before
+    the restart, and it ended at 15:25:42. Passed.
+  - *Event alert firing across the restart:* Test Event Alert came back `active`
+    with the same `event_expires` and `trigger_data`, and ended at 15:15:42.
+    Passed.
+
+- **2026-09-28, 1.0.0 refactor install restart.** No checks were pending. All
+  26 alerts, of every kind and including generated ones, came back `idle` with
+  their attributes as before, and nothing from Alert Redux in the log. Passed.
 
 - **2026-09-26, v0.11.0 install restart. Generated supersession across the
   restart** (phase 11b). Test Switch Still On's alert came back `ack`, firing

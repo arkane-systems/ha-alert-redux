@@ -157,7 +157,7 @@ no ad-hoc alerts [Decided, R4].
   dismiss any manual alert. The setting is exposed as the `user_dismissable`
   attribute. [Decided] It defaults to *off*: a dismiss button is then something you
   opt into deliberately, and it's less likely to be turned on by accident.
-- [Decided; 1.1.0] **End by itself after.** A manual alert can optionally end by
+- [Decided; 1.0.0] **End by itself after.** A manual alert can optionally end by
   itself, like an event alert (§4.2): fired by `alert_redux.fire`, it then stays
   firing for a duration. This fills the gap between manual alerts, which stay until
   dismissed, and event alerts, which can't be fired by action. (Today that needs a
@@ -985,6 +985,7 @@ keyboards could be added later. Other members leave the buttons out.
   notification on the phone, which was confusing next to our button. They're
   left alone, since people may want them, and ours is called **Snooze Alert**
   instead, so the two are told apart.
+- [Decided; phase 13] Custom buttons also show **on the main card** (§13.1).
 
 ## 10. Acknowledgement queue
 
@@ -1209,7 +1210,11 @@ triggers:
   | `_created`, `_deleted` | "Created", "Deleted" |
 
   An end's reason is still clear without `_ended`: an end for lack of data
-  follows its `_no_data` row, and a dismissal's state row carries the user. The
+  follows its `_no_data` row, and a dismissal's state row carries the user.
+  [Decided, 1.0.0] HA's logbook leaves out an entity's first state after a
+  restart, so a change made while restoring would have no row. A duration that
+  ran out while HA was down therefore ends just after the first state is written
+  (§15.1). The
   messages are English, like the cards (§13.1).
 - [Decided, 0.11.1] The messages are **capitalised**, like the translated
   states on the state rows beside them ("Acknowledged", "Idle"), so the
@@ -1239,8 +1244,11 @@ up labels you want for other things, and areas stay free.
 - It's never forced back. If you remove it from an alert, it stays removed. If you
   delete the label, it isn't recreated.
 - Only alert entities get it. Summary sensors (§11.2), generator entities (§12.3), and
-  voice proxy switches (§14) don't. The summary sensors in particular change
+  voice proxies (§14.2) don't. The summary sensors in particular change
   constantly and would flood an Activity card.
+- [Decided, phase 12 design] By the same rule, each alert is **exposed to
+  Assist** once, and never forced back (§14.1). Its stored record remembers
+  that as well.
 - Built as release 0.3.1, between phases 3 and 4.
 
 **Why not a device.** A single virtual "alerts" device was tried first and rejected.
@@ -1250,6 +1258,32 @@ get it in their entity IDs too. There's no supported way to opt out. Every alert
 would have become "Alert Redux alerts Back Door Open", with an entity ID to match.
 One device per alert would keep the names, but brings back the problem the device
 was meant to solve.
+
+### 11.6 Area and labels
+
+[Decided; phase 13] An alert's area and labels can be set in its configuration
+form (§12.1), as well as on the entity's settings page as now. They're meant for
+card filters (§13.1) and anything else that selects entities by area or label.
+
+- **The entity registry is where they live.** The form is an editor for the
+  registry's values, not a second copy: editing an alert pre-fills them from the
+  registry, and saving writes them back. Changes made on the entity's settings
+  page stay, and the form shows them the next time it's opened.
+- **A new alert** has no entity while its form is open, so the values travel in
+  the subentry and are applied once, when the entity is first added, as the alerts
+  label is (§11.5). They're kept apart from the alert's configuration proper: a
+  change to them isn't a configuration change, and doesn't restart a condition
+  alert's pending delays.
+- **The alerts label** keeps its own rule (§11.5): given once, never forced back.
+  The form shows it like any other label, and removing it there removes it.
+- **Generators** (§12.3) [Decided, provisionally]: a generator's form sets labels
+  for all its alerts, and an area that's either a fixed area or **the same as the
+  target**: the target entity's area, or else its device's. The target's area is
+  the default. Each door's *Left Open* alert then lands in that door's area,
+  though the doors are all in different areas.
+- **Voice proxies** (§14.2) copy their alert's area and labels, and follow
+  changes to them however they're made, except for the alerts label, which
+  proxies don't get (§11.5).
 
 ## 12. Configuration
 
@@ -1474,7 +1508,34 @@ To make sure it gets fixed:
   [Decided, 0.11.1] The card's visual editor sets the durations too, as a list
   of numbers of minutes (HA's multiple text selector). It stores them as
   strings, which the card reads just as well as numbers.
-- Filters (hide acknowledged; per priority) [Decided, R22, late phase].
+- **Custom buttons** [Decided; phase 13]. An alert's custom buttons (§9.11)
+  show on its box too, beside the controls, so *Garage Door Left Open* has
+  *Close door* on the dashboard as well as on the phone. They're the same
+  buttons, defined once; there's no separate set for the card.
+  - Pressing one runs **only that button's configured action**, as the user who
+    pressed it, through a new `alert_redux.press_button` action (§16), keeping
+    to the rule that anything the card does is also an action (§14).
+  - The card doesn't have the phones' limit of three buttons.
+  - Settled when it's built: the layout; whether a button can be limited to the
+    card or to notifications; and what a **Require unlock** button (§9.11), which
+    only means something on iOS, does on a dashboard anyone can reach: ask for
+    confirmation, or not appear on the card at all.
+- **Filters** [Decided, R22; phase 13]. There are two sorts, set in different
+  places:
+  - **Scope, set once in the card's configuration** (and its visual editor):
+    which alerts the card is for at all, by **area** and by **label** (§11.6).
+    For example, a card on each room's page that shows only that room's alerts,
+    or a card on a network dashboard that shows only the alerts labelled
+    *Network*. As for generator targets (§12.3), an alert must match each of
+    the two that's set, and any one value within each. Alerts outside the scope
+    are left out of the whole card, including the no-data section and the
+    disabled count. How scope and supersession interact (a superseded alert in
+    scope under a root that isn't, or the other way round) is settled when it's
+    built.
+  - **View, changed on the card itself**: hide acknowledged alerts, and show
+    only some priorities. These are for changing while looking at the card, so
+    they're controls on the card; the card's configuration only sets their
+    starting values.
 - Styling follows [weather_alerts_card](https://github.com/seevee/weather_alerts_card)
   [Decided, N31].
 - **Priority colours** [Decided]. Used for the sub-cards, the admin card, and the
@@ -1539,6 +1600,12 @@ To make sure it gets fixed:
   highest-priority superseder and counting any others ("+1"), with all of them
   in the tooltip. An alert that isn't firing isn't marked, since supersession
   only affects its notifications.
+- [Decided; phase 13] **Paging.** The admin card lists every alert, firing or
+  not, so it gets long and hard to fit on a dashboard. A card option sets how
+  many alerts a page shows, with controls to move between pages; unset, it
+  shows them all, as now. Pages keep the grouping by priority. The main card
+  isn't paged: it shows only firing alerts, and hiding one on another page
+  would defeat it.
 - [Deferred, phase 13] On request (a click, not shown all the time), show a
   **copyable text summary** of an alert's settings. That's useful when setting up a
   matching alert.
@@ -1550,18 +1617,208 @@ To make sure it gets fixed:
 - **Assist:** the integration registers its own voice commands for acknowledging,
   removing an acknowledgement, and snoozing (with a duration), matching alerts by
   name. For example: "acknowledge the back door alert", "snooze the server room
-  alert for 30 minutes". No extra entities are needed.
+  alert for 30 minutes". No extra entities are needed. [Decided, phase 12
+  design] Also a read-only query, "what alerts are firing?". Designed in §14.1.
 - **Alexa (and other limited assistants):** each alert can optionally expose a
-  **proxy switch**: turning it on acknowledges the alert, and turning it off removes
-  the acknowledgement. Optionally, a second switch per alert, or a per-alert setting,
-  gives a fixed-duration snooze. The switches are opt-in per alert so that entities
-  aren't doubled across the board.
+  **proxy switch** and a snooze button, designed in §14.2. They're opt-in per
+  alert so that entities aren't doubled across the board. [Changed, phase 12
+  design] This originally said that turning the switch on acknowledges the alert;
+  it now follows the built-in `alert`, where the switch is on while the alert
+  needs attention, and turning it off acknowledges.
 - The design must allow for this from the start: anything the card can do must also
   be available as an action, and alerts need names that make sense when spoken.
 - [Decided, to verify] The limited-assistant solution must also work with **Google
   Assistant / Google Home**, not just Alexa. Proxy switches should work there too,
   through HA's Google Assistant integration (Nabu Casa or manual), but this needs
   checking when the phase is built.
+- Proxies take their alert's area and labels (§11.6).
+
+### 14.1 Assist
+
+[Decided, phase 12 design] Researched against HA 2026.9. It needs no new
+entities and no files in the user's configuration directory.
+
+**One implementation, several ways in.** Four intents carry the behaviour:
+`AlertReduxAcknowledge`, `AlertReduxUnacknowledge`, `AlertReduxSnooze`, and
+`AlertReduxListFiring`. They're registered (`intent.async_register`) when the
+config entry is set up, and removed when it's unloaded. Each has a description
+and a slot schema: an optional `name`, and for snoozing an optional `duration`.
+Each also has `platforms` set to `alert_redux`, so it's only offered where alerts
+are exposed. They're reached through:
+
+- **Sentence triggers.** Alert Redux attaches HA's own `conversation` trigger,
+  the one automations use, with its English sentences, once HA has started. The
+  built-in agent checks sentence triggers before its intents, and an Assist
+  pipeline checks them before **any** conversation agent, LLM agents included,
+  whatever "prefer handling commands locally" is set to. The trigger hands its
+  sentence to the matching intent, with the speaker's context (so acknowledgements
+  record who made them, R18), and returns the intent's reply as the spoken
+  response.
+- **LLM agents.** From HA 2026.6, integrations offer LLM tools through an
+  `llm.py` platform. Alert Redux offers the four intents as tools (named
+  `alert_redux__…`), when at least one alert is exposed, with a short prompt
+  saying that alerts are acknowledged and snoozed with these tools, not by turning
+  them off. Before 2026.6, HA offered every registered intent to LLM agents by
+  itself, so older versions get the same tools with no extra code.
+- **Custom sentences.** Anyone can write custom sentences for the intents by
+  name, in any language. That's how languages other than English are covered for
+  now; the README gives an example.
+
+**Acting.** The intents call the existing actions (`alert_redux.ack`, `unack`,
+`snooze`) with the speaker's context. §6 and §16 therefore apply unchanged: an
+unacknowledgeable alert's refusal becomes the spoken reply. An action that
+doesn't apply to the alert's state still does nothing (§16), but the intent
+checks the state first, so the reply says why ("… isn't firing").
+
+**Which alerts.** Voice acts only on alerts **exposed to Assist**, as HA does
+everywhere. Alerts aren't among the domains HA exposes by default, so Alert
+Redux exposes each alert to Assist (only to Assist, never to Alexa or Google)
+**once**, by the rule the alerts label follows (§11.5): a new alert when it's
+first added, and an existing alert the first time phase 12 runs. The alert's
+stored record remembers that it's been done. It's never forced back: an alert
+unexposed stays unexposed, and voice can't reach it.
+
+**Matching names.** A spoken name is matched against the exposed alerts' names
+and their entity aliases, ignoring case, punctuation, a leading "the", and a
+trailing "alert". An exact match wins; failing that, a name that contains the
+spoken words, if only one does. When several alerts match, the reply names them
+and asks which.
+
+**Commands with no name** ("acknowledge the alert") act only when exactly one
+alert could take the action: the one unacknowledged alert for acknowledging, the
+one acknowledged alert for removing it, and the one acknowledgeable firing alert
+for snoozing. Otherwise the reply names the candidates and asks for one. No voice
+command ever acts on more than one alert (principle 6).
+
+**Snooze duration.** Without a duration, the alert's Snooze button duration
+(§9.11) is used: its own, or else the **Snooze button duration** option. Spoken durations are digits or English number words with seconds,
+minutes, or hours, plus "an hour", "half an hour", and "an hour and a half". The
+LLM tool takes minutes. A duration that can't be understood snoozes nothing, and
+the reply asks how long.
+
+**The query** lists the firing alerts, highest priority first, saying which are
+acknowledged or snoozed (and until when). Past a number that's reasonable to
+hear, it ends "and N more". It doesn't list alerts that aren't exposed.
+
+**Replies** say what happened, by name: "Acknowledged Back Door Open", "Snoozed
+Back Door Open for 30 minutes", "Back Door Open isn't firing", "Server Room
+Overheated can't be acknowledged", "Which one: Back Door Open or Garage Door
+Open?".
+
+**Sentences** (English; the final wording is settled when it's built and tried
+by voice):
+
+- `(acknowledge|ack) [the] {alert}`
+- `(unacknowledge|un-acknowledge|unack) [the] {alert}`
+- `remove [the] acknowledgement (from|for|on) [the] {alert}`
+- `snooze [the] {alert} [for {duration}]`
+- `(acknowledge|unacknowledge|snooze) [the] alert`, the forms with no name
+- `(what|which) alerts are (firing|active|on)`, `are there any [active|firing]
+  alerts`, `list [the] [active|firing] alerts`
+
+In a sentence trigger, every `{…}` is a wildcard: it captures whatever was said,
+and Alert Redux does the matching.
+
+**Limitations.**
+
+- **Speech-to-Phrase**, HA's local speech-to-text, recognises only sentences it
+  was trained on, and can't be taught these wildcards by an integration. The
+  sentences need a general-purpose speech-to-text (Whisper, Home Assistant Cloud,
+  and so on). The README says so.
+- Text sent straight to an LLM agent (the `conversation.process` action, rather
+  than a pipeline) skips sentence triggers. The LLM tools still work.
+
+### 14.2 Proxies for Alexa and Google Home
+
+[Decided, phase 12 design] Researched against HA 2026.9's Alexa and Google
+Assistant integrations, and built on the user's earlier design for Alert2.
+
+**What the assistants can represent.** Neither supports a custom domain such as
+`alert_redux`, so proxies are unavoidable.
+
+- **Alexa:**
+  - A `switch` gets on/off, and **also** a contact sensor that reads open while
+    the switch is on, reported as it changes.
+  - A `button` becomes a scene.
+  - Binary sensors come through only as contact, motion, or presence sensors,
+    which would make a firing alert "open".
+  - A `number` is a bare range with no time units.
+  - Devices, scenes, and groups share one namespace, so two with the same name
+    confuse it.
+- **Google:**
+  - A `switch` gets on/off.
+  - A `button` becomes a scene.
+  - Binary sensors come through only as doors, windows, smoke detectors, and
+    the like.
+- Both work through Home Assistant Cloud (Nabu Casa) or the manual setups.
+  Gemini for Home reportedly supports what Google Assistant did.
+
+**Rejected alternatives.**
+
+- **A binary sensor for the state** would be asked "is X open?".
+- **Separate entities for firing and acknowledging** would each need a different
+  name, because of Alexa's shared namespace. That means longer utterances ("turn
+  off workshop door left open acknowledgement").
+- **Acknowledge and unacknowledge buttons** ("acknowledge workshop door left
+  open") read well, but add two more entities per alert.
+- **Snooze** by one button per duration multiplies entities. By a number entity
+  plus a button, it needs two utterances and a bare number of seconds.
+
+**The proxy switch.** An opt-in per alert. It emulates the built-in `alert`
+entity, which Alexa could already handle:
+
+| Alert state | Switch | Turning it off | Turning it on |
+|---|---|---|---|
+| `active` | on | acknowledges the alert | nothing changes |
+| `ack`, including snoozed | off | nothing changes | removes the acknowledgement, and any snooze |
+| `idle`, `no_data`, `disabled` | off | nothing changes | refused with an error |
+
+- "Is *X* on?" asks whether the alert needs attention.
+- When a snooze runs out, the switch comes back on.
+- An unacknowledgeable alert's switch still shows its state, but turning it off
+  is refused (§6.1).
+- On Alexa, the switch's contact sensor opens whenever the switch turns on. Alexa
+  routines can start from a contact sensor, though not from a switch, so a routine
+  can announce an alert as it fires, and again when a snooze runs out.
+- The acknowledgements go through the existing actions, with the assistant's
+  context, so §6 and §16 apply unchanged.
+
+**The snooze button.** A second opt-in per alert, called "Snooze *name*". It
+becomes a scene in both assistants. Pressing it snoozes the alert for its Snooze
+button duration (§9.11): the alert's own, or else the **Snooze button duration**
+option. The duration isn't in the name, so the name doesn't change when the
+duration does, and Alexa needn't rediscover it. The button's attributes show the
+duration. A press on an alert that can't be snoozed (not firing, or
+unacknowledgeable) is refused with an error. Unsnoozing is the switch's turning
+on.
+
+**The proxies themselves.**
+
+- They're a `switch` with the alert's exact name and a `button` named "Snooze
+  *name*", both following the alert's renames. Their entity IDs follow the
+  alert's object ID (`switch.workshop_door_left_open`,
+  `button.snooze_workshop_door_left_open`).
+- They have no device (§11.5, "Why not a device").
+- They copy the alert's area and labels (§11.6), but aren't given the alerts
+  label (§11.5).
+- Their options are in the alert's form. Generators have the same options, and
+  apply them to each alert they make.
+- Turning an option off removes that proxy.
+- **Exposure:** when a proxy is created, it's exposed to Alexa and Google once,
+  and **hidden from Assist** once, where it would clash with the alert's own
+  name. Assist has better commands anyway (§14.1). The rule is the alerts
+  label's: done once, never forced back. Manual (non-cloud) Alexa and Google
+  setups choose entities with their own filters; the README explains.
+
+**To check in real HA** (Alexa and Google Home, Nabu Casa):
+
+- **The phrases:** "Alexa, turn off *X*", "Alexa, is *X* on?", "Alexa, turn on
+  Snooze *X*" (or simply "Alexa, snooze *X*"), and "Hey Google, activate Snooze
+  *X*".
+- **Refusals:** what each assistant says when an action is refused.
+- **Routines:** whether the Alexa routine trigger is reliable (some community
+  reports say contact-sensor triggers are occasionally flaky).
+- **Newer assistants:** how Gemini for Home and Alexa+ handle all of the above.
 
 ## 15. Startup, resilience, persistence
 
@@ -1581,13 +1838,22 @@ counters, held quiet-hours notifications, the retry queue) doesn't belong to any
 entity, so a Store is needed anyway. Per-alert records are keyed by the entity's
 unique ID, which also covers generated alerts. The records also tell Alert Redux
 which alerts are new or deleted since the last run (for `_created`/`_deleted`,
-§11.3).
+§11.3), and whether an alert has been given the alerts label (§11.5) and
+[phase 12] exposed to Assist (§14.1), and whether its proxies' exposure
+has been set (§14.2).
 
 After a restart:
 
 - An alert that was firing and still is resumes quietly: **no** new on notification
   [Decided, R16 response].
 - An alert that was firing and no longer is ends normally, with a done notification.
+  [Decided, 1.0.0] When a firing's duration ran out during the restart, it ends
+  just **after** the alert's first state is written, not before. HA's logbook
+  leaves out an entity's first state after a restart, so an alert already idle
+  by then showed "active" as its last row. Ending afterwards makes an ordinary
+  active → idle row (§11.4). Its other deadlines wait for the ending, which
+  clears or resets them, so a reminder that fell due before it ran out isn't
+  sent just ahead of the done notification.
 - A snooze or suspension that ran out during the restart ends as soon as HA is back.
 - [Decided, phase 4] A reminder that fell due during the restart is sent as soon as
   HA is back. It isn't an on notification, so it doesn't break "resumes quietly".
@@ -1645,6 +1911,7 @@ area, label, …):
 | `alert_redux.disable` / `alert_redux.enable` | Disable or enable. Admin only (phase 6). |
 | `alert_redux.suspend` | Suspend for a `duration`, or `until` a time. Admin only (phase 6). |
 | `alert_redux.fire` / `alert_redux.dismiss` | Fire or dismiss a manual alert; `fire` can take `data`. |
+| `alert_redux.press_button` | Run one of an alert's custom buttons (§9.11), as the main card does (§13.1). Takes the button's `label`. [Decided; phase 13] Labels are unique within an alert, so the label is enough. |
 | `alert_redux.refresh_generator` | Re-evaluate a generator's targets now (debugging; §12.3). [Decided, phase 11] Takes the generators' sensors as `entity_id`. |
 | `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off). |
 
@@ -1718,6 +1985,8 @@ all" action.
 | ~~Q10~~ | ~~Create/edit/delete by action?~~ Resolved: export/import actions, with overwrite protection (§16). | §16 |
 | ~~Q11~~ | ~~Remaining §9.9 details~~ Resolved: per-group threshold override; members that can't soften hold instead (§9.9). | §9.9 |
 | ~~Q12~~ | ~~Done notifications while throttled~~ Resolved: held, and covered by the throttling summary (§9.7). | §9.7, §9.8 |
+| Q13 | [Deferred] When should the condition alert kinds get a class or strategy object each? Not yet: the five kinds share one condition alert class, which branches on the kind in a few places (attributes, sources, judging, on/off edges), and the sources hide most of the differences. If more condition kinds are added, split it then. Event kinds are less likely to need this: a bus event alert is already just a trigger alert with an event trigger, so a new event kind would more likely be another trigger shape. | F23 |
+| ~~Q14~~ | ~~Raise the minimum HA version for phase 12?~~ Resolved: no, it stays 2025.3. Neither Assist nor the proxies need a newer version. The paths only older versions take (LLM tools before 2026.6, the `admin_only` fallback before 2026.9) are tested locally against an older HA, apart from CI (§20). | §14 |
 
 ## 19. Decision log
 
@@ -1848,6 +2117,24 @@ Decisions with their reasons, in the order they were made.
 | A superseded alert's reminder waits for a superseding alert about to fire; sent late if it doesn't | A reminder and the superseding on notification arriving together is noise, and no setting should be needed to avoid it; a lost reminder would fail quiet [§8.1]. |
 | Logbook messages are capitalised | They sit beside the translated states, which are [§11.4]. |
 | Manual alerts can end by themselves after a duration, as an option, not a new kind | Fills the gap between manual and event alerts without a ninth kind, and without overturning R2 or R3 [§4.3]. |
+| 1.0.0 is 0.11.1 plus self-ending manual alerts and an entity refactor, after a shorter soak of its own | The 0.11.1 soak found only trivia, and a 1.0.0 identical to it would add nothing; the refactor keeps manual-only code out of the base class every kind shares [§20]. |
+| An alert's area and labels live in the entity registry; the form edits them there | One place for the values, so edits on the entity's settings page aren't overwritten, and proxies can follow the alert whichever way it was edited [§11.6]. |
+| Generated alerts default to their target's area (provisionally) | The alerts a generator makes are usually about entities in different areas, e.g. each door's *Left Open* alert [§11.6]. |
+| Card filters are either scope, in the card's configuration (area, label), or view, on the card (hide acknowledged, priorities) | Scope is set once per placement, e.g. a card per room page; the view is what you change while looking at the card [§13.1]. |
+| The admin card can be paged; the main card isn't | The admin card lists every alert and gets long; the main card shows only firing alerts, which must never be hidden on another page [§13.2]. |
+| Custom buttons show on the main card too, from the same definitions | A *Close door* button is as useful on the dashboard as on the phone, and one definition can't drift apart from another [§13.1]. |
+| Assist sentences are HA's conversation triggers, attached by the integration | The one public way for an integration to add sentences; custom sentence files would mean writing into the user's configuration (R21), and pipelines check triggers before any agent, LLM agents included [§14.1]. |
+| Four intents carry the voice behaviour; sentences, LLM tools, and custom sentences all reach them | One implementation, whichever way the command arrives, and other languages can be added without code [§14.1]. |
+| Voice acts only on alerts exposed to Assist; each alert is exposed once, never forced back | Follows HA's convention and leaves the user in control, without making every alert need exposing by hand [§14.1, §11.5]. |
+| Voice can ask which alerts are firing | You can find out what's wrong before acknowledging it, and LLM agents learn the alerts' names from it [§14.1]. |
+| A command with no name acts only if exactly one alert fits | Convenient when one thing is wrong, and never acts on several alerts at once (principle 6) [§14.1]. |
+| Phase 12 is 1.1.0 | It follows 1.0.0, so it's a 1.x release [§20]. |
+| The proxy switch emulates the built-in `alert`: on while active, off to acknowledge | "Is X on?" asks whether it needs attention, and on Alexa the switch's contact sensor can start a routine as the alert fires; separate firing and acknowledgement entities would need longer names [§14.2]. |
+| One optional snooze button per alert, "Snooze *name*", for the alert's snooze button duration | One utterance; more durations would multiply entities, and a number entity needs two utterances and bare seconds; the name stays put when the duration changes [§14.2]. |
+| Proxies are exposed to Alexa and Google once, and hidden from Assist once | Opting in means wanting them there; in Assist they'd clash with the alerts' own names [§14.2]. |
+| The minimum HA version stays 2025.3 for phase 12 | Nothing in phase 12 needs a newer one; older paths are tested locally instead [§18, Q14]. |
+| A duration that ran out while HA was down ends just after the first state is written | HA's logbook leaves out an entity's first state after a restart, so an ending before it had no row [§11.4, §15.1]. |
+| Alert Redux ships an agent skill, checked against the code by a test | Agents can drive Alert Redux through MCP, but had to dig through the forms' schemas to do it; a test keeps the skill from drifting as the code changes [§20]. |
 
 ## 20. Phase plan
 
@@ -2123,25 +2410,73 @@ Live testing waits for the next real-HA run.
   [weather_alerts_card](https://github.com/seevee/weather_alerts_card) for their
   inspiration (moved from phase 13).
 
-### After 1.0.0 — Manual alerts that end by themselves (1.1.0)
+### 1.0.0 — Manual alerts that end by themselves, and a tidier alert entity
 
 - The *End by itself after* option for manual alerts (§4.3). The duration handling
   moves out of the event alerts into a part both kinds share: the expiry timer,
   restoring the expiry after a restart, gating reminders, and the attributes.
 - The option and its duration on the manual alert form.
+- A refactor of the alert entity, with no change in behaviour: manual alerts get
+  their own class, leaving the shared base class with only what every kind uses;
+  manual and event alerts share one path for starting a firing; and the alert
+  state kind's watched alert moves to the condition alerts.
+- Found in the restart checks: a duration that ran out while HA was down ends
+  just after the alert's first state is written, so the logbook shows it
+  (§11.4, §15.1).
+- The edit forms' warning about broken references appears only when something
+  refers to the alert or generator.
+- [Decided, 1.0.0] **An agent skill**, shipped in this repository
+  (`plugins/alert-redux/`): how-tos and best practices for agents that
+  configure, operate, and build on Alert Redux, e.g. through an MCP server. It's
+  written in terms of Home Assistant itself (subentry flows, actions, events),
+  with the HA-MCP server's tool names and quirks in a file of their own. It
+  follows the [Agent Skills](https://agentskills.io) format, so any agent that
+  supports it can use the folder, and the repository is also a Claude Code
+  plugin marketplace that lists it. The plugin's version follows the
+  integration's. A test checks the skill against the code (every action, event,
+  attribute, form field, error, Repairs issue, and card option), so it can't
+  silently go stale. Until HA-MCP can offer skills that custom integrations
+  provide (raised with its maintainers), shipping it here is how agents get it.
 
-It's small and self-contained, so it comes first after 1.0.0, ahead of phase 12,
-and leaves the daily-use soak before 1.0.0 undisturbed.
+Planned as 1.1.0, to leave the daily-use soak of 0.11.1 undisturbed. The soak
+found only trivia, and a 1.0.0 identical to 0.11.1 would add nothing, so this
+became 1.0.0 instead [Decided]. As it wasn't part of that soak, it gets a
+shorter soak of its own on the real instance before release.
 
-### Phase 12 — Voice control (0.12.0)
+### Phase 12 — Voice control (1.1.0)
 
-- Assist intents for acknowledge, unacknowledge, and snooze (§14).
-- Optional per-alert proxy switches, checked with Alexa and Google Home.
+- **First, a spike** in real HA: a conversation trigger attached by the
+  integration, whose action's reply is spoken, through both the built-in agent
+  and an LLM agent's pipeline. Everything else in §14.1 rests on it.
+- Assist (§14.1): the four intents (acknowledge, unacknowledge, snooze, and the
+  firing-alerts query); the English sentence triggers; the `llm.py` tools; name
+  matching, commands with no name, and spoken durations; each alert exposed to
+  Assist once; and the README's notes on custom sentences and Speech-to-Phrase.
+- Proxies (§14.2): the optional per-alert proxy switch and snooze button, their
+  options in the alert and generator forms, and their exposure (Alexa and Google
+  once, hidden from Assist once); the real-HA checks listed in §14.2.
+- The paths only older HA takes (LLM tools before 2026.6, the `admin_only`
+  fallback before 2026.9) tested locally against an older HA, apart from CI (Q14).
+- Testing notes: `conversation` and `llm` go in `after_dependencies`, not
+  `dependencies`. Tests that load `conversation` need the core `homeassistant`
+  component set up first, and a pinned HA's matching `hassil` and intents
+  packages.
+
+*Done when* acknowledging, unacknowledging, snoozing, and the query work by
+voice through a pipeline with an LLM agent and through the built-in agent, an
+LLM agent can use the tools on its own, and the proxies work with Alexa and
+Google Home.
+
+It was planned as 0.12.0, before 1.0.0 came first; it's now 1.1.0 [Decided].
 
 ### Phase 13 — Late features (0.13.0 onwards; may be split)
 
 - The acknowledgement queue (§10).
-- Card filters (§13.1).
+- Card filters: scope by area and label in the card's configuration, and
+  hide-acknowledged and per-priority controls on the card (§13.1).
+- Paging for the admin card (§13.2).
+- Custom notification buttons on the main card, and the `alert_redux.press_button`
+  action (§13.1, §16).
 - Creating and editing alerts from the admin card (§13.2).
 - The export and import actions and admin-card controls (§13.2, §16).
 - The admin card shows a copyable summary of an alert's settings on request
@@ -2152,6 +2487,9 @@ and leaves the daily-use soak before 1.0.0 undisturbed.
 - Consider recognising displayed state names in a state alert's target state,
   e.g. "open" for a door binary sensor's `on`, and storing the real state
   (§4.1; assessment in `docs/spec-notes.md`, N38).
+- Setting an alert's area and labels in its configuration form, when it's created
+  or edited, with the registry as where they live; and for generators, labels and
+  a fixed area or the target's area (§11.6).
 
 ### Phase 14 — Converter utilities
 
@@ -2161,4 +2499,5 @@ and leaves the daily-use soak before 1.0.0 undisturbed.
   - Alert2 alerts.
 
 **1.0.0** comes after phase 11, once the core feature set is proven in daily use,
-with phases 12–14 as 1.x releases [Decided, provisionally].
+with phases 12–14 as 1.x releases [Decided, provisionally]. It adds self-ending
+manual alerts and the entity refactor to 0.11.1 (above).

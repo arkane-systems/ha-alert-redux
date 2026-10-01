@@ -155,8 +155,12 @@ async def test_reconfigure_lists_referrers(
     """The edit form stands in for a delete warning (spec §12.4)."""
     entry = await _setup(setup_alerts)
     for subentry_id, referrers in (
-        ("open", "Back Door Left Open, Back Door Unacknowledged"),
-        ("left", "none"),
+        (
+            "open",
+            "Back Door Left Open, Back Door Unacknowledged. Deleting this alert"
+            " leaves their references to it broken.",
+        ),
+        ("left", "none."),
     ):
         result = await hass.config_entries.subentries.async_init(
             (entry.entry_id, SUBENTRY_ALERT),

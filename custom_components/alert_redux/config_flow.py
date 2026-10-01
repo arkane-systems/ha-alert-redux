@@ -81,6 +81,7 @@ from .const import (
     CONF_DONE_MESSAGE,
     CONF_DONE_WINDOW,
     CONF_DURATION,
+    CONF_ENDS_BY_ITSELF,
     CONF_ENTITIES,
     CONF_ENTITY_ID,
     CONF_EVENT_DATA,
@@ -226,6 +227,12 @@ class AlertReduxOptionsFlow(OptionsFlow):
             except ValueError:
                 errors["base"] = "invalid_throttle"
             if not errors:
+                # The supersession and quiet-hours sections are flattened into
+                # the top level on purpose, as each alert's notifications section
+                # is: the sections only group the form, and Settings.from_options
+                # reads those keys from the top level. The event durations are
+                # stored nested, as the section's own dict; both layouts are
+                # established, and changing either would need a migration.
                 return self.async_create_entry(
                     data={
                         CONF_NO_DATA_GRACE: user_input[CONF_NO_DATA_GRACE],
@@ -807,6 +814,15 @@ def _alert_schema(
                 default=defaults.get(CONF_USER_DISMISSABLE, False),
             )
         ] = BooleanSelector()
+        schema[
+            vol.Required(
+                CONF_ENDS_BY_ITSELF,
+                default=defaults.get(CONF_ENDS_BY_ITSELF, False),
+            )
+        ] = BooleanSelector()
+        schema[
+            vol.Optional(CONF_DURATION, description=_suggested(defaults, CONF_DURATION))
+        ] = DurationSelector()
     if not generator:
         schema[
             vol.Optional(
@@ -1065,6 +1081,7 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
     }
     if kind is AlertKind.MANUAL:
         data[CONF_USER_DISMISSABLE] = user_input[CONF_USER_DISMISSABLE]
+        data[CONF_ENDS_BY_ITSELF] = user_input[CONF_ENDS_BY_ITSELF]
     elif kind is AlertKind.STATE:
         data[CONF_ENTITY_ID] = user_input[CONF_ENTITY_ID]
         data[CONF_TARGET_STATE] = user_input[CONF_TARGET_STATE].strip()
@@ -1108,6 +1125,8 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         optional += [CONF_CONDITION, CONF_DURATION]
         if kind is AlertKind.EVENT:
             optional.append(CONF_EVENT_DATA)
+    elif kind is AlertKind.MANUAL:
+        optional.append(CONF_DURATION)
     for key in optional:
         value = user_input.get(key)
         if isinstance(value, str):
@@ -1234,7 +1253,18 @@ def _referrers(hass: HomeAssistant, entry: ConfigEntry, subentry_id: str) -> str
             or own in relationship_targets(other.data.get(CONF_SUPERSEDES, []))
         )
     )
-    return ", ".join(names) if names else "none"
+    return _referrers_text(
+        names, "Deleting this alert leaves their references to it broken."
+    )
+
+
+def _referrers_text(names: list[str], warning: str) -> str:
+    """Return an edit form's referrers: "none.", or their names and a warning.
+
+    Translations can't be conditional, so the warning about deleting, which
+    only makes sense when there are referrers, comes with their names.
+    """
+    return f"{', '.join(names)}. {warning}" if names else "none."
 
 
 def _alert_entity_id(hass: HomeAssistant, subentry_id: str) -> str | None:
@@ -1839,7 +1869,7 @@ def _generator_referrers(
             [],
         )
     )
-    return ", ".join(names) if names else "none"
+    return _referrers_text(names, "Deleting it leaves their references broken.")
 
 
 def _generator_targets(hass: HomeAssistant, subentry_id: str) -> str:

@@ -21,7 +21,8 @@ alert state kind, dangling references, and the card's superseded alerts), and
 phase 8 (the summary sensors, the logbook platform, and the `_data_restored`
 event), and phase 9 (replacing and clearing notifications, and notification
 buttons), and phase 10 (throttling and quiet hours), and phase 11 (generators,
-including generated supersession).
+including generated supersession), and, for 1.0.0, manual alerts that end by
+themselves (spec §4.3).
 
 ## Specification
 
@@ -69,11 +70,18 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `config_subentry_id`, and kept in `DATA_ENTITIES` by unique ID like the
     fixed ones. Also `async_forget_alert`, which drops a deleted alert's record
     and announces it.
-  - `entity.py` — `AlertEntity` (manual alerts; state, attributes, actions, events,
-    persistence, and the rendered messages while firing; snoozing, disabling, and
-    suspending, for every kind; supersession's on debounce, skipped and held reminders,
-    and held done notifications; throttling on and done notifications, and the
-    throttling summary), `ConditionAlertEntity`
+  - `entity.py` — `AlertEntity`, the base every kind shares and never used on its
+    own (state, attributes, actions, events, persistence, and the rendered messages
+    while firing; snoozing, disabling, and suspending; durations and their expiry,
+    for event alerts and self-ending manual alerts; starting a manual or event
+    alert's firing; supersession's on debounce, skipped and held reminders, and
+    held done notifications; throttling on and done notifications, and the
+    throttling summary). Differences between kinds are class attributes
+    (`_awaits_data`, `_has_duration`, `_fire_data_is_trigger`) and overridden
+    hooks, not checks on the kind; `fire` and `dismiss` are stubs raising
+    `not_manual`, since HA calls entity actions by name on every entity.
+    `ManualAlertEntity` (fire, dismiss, and the manual settings),
+    `ConditionAlertEntity`
     (state, on/off, threshold, template, and alert state kinds: watches its sources,
     judges them
     by the kind's rule in `_judge`, and runs the delays and no-data grace period on
@@ -193,6 +201,11 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   `screenshots/`, the README's pictures of the cards: the dev preview's theme
   columns (without its toolbar), at 1.5× scale, quantized to 256 colours.
 - **`tests/`** — smoke tests using `pytest-homeassistant-custom-component`.
+- **`plugins/alert-redux/`** — the **agent skill** (spec §20, 1.0.0): how-tos and
+  best practices for agents configuring, operating, and building on Alert Redux
+  (`skills/alert-redux/SKILL.md` and its reference files), packaged as a Claude
+  Code plugin (`.claude-plugin/plugin.json`). **`.claude-plugin/marketplace.json`**
+  at the root makes the repository a plugin marketplace that lists it.
 
 ## Card development
 
@@ -231,9 +244,37 @@ install restart. `docs/restart-checks.md` is the ledger of pending and done chec
 with a note on this instance's restart timing. Read it at the start of every
 real-HA run.
 
+The real instance has a permanent alerting and notification test rig, older than
+Alert Redux and moved over to it unchanged:
+
+- **Test Alert** (`alert_redux.test_alert`): a state alert, firing while
+  `input_boolean.test_alert` is on.
+- **Test Event Alert** (`alert_redux.test_event_alert`): a bus event alert, fired
+  by pressing `input_button.test_event_alert`.
+
+Both send to the Quiet and Office Only groups. Use them freely in real-HA runs,
+but don't change their configuration permanently (restore anything a test
+changes), and never delete them or their helpers when cleaning up a run's test
+entities.
+
+## The agent skill
+
+The skill in `plugins/alert-redux/skills/alert-redux/` is user-facing
+documentation for agents. **Update it with any change to the forms, actions,
+events, attributes, errors, Repairs issues, or card options, and with any
+change in behaviour it describes.** `tests/test_skill.py` fails when the skill
+leaves out a name the code defines, or names an event or card option that
+doesn't exist, but it can't check that the descriptions are still right. Write
+it in terms of Home Assistant itself (subentry flows, actions, events), with
+HA-MCP specifics only in `ha-mcp.md`. Keep `SKILL.md` under 500 lines, with
+every reference file linked from it.
+
 ## Versioning
 
 `manifest.json` `version` is the release version (semantic; bump on release, then
 rebuild the card so its reported version and resource cache-buster match).
 `config_flow.VERSION` / `MINOR_VERSION` are the config entry schema version and are
 only bumped for changes to stored entry data/options — they are unrelated.
+The plugin's `version` (`plugins/alert-redux/.claude-plugin/plugin.json`) follows
+the manifest's, so a release also updates installed skills; `tests/test_skill.py`
+checks they match.

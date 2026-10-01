@@ -66,6 +66,7 @@ FORM = {
     "priority": "critical",
     "acknowledgeable": True,
     "user_dismissable": True,
+    "ends_by_itself": False,
     "supersession": {},
     "notifications": {},
 }
@@ -109,6 +110,7 @@ async def test_create_alert(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
         "priority": "critical",
         "acknowledgeable": True,
         "user_dismissable": True,
+        "ends_by_itself": False,
     }
 
     state = hass.states.get("alert_redux.back_door_open")
@@ -175,6 +177,45 @@ async def test_reconfigure_keeps_state(
     assert state.attributes["priority"] == "critical"
     assert state.attributes["icon"] == "mdi:door"
     assert state.attributes["fire_count"] == 1
+
+
+async def test_ends_by_itself_saved_and_prefilled(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A manual alert's self-ending option and duration save and reload (1.0.0)."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            **FORM,
+            "ends_by_itself": True,
+            "duration": {"hours": 0, "minutes": 10, "seconds": 0},
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    (subentry,) = entry.subentries.values()
+    assert subentry.data["ends_by_itself"] is True
+    assert subentry.data["duration"] == {"hours": 0, "minutes": 10, "seconds": 0}
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
+    )
+    suggested = _suggested(result["data_schema"].schema)
+    assert suggested["duration"] == {"hours": 0, "minutes": 10, "seconds": 0}
+
+    # Turning it back off keeps the boolean but drops the duration.
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**FORM, "ends_by_itself": False}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+    data = entry.subentries[subentry.subentry_id].data
+    assert data["ends_by_itself"] is False
+    assert "duration" not in data
 
 
 async def test_remove_alert(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
@@ -1504,7 +1545,7 @@ async def test_reconfigure_generator(
     assert result["step_id"] == "reconfigure_state"
     assert result["description_placeholders"] == {
         "targets": "lock.front_door",
-        "referrers": "none",
+        "referrers": "none.",
     }
     targets = result["data_schema"].schema["targets"].schema.schema
     assert _suggested(targets) == {"domains": ["lock"]}
@@ -1617,7 +1658,9 @@ async def test_generator_supersession(
         (entry.entry_id, SUBENTRY_GENERATOR),
         context={"source": SOURCE_RECONFIGURE, "subentry_id": "open"},
     )
-    assert result["description_placeholders"]["referrers"] == "Left Open"
+    assert result["description_placeholders"]["referrers"] == (
+        "Left Open. Deleting it leaves their references broken."
+    )
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
         {
@@ -1681,7 +1724,9 @@ async def test_fixed_alert_cycle_through_generator(
         (entry.entry_id, SUBENTRY_ALERT),
         context={"source": SOURCE_RECONFIGURE, "subentry_id": "insecure"},
     )
-    assert result["description_placeholders"] == {"referrers": "Open"}
+    assert result["description_placeholders"] == {
+        "referrers": "Open. Deleting this alert leaves their references to it broken."
+    }
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
         {

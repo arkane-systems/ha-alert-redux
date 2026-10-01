@@ -1,0 +1,14 @@
+{
+  "name": "alert-redux",
+  "description": "Agent skills for Alert Redux, the Home Assistant alerting integration.",
+  "owner": {
+    "name": "Arkane Systems"
+  },
+  "plugins": [
+    {
+      "name": "alert-redux",
+      "source": "./plugins/alert-redux",
+      "description": "Configure, operate, and build on Alert Redux alerts from an agent."
+    }
+  ]
+}
