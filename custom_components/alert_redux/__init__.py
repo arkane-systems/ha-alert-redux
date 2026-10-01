@@ -76,6 +76,7 @@ from .issues import async_check_broken_references, async_check_default_groups
 from .store import AlertStore
 from .summary import SummaryCoordinator
 from .supersession import Supersession
+from .voice import async_setup_voice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -291,6 +292,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
     # Taps on notification buttons (spec §9.11).
     entry.async_on_unload(async_setup_buttons(hass))
+    # Voice commands through Assist (spec §14.1).
+    entry.async_on_unload(async_setup_voice(hass))
     return True
 
 

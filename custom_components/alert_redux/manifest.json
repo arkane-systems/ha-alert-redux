@@ -1,7 +1,7 @@
 {
   "domain": "alert_redux",
   "name": "Alert Redux",
-  "after_dependencies": ["frontend", "lovelace"],
+  "after_dependencies": ["conversation", "frontend", "lovelace"],
   "codeowners": ["@arkane-systems"],
   "config_flow": true,
   "dependencies": ["http"],
