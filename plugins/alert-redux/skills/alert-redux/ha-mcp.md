@@ -18,7 +18,9 @@ missing, search its tools for the same purpose.
 |---|---|
 | The config entry ID | `ha_get_integration(query="alert_redux")` |
 | Subentry IDs (alerts, generators, groups) | `ha_get_integration(entry_id=…, include_subentries=True)` |
-| A form's live fields | `ha_get_integration(entry_id=…, include_subentry_schema=True, subentry_type="alert")` (the kind menu; add `subentry_id` for an edit form) |
+| An alert's edit form, pre-filled | `ha_get_integration(entry_id=…, include_subentry_schema=True, subentry_type="alert", subentry_id=…)` |
+| What an alert is configured with (button actions, message templates, …) | the edit form's `suggested_value` and `default` entries: attributes show only some settings, e.g. button labels, and `message` only while firing |
+| What refers to an alert, before deleting it | the edit form's `description_placeholders.referrers`: `"none."`, or the referrers' names followed by a warning |
 | All alerts and states | `ha_search(domain_filter="alert_redux", result_fields=["entity_id", "state"])` |
 | One alert's details | `ha_get_state("alert_redux.x", attribute_keys=[…])` |
 
@@ -39,6 +41,12 @@ Edit: `action="update"` with `subentry_id`, passing the **whole** form (see
 Quirks). Notifier groups and generators work the same way, with
 `subentry_type="notifier_group"` or `"generator"` (a group has no menu, so no
 `next_step_id`).
+
+A **create** form can't be read beforehand: `include_subentry_schema` without a
+`subentry_id` shows only the kind menu. Use the tables in
+[configuring.md](configuring.md); a refused submission returns the form's full
+`data_schema` with the error, and an existing alert of the same kind shows its
+fields in its edit form.
 
 Delete:
 
@@ -67,13 +75,17 @@ patch: omitted fields keep their values. Sections (`event_durations`,
 ## Quirks
 
 - **Acknowledgment key.** In HA-MCP's strict best-practices mode, write tools
-  (such as `ha_config_set_helper`) refuse calls without a `BestPracticeKey`. Read
-  the guide it names (`ha_get_skill_guide`) and pass the key it shows. The key
-  rotates hourly: when a call is refused again, read it again.
-- **Edits must pass the whole form.** An update doesn't carry over sections that
-  are empty in the stored data, so it fails with `supersession: required key not
-  provided`. Send every field you want kept, and `"supersession": {}` when there
-  are no relationships.
+  (such as `ha_config_set_helper`) refuse calls without a `BestPracticeKey`. The
+  refusal's suggestion names the exact `ha_get_skill_guide` call (its parameters
+  differ between HA-MCP versions); the key is on the first line of the content it
+  returns. Pass it as `BestPracticeKey`, with `MandatoryBPS=False` so later writes
+  don't return the whole guide inline. The key rotates hourly: when a call is
+  refused again, read it again.
+- **Edits must pass the whole form**, whatever the tool's own description says
+  about updates being a patch. An update doesn't carry over sections that are
+  empty in the stored data, so a partial one fails with `supersession: required
+  key not provided`. Read the edit form, and send every field you want kept, with
+  `"supersession": {}` when there are no relationships.
 - **Phantom option keys.** `ha_get_integration` may show the options with extra,
   flattened copies of section fields (`hours`, `minutes`, `critical`, … at the top
   level). That's an HA-MCP display bug

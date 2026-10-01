@@ -52,8 +52,9 @@ Check in this order:
 4. `throttled_since` is set: notifications are held until the rate drops.
 5. Quiet hours: a loud group holds lower priorities while its quiet-hours entity
    is on.
-6. `reminder_schedule` is empty, or (event kinds) the duration doesn't outlast
-   the first reminder interval.
+6. `reminder_schedule` is empty: the alert has no reminders, or (event kinds and
+   self-ending manual alerts) its duration doesn't outlast the first reminder
+   interval, which the attribute shows as an empty schedule.
 7. The notifier itself failed: check the log, and the fallback group (a
    persistent notification unless set otherwise).
 

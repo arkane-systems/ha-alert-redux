@@ -36,17 +36,20 @@ Assistant works (an MCP server, the websocket API, or the UI).
 1. **Never edit `.storage` files.** Use the subentry flows and actions.
 2. **Find IDs, don't guess them.** List the entry's subentries to get subentry IDs
    (for editing, deleting, and notifier groups).
-3. **Check before deleting an alert.** Opening its edit form shows which alerts
-   refer to it ("Alerts that refer to this one: …"). Deleting it leaves their
-   references broken, with a Repairs issue.
+3. **Check before deleting an alert.** Its edit form says which alerts refer to
+   it ("Alerts that refer to this one: …"). Deleting it leaves their references
+   broken, with a Repairs issue. When deleting a set of alerts that refer to each
+   other, delete the referrers first.
 4. **Test quietly.** For test alerts, turn off the default notifier groups and
    choose a quiet group, or none (an empty list notifies nobody). Loud groups (TTS
    announcements, say) queue up when a test flickers. Name test alerts so they're
    recognisable, and delete them afterwards.
 5. **Leave alone what you didn't create.** Existing alerts, generators, and groups
    may be someone's working setup: change them only when asked.
-6. **Read the live form when in doubt.** Fields can change between versions; ask
-   for the subentry flow's schema rather than relying on memory.
+6. **Read the live form when in doubt.** Fields can change between versions. An
+   edit form shows its fields and the alert's current settings; a create form
+   can't be read before submitting, but a refused submission returns its fields
+   with the error.
 
 ## Where to look
 

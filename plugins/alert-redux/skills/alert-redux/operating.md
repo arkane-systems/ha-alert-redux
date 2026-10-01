@@ -59,7 +59,9 @@ Every alert: `kind`, `priority`, `acknowledgeable`, `subject_entity`,
 `reminder_schedule`, `next_reminder`, `throttle`, `throttled_since`, `supersedes`,
 `superseded_by`, `pre_acked_by`, `pre_snoozed_until`, `broken_references`,
 `buttons` (labels), `generated_by` (the generator's sensor, for generated alerts).
-The `_by` attributes are user IDs.
+The `_by` attributes are user IDs. `fire_count` counts the fires of the
+**current** firing (firing again adds to it), and goes back to 0 when the firing
+ends; `fire_data` and `firing_since` clear then too.
 
 By kind:
 
