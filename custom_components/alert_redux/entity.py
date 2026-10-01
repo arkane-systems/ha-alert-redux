@@ -163,6 +163,7 @@ from .const import (
     Priority,
 )
 from .definitions import AlertDefinition, RelationshipResolver, generator_unique_id
+from .exposure import ASSIST, async_set_exposure
 from .labels import async_apply_label
 from .messages import Messages, MessageTracker, message_context
 from .buttons import BUTTON_ACK, BUTTON_SNOOZE, alert_buttons, custom_button_key
@@ -305,6 +306,10 @@ class AlertEntity(Entity):
         self._message_key: tuple[Any, ...] | None = None
         # Whether this alert has been given the alerts label (spec §11.5).
         self._labelled = False
+        # Whether it's been exposed to Assist, and which proxies have been
+        # exposed to Alexa and Google, once each (spec §14.1, §14.2).
+        self._assist_exposed = False
+        self.proxies_exposed: set[str] = set()
         self._reminder_timer = PointTimer(self._async_reminder_due)
         # A reminder held for a superseding alert about to fire (spec §8.1): the
         # time it was moved to, while next_reminder is still that time.
@@ -401,6 +406,16 @@ class AlertEntity(Entity):
         return self._runtime.firing
 
     @property
+    def acknowledgeable(self) -> bool:
+        """Return whether the alert can be acknowledged and snoozed (§6.1)."""
+        return self._acknowledgeable
+
+    @property
+    def snoozed_until(self) -> datetime | None:
+        """Return when the alert's snooze runs out, if it's snoozed (§6.2)."""
+        return self._runtime.snoozed_until
+
+    @property
     def last_ended(self) -> datetime | None:
         """Return when the alert last stopped firing."""
         return self._runtime.last_ended
@@ -486,7 +501,7 @@ class AlertEntity(Entity):
         return self._settings.throttle
 
     @property
-    def _button_snooze(self) -> timedelta:
+    def button_snooze(self) -> timedelta:
         """Return how long the Snooze button snoozes: the alert's own, or else the
         default."""
         return self._own_button_snooze or self._settings.button_snooze_duration
@@ -553,17 +568,24 @@ class AlertEntity(Entity):
 
         An alert that hasn't been given the alerts label yet gets it now, whether
         it's new or existed before the label did. That happens once per alert, so
-        removing the label from an alert is left alone.
+        removing the label from an alert is left alone. Being exposed to Assist
+        follows the same rule (spec §14.1).
         """
         assert self.unique_id is not None
         record = self._store.get_alert(self.unique_id)
         if record is not None:
             self._runtime = AlertRuntime.from_dict(record["runtime"])
             self._labelled = record.get("labelled", False)
+            self._assist_exposed = record.get("assist_exposed", False)
+            self.proxies_exposed = set(record.get("proxies_exposed", ()))
         if not self._labelled:
             self._labelled = True
             if (label_id := self.hass.data[DOMAIN].get(DATA_LABEL)) is not None:
                 async_apply_label(self.hass, self.entity_id, label_id)
+        if not self._assist_exposed:
+            self._assist_exposed = async_set_exposure(
+                self.hass, self.entity_id, {ASSIST: True}
+            )
         self._async_restored()
         if self._runtime.state is AlertState.ACTIVE and not self._runtime.next_reminder:
             # E.g. an alert that was firing before reminders existed.
@@ -845,7 +867,7 @@ class AlertEntity(Entity):
                 self.unique_id,
                 self._custom_buttons,
                 acknowledgeable=self._acknowledgeable,
-                snooze=self._button_snooze,
+                snooze=self.button_snooze,
             ),
             "urgency": self._priority.urgency,
         }
@@ -1317,7 +1339,7 @@ class AlertEntity(Entity):
             if key == BUTTON_ACK:
                 await self.async_ack()
             else:
-                await self.async_snooze(self._button_snooze)
+                await self.async_snooze(self.button_snooze)
             return
         button = next(
             (b for b in self._custom_buttons if custom_button_key(b) == key), None
@@ -1437,6 +1459,8 @@ class AlertEntity(Entity):
                 ATTR_PRIORITY: self._priority,
                 "runtime": self._runtime.to_dict(),
                 "labelled": self._labelled,
+                "assist_exposed": self._assist_exposed,
+                "proxies_exposed": sorted(self.proxies_exposed),
                 # A generated alert's generator and target (spec §12.3).
                 **(
                     {
