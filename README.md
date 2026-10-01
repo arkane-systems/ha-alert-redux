@@ -509,6 +509,27 @@ a new card version needs a refresh, and a card that's older than the integration
 offers a **Reload** button. In the companion app, pull down to reload, or reset
 the frontend cache from the app's own settings.
 
+## Using Alert Redux from an AI agent
+
+An agent with access to your Home Assistant (for example through
+[HA-MCP](https://github.com/homeassistant-ai/ha-mcp)) can set up and manage
+alerts for you. This repository includes an **agent skill** that teaches it how:
+the configuration forms and their fields, the actions and events, building
+automations and dashboards on alerts, troubleshooting, and good habits such as
+testing quietly and checking what refers to an alert before deleting it.
+
+In Claude Code, add this repository as a plugin marketplace and install the
+plugin:
+
+```text
+/plugin marketplace add arkane-systems/ha-alert-redux
+/plugin install alert-redux@alert-redux
+```
+
+For other agents that support [Agent Skills](https://agentskills.io), copy the
+[`plugins/alert-redux/skills/alert-redux`](plugins/alert-redux/skills/alert-redux)
+folder into the agent's skills directory.
+
 ## Acknowledgements
 
 Alert Redux owes a great deal to two other projects, and thanks their authors:

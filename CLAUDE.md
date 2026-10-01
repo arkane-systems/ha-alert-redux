@@ -201,6 +201,11 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   `screenshots/`, the README's pictures of the cards: the dev preview's theme
   columns (without its toolbar), at 1.5× scale, quantized to 256 colours.
 - **`tests/`** — smoke tests using `pytest-homeassistant-custom-component`.
+- **`plugins/alert-redux/`** — the **agent skill** (spec §20, 1.0.0): how-tos and
+  best practices for agents configuring, operating, and building on Alert Redux
+  (`skills/alert-redux/SKILL.md` and its reference files), packaged as a Claude
+  Code plugin (`.claude-plugin/plugin.json`). **`.claude-plugin/marketplace.json`**
+  at the root makes the repository a plugin marketplace that lists it.
 
 ## Card development
 
@@ -252,9 +257,24 @@ but don't change their configuration permanently (restore anything a test
 changes), and never delete them or their helpers when cleaning up a run's test
 entities.
 
+## The agent skill
+
+The skill in `plugins/alert-redux/skills/alert-redux/` is user-facing
+documentation for agents. **Update it with any change to the forms, actions,
+events, attributes, errors, Repairs issues, or card options, and with any
+change in behaviour it describes.** `tests/test_skill.py` fails when the skill
+leaves out a name the code defines, or names an event or card option that
+doesn't exist, but it can't check that the descriptions are still right. Write
+it in terms of Home Assistant itself (subentry flows, actions, events), with
+HA-MCP specifics only in `ha-mcp.md`. Keep `SKILL.md` under 500 lines, with
+every reference file linked from it.
+
 ## Versioning
 
 `manifest.json` `version` is the release version (semantic; bump on release, then
 rebuild the card so its reported version and resource cache-buster match).
 `config_flow.VERSION` / `MINOR_VERSION` are the config entry schema version and are
 only bumped for changes to stored entry data/options — they are unrelated.
+The plugin's `version` (`plugins/alert-redux/.claude-plugin/plugin.json`) follows
+the manifest's, so a release also updates installed skills; `tests/test_skill.py`
+checks they match.

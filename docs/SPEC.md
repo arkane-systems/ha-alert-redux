@@ -2134,6 +2134,7 @@ Decisions with their reasons, in the order they were made.
 | Proxies are exposed to Alexa and Google once, and hidden from Assist once | Opting in means wanting them there; in Assist they'd clash with the alerts' own names [§14.2]. |
 | The minimum HA version stays 2025.3 for phase 12 | Nothing in phase 12 needs a newer one; older paths are tested locally instead [§18, Q14]. |
 | A duration that ran out while HA was down ends just after the first state is written | HA's logbook leaves out an entity's first state after a restart, so an ending before it had no row [§11.4, §15.1]. |
+| Alert Redux ships an agent skill, checked against the code by a test | Agents can drive Alert Redux through MCP, but had to dig through the forms' schemas to do it; a test keeps the skill from drifting as the code changes [§20]. |
 
 ## 20. Phase plan
 
@@ -2419,6 +2420,23 @@ Live testing waits for the next real-HA run.
   their own class, leaving the shared base class with only what every kind uses;
   manual and event alerts share one path for starting a firing; and the alert
   state kind's watched alert moves to the condition alerts.
+- Found in the restart checks: a duration that ran out while HA was down ends
+  just after the alert's first state is written, so the logbook shows it
+  (§11.4, §15.1).
+- The edit forms' warning about broken references appears only when something
+  refers to the alert or generator.
+- [Decided, 1.0.0] **An agent skill**, shipped in this repository
+  (`plugins/alert-redux/`): how-tos and best practices for agents that
+  configure, operate, and build on Alert Redux, e.g. through an MCP server. It's
+  written in terms of Home Assistant itself (subentry flows, actions, events),
+  with the HA-MCP server's tool names and quirks in a file of their own. It
+  follows the [Agent Skills](https://agentskills.io) format, so any agent that
+  supports it can use the folder, and the repository is also a Claude Code
+  plugin marketplace that lists it. The plugin's version follows the
+  integration's. A test checks the skill against the code (every action, event,
+  attribute, form field, error, Repairs issue, and card option), so it can't
+  silently go stale. Until HA-MCP can offer skills that custom integrations
+  provide (raised with its maintainers), shipping it here is how agents get it.
 
 Planned as 1.1.0, to leave the daily-use soak of 0.11.1 undisturbed. The soak
 found only trivia, and a 1.0.0 identical to 0.11.1 would add nothing, so this
