@@ -119,7 +119,8 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `async_write_ha_state`). Pre-acknowledgements are kept by the source's
     unique ID. It also reports each alert's `broken_references`.
   - `summary.py` — `summarise` (HA-free: the counts, entity-ID lists, and
-    highest priorities across all alerts) and `SummaryCoordinator` in
+    highest priorities across all alerts; a firing alert that's superseded counts
+    as firing but not as active, and is listed as superseded) and `SummaryCoordinator` in
     `hass.data`, which each alert reports to (by unique ID) from
     `async_write_ha_state` and withdraws from when removed; it recomputes once
     per burst of reports and tells the sensors.

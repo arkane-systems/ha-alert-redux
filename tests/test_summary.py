@@ -25,9 +25,19 @@ UNACKED = "sensor.alert_redux_highest_unacked_priority"
 FIRING = "sensor.alert_redux_firing"
 ACTIVE = "sensor.alert_redux_active"
 ACKNOWLEDGED = "sensor.alert_redux_acknowledged"
+SUPERSEDED = "sensor.alert_redux_superseded"
 NO_DATA = "sensor.alert_redux_no_data"
 DISABLED = "sensor.alert_redux_disabled"
-SENSORS = (HIGHEST, UNACKED, FIRING, ACTIVE, ACKNOWLEDGED, NO_DATA, DISABLED)
+SENSORS = (
+    HIGHEST,
+    UNACKED,
+    FIRING,
+    ACTIVE,
+    ACKNOWLEDGED,
+    SUPERSEDED,
+    NO_DATA,
+    DISABLED,
+)
 
 LEAK = "alert_redux.leak"
 DOOR = "alert_redux.back_door_open"
@@ -40,8 +50,9 @@ def _report(
     state: AlertState,
     priority: Priority = Priority.WARNING,
     missing_data: bool = False,
+    superseded: bool = False,
 ) -> AlertReport:
-    return AlertReport(entity_id, state, priority, missing_data)
+    return AlertReport(entity_id, state, priority, missing_data, superseded)
 
 
 def test_summarise_nothing() -> None:
@@ -75,6 +86,32 @@ def test_summarise() -> None:
     assert summary.firing_by_priority[Priority.WARNING] == 1
     assert summary.active_by_priority[Priority.CRITICAL] == 0
     assert summary.active_by_priority[Priority.NOTICE] == 1
+
+
+def test_superseded_alerts_are_not_unacknowledged() -> None:
+    """A firing alert that's superseded counts as firing but not as active, so it
+    doesn't hold up the unacknowledged signals; it's listed as superseded."""
+    summary = summarise(
+        [
+            _report(
+                "alert_redux.a", AlertState.ACTIVE, Priority.CRITICAL, superseded=True
+            ),
+            _report(
+                "alert_redux.b", AlertState.ACK, Priority.EMERGENCY, superseded=True
+            ),
+            _report("alert_redux.c", AlertState.ACTIVE, Priority.NOTICE),
+            # Not firing, so not superseded in any way that shows.
+            _report("alert_redux.d", AlertState.IDLE, superseded=True),
+        ]
+    )
+    assert summary.highest_priority is Priority.EMERGENCY
+    assert summary.highest_unacked_priority is Priority.NOTICE
+    assert summary.firing == ("alert_redux.a", "alert_redux.b", "alert_redux.c")
+    assert summary.active == ("alert_redux.c",)
+    assert summary.acknowledged == ("alert_redux.b",)
+    assert summary.superseded == ("alert_redux.a", "alert_redux.b")
+    assert summary.active_by_priority[Priority.CRITICAL] == 0
+    assert summary.firing_by_priority[Priority.CRITICAL] == 1
 
 
 async def _call(hass: HomeAssistant, service: str, entity_id: str, **data: Any) -> None:
@@ -244,3 +281,47 @@ async def test_one_write_per_burst(
     assert _value(hass, FIRING) == "3"
     firing_writes = [event for event in changes if event.data["entity_id"] == FIRING]
     assert len(firing_writes) == 1
+
+
+async def test_superseded_alert_leaves_the_unacknowledged_sensors(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """While Left Open is firing, Open (which it supersedes) doesn't keep the
+    signal lights lit; once Left Open ends, it counts again."""
+    open_ = "alert_redux.back_door_open"
+    left_open = "alert_redux.back_door_left_open"
+    await setup_alerts(
+        alert_subentry("Back Door Open", priority="notice"),
+        alert_subentry(
+            "Back Door Left Open",
+            priority="warning",
+            supersedes=[{"alert": open_}],
+        ),
+    )
+
+    await _call(hass, "fire", open_)
+    assert _value(hass, UNACKED) == "notice"
+    assert _value(hass, SUPERSEDED) == "0"
+
+    await _call(hass, "fire", left_open)
+    await hass.async_block_till_done()
+    assert _value(hass, HIGHEST) == "warning"
+    assert _value(hass, FIRING) == "2"
+    assert _value(hass, ACTIVE) == "1"
+    assert hass.states.get(ACTIVE).attributes["entity_ids"] == [left_open]
+    assert hass.states.get(ACTIVE).attributes["notice"] == 0
+    assert _value(hass, SUPERSEDED) == "1"
+    assert hass.states.get(SUPERSEDED).attributes["entity_ids"] == [open_]
+
+    # Acknowledging the visible alert quiets the signal, as the user sees it.
+    await _call(hass, "ack", left_open)
+    await hass.async_block_till_done()
+    assert _value(hass, UNACKED) == "none"
+    assert _value(hass, ACTIVE) == "0"
+    assert _value(hass, FIRING) == "2"
+
+    # Without a superseder, the alert counts as it stands.
+    await _call(hass, "dismiss", left_open)
+    await hass.async_block_till_done()
+    assert _value(hass, UNACKED) == "notice"
+    assert _value(hass, SUPERSEDED) == "0"

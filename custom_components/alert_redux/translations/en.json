@@ -2725,6 +2725,9 @@
       "acknowledged": {
         "name": "Alert Redux acknowledged"
       },
+      "superseded": {
+        "name": "Alert Redux superseded"
+      },
       "no_data": {
         "name": "Alert Redux no data"
       },

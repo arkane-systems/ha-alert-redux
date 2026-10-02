@@ -378,7 +378,11 @@ notifications; see below).
   firing [Decided, R15].
 - [Decided, F7] Supersession affects notifications only. A superseded alert keeps
   its own state, in line with N1, and its attributes include `superseded_by`. It can
-  stop firing before the alert that supersedes it; that's fine.
+  stop firing before the alert that supersedes it; that's fine. [Decided; phase 13]
+  Notifications aren't all it affects: the card hides a superseded alert, so the
+  summary sensors' *unacknowledged* figures leave it out too (§11.2), or a signal
+  light would ask for an acknowledgement of something the user can't see. Its
+  state, and so the alert itself, are unchanged.
 - [Decided] While the superseding alert is firing, the superseded alert sends no on
   or reminder notifications. Its **done** notification follows §9.7: it's dropped
   only if both alerts stop firing together.
@@ -1071,6 +1075,20 @@ recorder with `_unrecorded_attributes`.
   also carry a count per priority. The count sensors have a state class
   (`measurement`), which gives them statistics and keeps them out of the logbook.
   The sensors have no device, and don't get the alerts label (§11.5).
+- [Decided; phase 13] **Superseded alerts aren't unacknowledged.** A firing alert
+  that a firing alert supersedes (§8.1) is hidden on the card and silent, so it
+  is left out of the unacknowledged figures: `highest_unacked_priority`, and the
+  `active` count, its `entity_ids`, and its per-priority counts. Acknowledging
+  the visible alert therefore quiets the signal. The factual figures still count
+  it: `firing`, `highest_priority`, and `acknowledged` (when it is). So `active`
+  plus `acknowledged` is no longer `firing`; the difference is the **superseded
+  alerts that are `active`**.
+- [Decided; phase 13] `sensor.alert_redux_superseded` counts the firing alerts
+  that are currently superseded, `active` or `ack`, and lists them in
+  `entity_ids`, so what is left out of `active` can be seen. An alert that
+  isn't firing isn't counted, whatever its `superseded_by` says. When the
+  superseding alert stops firing, its alerts count as unacknowledged again, as
+  they would on their own (§12.4).
 - [Decided, phase 8] The **no data** count counts every alert missing data,
   whatever its state: `no_data` alerts, and firing alerts in their grace period
   (§4.4), which count as firing too. Something's input being broken shows at
@@ -2074,6 +2092,7 @@ Decisions with their reasons, in the order they were made.
 | Separate events per change, with a common prefix | Easy to filter; list-based event triggers cover listening for several [§11.3]. |
 | Paired events when one change implies another | Snooze and ack don't always move together, so firing both gives the most information [§11.3]. |
 | Per-priority counts as attributes, not sensors | Avoids multiplying entities [§11.2]. |
+| A superseded alert is left out of the summary's unacknowledged figures, and counted by a `superseded` sensor | The card hides it and it sends nothing, so a signal light shouldn't ask for its acknowledgement; the firing figures stay factual, and nothing is hidden without a count [§11.2]. |
 | Generators are entities, with a refresh action | Somewhere to show what they generated; refreshing helps debugging [§12.3]. |
 | Supersession can be generated per target | Matches the main pattern (each door's *Left Open* over its *Open*) [§12.3]. |
 | Dangling references fail towards more noise; flagged as Repairs issues | Losing a partner must never silence a working alert; Repairs is HA's standard place for configuration problems [§12.4]. |

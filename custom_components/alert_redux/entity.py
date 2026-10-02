@@ -645,6 +645,7 @@ class AlertEntity(Entity):
                 self._runtime.state,
                 self._priority,
                 self._runtime.no_data_since is not None,
+                bool(self._superseded_by),
             ),
         )
         firing = self._runtime.firing

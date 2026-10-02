@@ -27,6 +27,9 @@
       },
       "disabled": {
         "default": "mdi:bell-off-outline"
+      },
+      "superseded": {
+        "default": "mdi:layers-outline"
       }
     }
   },

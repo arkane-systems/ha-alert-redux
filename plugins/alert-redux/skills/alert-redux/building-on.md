@@ -71,16 +71,22 @@ history.
 | Sensor | State |
 |---|---|
 | `sensor.alert_redux_highest_priority` | highest priority among firing alerts, or `none` |
-| `sensor.alert_redux_highest_unacked_priority` | the same, among `active` alerts |
+| `sensor.alert_redux_highest_unacked_priority` | the same, among `active` alerts that aren't superseded |
 | `sensor.alert_redux_firing` | count of firing alerts (`active` or `ack`) |
-| `sensor.alert_redux_active` | count of firing, unacknowledged alerts |
+| `sensor.alert_redux_active` | count of firing, unacknowledged alerts that aren't superseded |
 | `sensor.alert_redux_acknowledged` | count of acknowledged alerts |
+| `sensor.alert_redux_superseded` | count of firing alerts that a firing alert supersedes (`active` or `ack`) |
 | `sensor.alert_redux_no_data` | count missing data, including firing alerts in their grace period |
 | `sensor.alert_redux_disabled` | count disabled or suspended |
 
 Count sensors list their alerts in `entity_ids`; the firing and active sensors
 also count each priority (`emergency: 0`, …). For a status light or a badge,
 follow `sensor.alert_redux_highest_unacked_priority`.
+
+A superseded alert is hidden on the card and silent, so the unacknowledged
+figures (`highest_unacked_priority` and `active`) leave it out, while `firing`
+and `highest_priority` still count it. `active` plus `acknowledged` can therefore
+be less than `firing`; `sensor.alert_redux_superseded` lists the difference.
 
 ## Dashboards
 
