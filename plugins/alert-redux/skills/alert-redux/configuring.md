@@ -4,9 +4,9 @@
 - How the flows work
 - Value formats
 - Fields every alert has
+- The `placement` section
 - The `notifications` section
 - The `supersession` section
-- The `placement` section
 - The `voice` section
 - Fields by kind
 - Generators
@@ -64,6 +64,24 @@ Templates that return a value must be **clearly** true or false: anything else
 | `acknowledgeable` | boolean, required | Default true. Off: can't be acknowledged or snoozed. |
 | `subject_entity` | entity | What the alert is about, for messages. Defaults to the watched entity. |
 
+## The `placement` section
+
+An alert's area and labels, which cards and automations use to select alerts
+(for example the card's `areas` and `labels`). Both are optional.
+
+- `area_id` (an area) and `labels` (label IDs). **The entity registry is where
+  they live**: editing an alert pre-fills them from the registry, and saving writes
+  them back (so removing a label here removes it; the Alert Redux label is one
+  like any other). Changes made on the entity's settings page show here next time.
+- For a **new** alert, the values are applied once, when its entity is first
+  added, and never forced back after that.
+- A **generator's** section also has `area_from_target` (boolean, on by default
+  for a new generator): each alert goes in the area of the entity it's about
+  (or its device's); off uses `area_id`. `labels` go on every alert. Saving a
+  generator updates the alerts it has made: the labels it adds or removes and the
+  area, not labels or areas set by hand. A generator made before this has nothing
+  set, so its alerts' areas are left alone.
+
 ## The `notifications` section
 
 | Field | Type | Notes |
@@ -102,24 +120,6 @@ snooze_duration}`:
 The form refuses self-references, repeats, and cycles, and propagation to an
 unacknowledgeable alert. See [operating.md](operating.md) for how supersession
 behaves.
-
-## The `placement` section
-
-An alert's area and labels, which cards and automations use to select alerts
-(for example the card's `areas` and `labels`). Both are optional.
-
-- `area_id` (an area) and `labels` (label IDs). **The entity registry is where
-  they live**: editing an alert pre-fills them from the registry, and saving writes
-  them back (so removing a label here removes it; the Alert Redux label is one
-  like any other). Changes made on the entity's settings page show here next time.
-- For a **new** alert, the values are applied once, when its entity is first
-  added, and never forced back after that.
-- A **generator's** section also has `area_from_target` (boolean, on by default
-  for a new generator): each alert goes in the area of the entity it's about
-  (or its device's); off uses `area_id`. `labels` go on every alert. Saving a
-  generator updates the alerts it has made: the labels it adds or removes and the
-  area, not labels or areas set by hand. A generator made before this has nothing
-  set, so its alerts' areas are left alone.
 
 ## The `voice` section
 

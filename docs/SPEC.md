@@ -1397,8 +1397,12 @@ card filters (§13.1) and anything else that selects entities by area or label.
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
 - Each **notifier group** is also a subentry (§9.3).
-- [Deferred, phase 13] Review the layout and grouping of the configuration forms
-  for each kind of alert.
+- [Decided, phase 13] The layout and grouping of the alert and generator forms were
+  reviewed, and found sound. The one change: the collapsed **Area and labels**
+  section (§11.6) sits right after the name, priority, and icon, where you think
+  about where an alert is. The other three collapsed sections follow the kind's
+  fields, in alphabetical order: **Notifications and messages**, **Supersession**,
+  **Voice assistants**.
 - The forms use HA's own selectors: entity, template, trigger, duration, and so on.
   The form fields shown depend on the kind of alert.
 
@@ -2326,6 +2330,7 @@ Decisions with their reasons, in the order they were made.
 | Alert Redux ships an agent skill, checked against the code by a test | Agents can drive Alert Redux through MCP, but had to dig through the forms' schemas to do it; a test keeps the skill from drifting as the code changes [§20]. |
 | Latching alerts (§10) replace the acknowledgement queue (R7), in a late phase 15 | The real need is a firing that ended before anyone saw it; a per-alert setting answers it on the existing model, where a queue would be a subsystem. One item per alert, with the fire count shown, is simpler than one per firing [§10]. |
 | iOS interruption levels follow priority (Emergency critical, Critical time-sensitive), without a setting | Apple's levels match our top two priorities; a member's own `push` data is the escape hatch, and a setting waits for demand [§9.3]. |
+| Form layout unchanged, except Area and labels moves up beside the name, priority, and icon | A review found nothing else worth regrouping; the sections left at the bottom are alphabetical [§12.1]. |
 | The quiet-hours summary stays an ordinary notification | The queue it might have used is gone; the summary already tells you what you missed [§9.9]. |
 | Displayed state names in a state alert are dropped (N38) | Translations, device classes, and entities' own state names make recognising them a lot of complexity for marginal gain; a state alert's target stays the real state. Revisit if HA's state selector becomes usable for it [§4.1]. |
 | Phase 13 is 1.2.0, phase 14 1.2.1, phase 15 1.3.0 | Integration feature phases are minor releases; phase 14 ships tools, not integration features, so it takes a patch version [§20]. |
@@ -2690,8 +2695,6 @@ platform arrived in 2026.8. Decisions from building it are recorded in §14.1,
 - The admin card shows a copyable summary of an alert's settings on request
   (§13.2).
 - iOS interruption levels for Emergency and Critical alerts (§9.3).
-- Review the layout and grouping of the configuration forms for each kind of
-  alert (§12.1).
 - Setting an alert's area and labels in its configuration form, when it's created
   or edited, with the registry as where they live; and for generators, labels and
   a fixed area or the target's area (§11.6).

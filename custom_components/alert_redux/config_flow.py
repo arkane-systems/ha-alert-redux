@@ -726,6 +726,9 @@ def _alert_schema(
         vol.Optional(CONF_ICON, description=_suggested(defaults, CONF_ICON)): (
             IconSelector()
         ),
+        # With the name, priority, and icon, since that's when you think of where an
+        # alert is. The other sections follow the fields, in alphabetical order.
+        vol.Required(SECTION_PLACEMENT): _placement_section(defaults, generator),
     }
     if kind is AlertKind.STATE:
         if not generator:
@@ -863,7 +866,6 @@ def _alert_schema(
         own,
         _other_generators(entry, own_generator) if generator else None,
     )
-    schema[vol.Required(SECTION_PLACEMENT)] = _placement_section(defaults, generator)
     schema[vol.Required(SECTION_VOICE)] = _voice_section(defaults)
     return vol.Schema(schema)
 

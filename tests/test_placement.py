@@ -284,3 +284,16 @@ async def test_generator_form_defaults_to_the_targets_area(
         result["flow_id"], {**GENERATOR_FORM, "placement": {"area_from_target": False}}
     )
     assert "placement" not in entry.subentries["gen"].data
+
+
+async def test_form_order(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
+    """Area and labels sit with the name, priority, and icon; the other three
+    sections close the form, alphabetically (spec §12.1)."""
+    entry = await setup_alerts()
+    for result in (
+        await _start(hass, entry, "state"),
+        await _start_generator(hass, entry, "state"),
+    ):
+        keys = [str(key) for key in result["data_schema"].schema]
+        assert keys[keys.index("icon") + 1] == "placement"
+        assert keys[-3:] == ["notifications", "supersession", "voice"]
