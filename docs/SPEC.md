@@ -2699,6 +2699,18 @@ platform arrived in 2026.8. Decisions from building it are recorded in §14.1,
   or edited, with the registry as where they live; and for generators, labels and
   a fixed area or the target's area (§11.6).
 
+[Phase 13 as built] Built feature by feature, and released together as 1.2.0. The
+export and import actions are `portable.py`, over the checks the forms share in
+`validation.py`; the admin card gained paging, summary, export and import (YAML),
+and add, edit, and delete through the subentry flows (`flow-client.ts`,
+`flow-dialog.ts`); the main card gained custom buttons and filters; area and labels
+are `placement.py`. Off the plan: the summary sensors leave superseded alerts out of
+the unacknowledged figures and gain `sensor.alert_redux_superseded` (§11.2). Dropped
+or moved: the acknowledgement queue became latching alerts, phase 15 (§10), and
+displayed state names in state alerts (N38) were dropped (§4.1). Decisions from
+building it are recorded in §4.1, §8.1, §9.3, §9.11, §11.2, §11.6, §12.1, §13.1, §13.2,
+and §16.
+
 ### Phase 14 — Converter utilities (1.2.1)
 
 - Standalone tools in this repository, not shipped in the integration, that
