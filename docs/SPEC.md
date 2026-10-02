@@ -1610,6 +1610,13 @@ To make sure it gets fixed:
   friendlier front end to the subentry flows.
 - [Decided, F27; late phase] Export/import of alert definitions, to make up for
   losing YAML's version control and text editing. Also available as actions (§16).
+  [Decided, as built] **Export** (a button for everyone; the actions are open to
+  all) shows every definition as JSON, to copy or download as
+  `alert-redux-<date>.json`; **Import** (admins only) takes pasted text or a chosen
+  file, with a checkbox for overwrite, a **Check** button (a dry run that says what
+  would be created, replaced, or left alone), and **Import**. A refusal shows the
+  action's error, which lists every problem. The format is JSON, since no YAML
+  parser ships with the card and the action takes the parsed object.
 - [Decided, phase 11] Generated alerts are marked "generated" beside their
   kind, with the generator's name as a tooltip; they're edited through their
   generator (§12.3).
@@ -1627,9 +1634,16 @@ To make sure it gets fixed:
   are cut into pages in card order (priority, then name), a priority's heading
   counts its alerts on every page, and the card shows "Page 2 of 5" with
   previous and next buttons under the list when there's more than one page.
-- [Deferred, phase 13] On request (a click, not shown all the time), show a
+- [Decided, as built; phase 13] On request (a click, not shown all the time), show a
   **copyable text summary** of an alert's settings. That's useful when setting up a
-  matching alert.
+  matching alert. A Summary button on each row (for everyone, like export) calls
+  the export action for that alert (a generated alert shows its generator) and
+  turns the definition it returns into text in the card (`describe.ts`): kind and
+  priority, what makes it fire, delays and messages, notifications (groups,
+  reminders, throttle), buttons, supersession, voice proxies, and for a generator
+  its targets. The dialog can switch to the definition itself as JSON, and both
+  copy with one click. The text is made in the card, from the export, so there's one
+  source of truth for what a definition holds.
 
 ## 14. Voice control
 

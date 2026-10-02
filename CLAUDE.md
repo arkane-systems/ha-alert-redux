@@ -224,6 +224,9 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     rendered from `assets/alert-redux-icon.svg`.
 - **`frontend/`** — card source (TypeScript + Lit), bundled with esbuild.
   - `src/main.ts` — the bundle's entry point, importing both cards.
+  - `src/dialog.ts`, `src/transfer-dialog.ts`, `src/describe.ts` — the admin card's
+    modal dialog element; its summary / export / import dialog (from the export and
+    import actions); and `describe`, the pure text summary of an exported definition.
   - `src/alert-redux-card.ts` — the main card element; `src/alert-redux-admin-card.ts`
     — the admin card; `alerts.ts` (reading, sorting, and classifying alert entities),
     `format.ts`, `styles.ts` (`sharedStyles` for both cards, plus the main card's),

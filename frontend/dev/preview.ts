@@ -199,6 +199,55 @@ const ALERTS: HassEntity[] = [
   }),
 ];
 
+// --- Mock definitions, as the export action returns them -----------------------------
+
+const DEFINITIONS = {
+  format: "alert_redux",
+  version: 1,
+  alerts: [
+    {
+      id: "01M3EWQ0P4MT6R6FWNW6TRFCMM",
+      name: "Workshop Door Left Open",
+      kind: "state",
+      priority: "warning",
+      acknowledgeable: true,
+      entity_id: "cover.workshop_garage_door",
+      target_state: "open",
+      delay_on: { hours: 0, minutes: 10, seconds: 0 },
+      delay_off: { hours: 0, minutes: 0, seconds: 5 },
+      message: "The workshop main door has been left open.",
+      reminder_message: "The workshop main door has been left open for {{ duration }}.",
+      done_message: "The workshop main door has been closed. It was open for {{ duration }}.",
+      notifier_groups: ["Quiet", "Office Only"],
+      reminder_schedule: [5, 15],
+      supersedes: [
+        {
+          alert: "alert_redux.workshop_door_open",
+          propagation: "snooze",
+          snooze_duration: { hours: 4, minutes: 0, seconds: 0 },
+        },
+      ],
+      buttons: [{ label: "Close door", action: [], require_unlock: true }],
+      proxy_switch: true,
+      proxy_snooze_button: true,
+    },
+  ],
+  generators: [
+    {
+      id: "01M3FZK72JW93F4YNJRM8F7P7Y",
+      name: "Battery Low",
+      kind: "threshold",
+      priority: "informational",
+      acknowledgeable: true,
+      name_template: "{{ target_name }} battery low",
+      targets: { domains: ["sensor"], device_classes: ["battery"], exclude: ["sensor.spare"] },
+      minimum: "15",
+      hysteresis: 5,
+      throttle: [3, 60],
+    },
+  ],
+};
+
 // --- The page ---------------------------------------------------------------------
 
 type Card = HTMLElement & { hass: HomeAssistant; setConfig(config: object): void };
@@ -242,6 +291,29 @@ function hassFor(dark: boolean): HomeAssistant {
       return { version: stale ? "9.9.9" : __CARD_VERSION__ } as T;
     },
     async callService(_domain, service, data) {
+      if (service === "export") {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        // A generated alert exports its generator.
+        const generated = data?.entity_id === "alert_redux.battery_low";
+        return {
+          response: {
+            ...DEFINITIONS,
+            alerts: data?.entity_id && generated ? [] : DEFINITIONS.alerts,
+            generators: data?.entity_id && !generated ? [] : DEFINITIONS.generators,
+          },
+        };
+      }
+      if (service === "import") {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const file = data?.definitions as { alerts?: { name: string }[] } | undefined;
+        if (file?.alerts?.some((definition) => definition.name === "Bad")) {
+          throw new Error("Nothing was imported:\n- alert 'Bad': unknown_group (Loud)");
+        }
+        const names = (file?.alerts ?? []).map((definition) => ({ name: definition.name }));
+        return {
+          response: { created: names, updated: [], unchanged: [], dry_run: data?.dry_run },
+        };
+      }
       const entityId = String(data?.entity_id);
       await new Promise((resolve) => setTimeout(resolve, 300));
       const attributes = (snoozed_until: string | null) => ({
@@ -313,6 +385,15 @@ function build() {
     const expanded = new Set(Object.keys(states));
     for (const card of cards) Object.assign(card, { _expanded: expanded });
   }
+  // ?summary=<object ID>, ?export, or ?import opens that dialog.
+  const dialog = params.has("summary")
+    ? { mode: "summary", entityId: `alert_redux.${params.get("summary")}` }
+    : params.has("export")
+      ? { mode: "export" }
+      : params.has("import")
+        ? { mode: "import" }
+        : undefined;
+  if (dialog) for (const card of cards) Object.assign(card, { _transfer: dialog });
   const menu = params.get("menu");
   if (menu) {
     const entityId = `alert_redux.${menu}`;

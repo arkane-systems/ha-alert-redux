@@ -11,6 +11,7 @@ import {
   isFiring,
 } from "./alerts";
 import "./dialog";
+import "./transfer-dialog";
 import { clockTime, elapsed, span } from "./format";
 import { sharedStyles } from "./styles";
 import type { Alert, AlertReduxAdminCardConfig, HomeAssistant } from "./types";
@@ -32,6 +33,7 @@ export class AlertReduxAdminCard extends LitElement {
     _menu: { state: true },
     _untilOpen: { state: true },
     _page: { state: true },
+    _transfer: { state: true },
   };
 
   declare hass?: HomeAssistant;
@@ -44,6 +46,8 @@ export class AlertReduxAdminCard extends LitElement {
   declare _untilOpen: boolean;
   /** The page shown, from 0; kept within the pages there are. */
   declare _page: number;
+  /** The summary, export, or import dialog that's open, if any. */
+  declare _transfer?: { mode: "summary" | "export" | "import"; entityId?: string };
 
   private _tick?: number;
 
@@ -166,6 +170,16 @@ export class AlertReduxAdminCard extends LitElement {
         color: var(--secondary-text-color);
         font-size: 0.9rem;
       }
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .toolbar button {
+        padding: 4px 12px;
+        font-size: 0.8rem;
+        --mdc-icon-size: 16px;
+      }
       .pager {
         display: flex;
         align-items: center;
@@ -255,9 +269,20 @@ export class AlertReduxAdminCard extends LitElement {
     const page = Math.min(this._page, Math.max(pages - 1, 0));
     const shown = size ? ordered.slice(page * size, (page + 1) * size) : ordered;
     const title = this._config.title;
+    const admin = this.hass.user?.is_admin ?? false;
     return html`
       <ha-card .header=${title || undefined}>
         <div class="content ${title ? "has-header" : ""}">
+          <div class="toolbar">
+            <button @click=${() => (this._transfer = { mode: "export" })}>
+              <ha-icon icon="mdi:export"></ha-icon>Export
+            </button>
+            ${admin
+              ? html`<button @click=${() => (this._transfer = { mode: "import" })}>
+                  <ha-icon icon="mdi:import"></ha-icon>Import
+                </button>`
+              : nothing}
+          </div>
           ${shown.length
             ? PRIORITIES.map((priority) => {
                 const group = shown.filter((alert) => alert.priority === priority);
@@ -275,6 +300,14 @@ export class AlertReduxAdminCard extends LitElement {
           ${pages > 1 ? this._renderPager(page, pages) : nothing}
         </div>
       </ha-card>
+      ${this._transfer
+        ? html`<alert-redux-transfer-dialog
+            .hass=${this.hass}
+            .mode=${this._transfer.mode}
+            .entityId=${this._transfer.entityId}
+            @closed=${() => (this._transfer = undefined)}
+          ></alert-redux-transfer-dialog>`
+        : nothing}
     `;
   }
 
@@ -318,31 +351,38 @@ export class AlertReduxAdminCard extends LitElement {
               ${this._detail(alert)}${this._superseded(alert)}
             </div>
           </div>
-          ${admin
-            ? html`<div class="controls">
-                ${disabled
-                  ? html`<button
-                      class="primary"
-                      ?disabled=${busy}
-                      @click=${() => this._call(alert, "enable")}
-                    >
-                      <ha-icon icon="mdi:bell-outline"></ha-icon>Enable
-                    </button>`
-                  : html`<button ?disabled=${busy} @click=${() => this._call(alert, "disable")}>
-                      <ha-icon icon="mdi:bell-off-outline"></ha-icon>Disable
-                    </button>`}
-                <button
-                  ?disabled=${busy}
-                  aria-expanded=${this._menu === alert.entityId ? "true" : "false"}
-                  @click=${() => this._toggleMenu(alert)}
-                >
-                  <ha-icon icon="mdi:timer-pause-outline"></ha-icon>Suspend<ha-icon
-                    class="caret"
-                    icon=${this._menu === alert.entityId ? "mdi:menu-up" : "mdi:menu-down"}
-                  ></ha-icon>
-                </button>
-              </div>`
-            : nothing}
+          <div class="controls">
+            <button
+              aria-label=${`Settings summary of ${alert.name}`}
+              title="Settings summary"
+              @click=${() => (this._transfer = { mode: "summary", entityId: alert.entityId })}
+            >
+              <ha-icon icon="mdi:text-box-outline"></ha-icon>
+            </button>
+            ${admin
+              ? html`${disabled
+                    ? html`<button
+                        class="primary"
+                        ?disabled=${busy}
+                        @click=${() => this._call(alert, "enable")}
+                      >
+                        <ha-icon icon="mdi:bell-outline"></ha-icon>Enable
+                      </button>`
+                    : html`<button ?disabled=${busy} @click=${() => this._call(alert, "disable")}>
+                        <ha-icon icon="mdi:bell-off-outline"></ha-icon>Disable
+                      </button>`}
+                  <button
+                    ?disabled=${busy}
+                    aria-expanded=${this._menu === alert.entityId ? "true" : "false"}
+                    @click=${() => this._toggleMenu(alert)}
+                  >
+                    <ha-icon icon="mdi:timer-pause-outline"></ha-icon>Suspend<ha-icon
+                      class="caret"
+                      icon=${this._menu === alert.entityId ? "mdi:menu-up" : "mdi:menu-down"}
+                    ></ha-icon>
+                  </button>`
+              : nothing}
+          </div>
         </div>
         ${admin && this._menu === alert.entityId ? this._renderMenu(alert, busy) : nothing}
       </div>
@@ -513,6 +553,6 @@ if (!customElements.get("alert-redux-admin-card")) {
   window.customCards.push({
     type: "alert-redux-admin-card",
     name: "Alert Redux admin",
-    description: "Lists every Alert Redux alert, and lets admins disable, enable, and suspend them.",
+    description: "Lists every Alert Redux alert, shows its settings, exports and imports definitions, and lets admins disable, enable, and suspend alerts.",
   });
 }

@@ -9,11 +9,18 @@ export interface HassEntity {
 
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
+  /**
+   * Call an action. With returnResponse, the action's response data comes back as
+   * `response`; without notifyOnError, a failure is thrown to the caller only.
+   */
   callService(
     domain: string,
     service: string,
     data?: Record<string, unknown>,
-  ): Promise<unknown>;
+    target?: Record<string, unknown>,
+    notifyOnError?: boolean,
+    returnResponse?: boolean,
+  ): Promise<{ response?: unknown } | undefined>;
   callWS<T>(message: { type: string; [key: string]: unknown }): Promise<T>;
   themes?: { darkMode?: boolean };
   locale?: { language?: string };
