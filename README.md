@@ -31,7 +31,7 @@ built-in `alert` integration, which is
 Copy `custom_components/alert_redux/` into your Home Assistant `config/custom_components/`
 directory, restart Home Assistant, and add the integration as above.
 
-Requires Home Assistant 2025.3 or later.
+Requires Home Assistant 2026.6 or later.
 
 ## Alerts
 
@@ -584,6 +584,78 @@ upgraded card isn't used until you refresh the page. Until then, a dashboard may
 a new card version needs a refresh, and a card that's older than the integration
 offers a **Reload** button. In the companion app, pull down to reload, or reset
 the frontend cache from the app's own settings.
+
+## Voice control
+
+### Assist
+
+Alert Redux adds its own voice commands to Assist, in English:
+
+- "Acknowledge the back door alert" (or "ack …")
+- "Unacknowledge the back door alert", or "remove the acknowledgement from …"
+- "Snooze the back door alert", or "… for 30 minutes" (digits or words; without
+  a duration, the alert's snooze button duration)
+- "What alerts are firing?", "Are there any alerts?"
+
+They work with the built-in agent and with LLM agents: an Assist pipeline
+checks them before handing anything to its agent. LLM agents also get them as
+tools, so "can you snooze whatever's beeping in the kitchen?" works too.
+
+A name matches the alert's name or its aliases, ignoring case, "the", and a
+trailing "alert"; part of a name works if only one alert has it. With no name
+("acknowledge the alert"), the command acts only if exactly one alert fits, and
+otherwise asks which. Voice only reaches alerts that are **exposed to Assist**.
+Each alert is exposed once, when it's first added; unexpose one (Settings →
+Voice assistants → Expose) and voice leaves it alone.
+
+**Other languages.** The commands are intents, so you can give them sentences in
+any language, in `custom_sentences/<language>/alert_redux.yaml`:
+
+```yaml
+language: de
+intents:
+  AlertReduxAcknowledge:
+    data:
+      - sentences:
+          - "bestätige [den] [Alarm] {name}"
+lists:
+  name:
+    wildcard: true
+```
+
+The intents are `AlertReduxAcknowledge`, `AlertReduxUnacknowledge`,
+`AlertReduxSnooze` (also taking `minutes`), and `AlertReduxListFiring`.
+
+**Speech-to-Phrase** recognises only sentences it was trained on, and can't learn
+these, which name alerts with wildcards. Use another speech-to-text engine (such
+as Home Assistant Cloud or Whisper) for voice commands, or type them.
+
+### Alexa and Google Home
+
+Neither can see alert entities, so an alert can have **proxies**, turned on in
+its **Voice assistants** section:
+
+- A **proxy switch**, named after the alert, which works like the old `alert`
+  integration's entities: it's on while the alert is active (unacknowledged).
+  "Alexa, turn off the back door alert" acknowledges it, "… turn on …" removes
+  the acknowledgement, and "Alexa, is the back door alert on?" asks whether it
+  needs attention. It turns off when the alert stops firing, and can't be turned
+  on while it isn't firing.
+- A **snooze button**, "Snooze" and the alert's name, which snoozes the alert for
+  its snooze button duration. Assistants show it as a scene: "Alexa, turn on
+  Snooze back door alert", or "Hey Google, activate Snooze back door alert".
+
+Alexa also shows a switch as a contact sensor, open while the switch is on, so an
+**Alexa routine** started by it "opening" can announce an alert as it fires.
+
+Proxies are exposed to Alexa and Google (through Home Assistant Cloud) when
+they're made, and hidden from Assist, which has its own commands. If you link
+Alexa or Google yourself rather than through Home Assistant Cloud, include the
+proxies in its entity filter. They take their alert's area and labels, and go
+when the option is turned off or the alert is deleted. When an assistant asks
+for something that can't happen, such as turning a proxy on while its alert
+isn't firing, it may still say "OK", but nothing changes, and the switch shows
+the real state.
 
 ## Using Alert Redux from an AI agent
 

@@ -1,7 +1,7 @@
 {
   "name": "alert-redux",
   "description": "How-tos and best practices for configuring, operating, and building on Alert Redux, the Home Assistant alerting integration, through MCP or any other way of driving Home Assistant.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "Arkane Systems"
   },

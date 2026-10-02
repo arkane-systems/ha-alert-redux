@@ -57,7 +57,7 @@ Assistant works (an MCP server, the websocket API, or the UI).
   options: [configuring.md](configuring.md). Every form's fields, their types, the
   validation errors, and worked examples.
 - **Using** alerts (actions, states, attributes, events, supersession, snoozing,
-  notifications): [operating.md](operating.md).
+  notifications, voice control): [operating.md](operating.md).
 - **Building on top** (automations, scripts, dashboards and the cards, summary
   sensors, the logbook): [building-on.md](building-on.md).
 - **Something's wrong** (an alert won't fire, won't notify, shows `no_data`, a

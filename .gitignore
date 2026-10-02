@@ -222,3 +222,6 @@ node_modules/
 
 # Card preview build output
 frontend/dev/dist/
+
+# Venvs for testing against older Home Assistant (scripts/test-against-ha.sh)
+.venvs/

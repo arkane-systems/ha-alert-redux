@@ -28,6 +28,19 @@ None.
 
 ## Done
 
+- **2026-10-02, install restart for phase 12. Exposure isn't forced back, and
+  voice and proxies come back** (1.1.0). Test Voice Proxies (a state alert on
+  `input_boolean.test_alert`, Quiet only, with both proxies) had been unexposed
+  from Assist, and its snooze button from Google, by hand at 00:20 UTC. After
+  the restart, at 01:15 UTC: the alert was still unexposed from Assist, so "what
+  alerts are firing" through the built-in agent answered without it, though it
+  was acknowledged and firing (the sentence triggers had reattached); Test
+  Alert was still exposed. `switch.test_voice_proxies` and
+  `button.snooze_test_voice_proxies` kept their entity IDs; the switch was off,
+  matching its alert's `ack`; the button was still unexposed from Google, and
+  both were still exposed to Alexa and hidden from Assist. Deleting Test Voice
+  Proxies then removed both proxies from the entity registry. Passed.
+
 - **2026-09-30, install restart for the logbook fix. The logbook shows an
   ending while HA was down** (1.0.0). Test Manual Ending (1 minute) was fired
   at 15:37:59 UTC and the restart requested at 15:38:21; Alert Redux set up at

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -87,6 +88,16 @@ def _value(hass: HomeAssistant, entity_id: str) -> str:
     return hass.states.get(entity_id).state
 
 
+async def _settle(hass: HomeAssistant) -> None:
+    """Wait for the summary's recount, which comes a loop turn after the burst.
+
+    Before HA 2026.7, async_block_till_done could return before that turn.
+    """
+    await hass.async_block_till_done()
+    await asyncio.sleep(0)
+    await hass.async_block_till_done()
+
+
 async def test_sensors_exist(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
     await setup_alerts(alert_subentry("Leak"))
     registry = er.async_get(hass)
@@ -169,21 +180,21 @@ async def test_no_data_count(
     )
     assert _value(hass, NO_DATA) == "0"
     hass.states.async_set(SENSOR, "unavailable")
-    await hass.async_block_till_done()
+    await _settle(hass)
     assert hass.states.get(DOOR).state == "active"
     assert _value(hass, NO_DATA) == "1"
     assert _value(hass, FIRING) == "1"
 
     freezer.tick(timedelta(minutes=2))
     async_fire_time_changed(hass)
-    await hass.async_block_till_done()
+    await _settle(hass)
     assert hass.states.get(DOOR).state == "no_data"
     assert _value(hass, NO_DATA) == "1"
     assert _value(hass, FIRING) == "0"
     assert hass.states.get(NO_DATA).attributes["entity_ids"] == [DOOR]
 
     hass.states.async_set(SENSOR, "off")
-    await hass.async_block_till_done()
+    await _settle(hass)
     assert _value(hass, NO_DATA) == "0"
 
 
@@ -229,7 +240,7 @@ async def test_one_write_per_burst(
     )
     changes = async_capture_events(hass, EVENT_STATE_CHANGED)
     hass.states.async_set(SENSOR, "on")
-    await hass.async_block_till_done()
+    await _settle(hass)
     assert _value(hass, FIRING) == "3"
     firing_writes = [event for event in changes if event.data["entity_id"] == FIRING]
     assert len(firing_writes) == 1

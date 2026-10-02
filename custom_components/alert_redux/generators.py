@@ -75,6 +75,7 @@ from .const import (
     CONF_VALUE_TEMPLATE,
     DATA_ADD_ENTITIES,
     DATA_ADD_SENSORS,
+    DATA_PROXIES,
     DOMAIN,
     EVENT_DELETED,
     SUBENTRY_ALERT,
@@ -706,6 +707,9 @@ def async_forget_alert(hass: HomeAssistant, store: AlertStore, unique_id: str) -
     clearing its notifications."""
     record = store.get_alert(unique_id) or {}
     store.remove_alert(unique_id)
+    # Its voice proxies go with it (spec §14.2).
+    if (proxies := hass.data[DOMAIN].get(DATA_PROXIES)) is not None:
+        proxies.async_alert_forgotten(unique_id)
     if entity_id := record.get("entity_id"):
         async_clear_notifications(hass, entity_id)
     hass.bus.async_fire(

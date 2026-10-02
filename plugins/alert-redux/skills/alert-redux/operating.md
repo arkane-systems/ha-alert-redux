@@ -8,6 +8,7 @@
 - Acknowledging, snoozing, disabling, suspending
 - Notifications
 - Supersession
+- Voice
 - Restarts
 
 ## Actions
@@ -167,6 +168,44 @@ An alert can **supersede** others (its `supersedes` relationships):
 The classic pair: *Door Open* (state, no delay) superseded by *Door Left Open*
 (same state, `delay_on` 10 minutes, propagation `acknowledge`): you're told the
 door opened, and acknowledging that also covers it being left open.
+
+## Voice
+
+**Assist** understands these English commands, through the built-in agent and
+through any pipeline, LLM agents included (the sentences are checked first):
+
+- "acknowledge [the] *name* [alert]", "ack …"
+- "unacknowledge *name*", "remove the acknowledgement from *name*"
+- "snooze *name*", "snooze *name* for 30 minutes" (digits or words; without a
+  duration, the alert's `button_snooze_duration`)
+- "what alerts are firing?", "are there any alerts?", "list the alerts"
+
+Names match the alert's name or entity aliases, ignoring case, "the", and a
+trailing "alert"; a part of the name works if only one alert has it. With no
+name ("acknowledge the alert"), it acts only if exactly one alert fits, and
+otherwise asks which. Voice only reaches alerts **exposed to Assist**: each
+alert is exposed once, when it's first added, and stays unexposed if someone
+unexposes it. The commands use the ordinary actions, so who gave them is
+recorded (`last_acked_by` and so on), and §6's refusals apply. LLM agents get
+the same commands as tools, named alert_redux__ and the intent (see
+[building-on.md](building-on.md)).
+
+**Alexa and Google Home** use the proxies (`proxy_switch`,
+`proxy_snooze_button`), which are exposed to them when created, and hidden from
+Assist:
+
+| Alert state | Switch | Turning it off | Turning it on |
+|---|---|---|---|
+| `active` | on | acknowledges | nothing |
+| `ack` (snoozed too) | off | nothing | removes the acknowledgement and snooze |
+| `idle`, `no_data`, `disabled` | off | nothing | refused: `not_firing` |
+
+An unacknowledgeable alert's switch refuses to turn off. The snooze button
+snoozes for the alert's snooze button duration, and refuses (`not_firing`) when
+the alert isn't firing. Both have an `alert` attribute (the alert's entity ID);
+the button also has `snooze_duration` (seconds). On Alexa, a switch is also a
+contact sensor, open while on, so an Alexa routine can announce an alert firing.
+The proxies take the alert's area and labels, but not the "Alert Redux" label.
 
 ## Restarts
 

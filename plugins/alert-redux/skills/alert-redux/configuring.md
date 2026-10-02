@@ -6,6 +6,7 @@
 - Fields every alert has
 - The `notifications` section
 - The `supersession` section
+- The `voice` section
 - Fields by kind
 - Generators
 - Notifier groups
@@ -99,6 +100,20 @@ snooze_duration}`:
 The form refuses self-references, repeats, and cycles, and propagation to an
 unacknowledgeable alert. See [operating.md](operating.md) for how supersession
 behaves.
+
+## The `voice` section
+
+Proxies for Alexa and Google Home, which can't see alert entities. Both are
+booleans, off by default; generators take them too, for every alert they make.
+
+- `proxy_switch`: a `switch` with the alert's name, on while the alert is
+  `active`. Turning it off acknowledges the alert; turning it on removes the
+  acknowledgement.
+- `proxy_snooze_button`: a `button` named "Snooze" and the alert's name, which
+  snoozes the alert for its `button_snooze_duration` (or the global default).
+
+Turning an option off deletes that proxy. Assist needs no proxies: it has its
+own voice commands (see [operating.md](operating.md)).
 
 ## Fields by kind
 

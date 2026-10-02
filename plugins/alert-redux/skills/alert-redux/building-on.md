@@ -5,6 +5,7 @@
 - Automations
 - Summary sensors
 - Dashboards
+- Custom voice sentences
 - History
 
 ## Choosing what to listen to
@@ -112,6 +113,30 @@ Theme variables recolour priorities: `alert-redux-emergency-color`,
 Other cards work too. Every alert carries the label **Alert Redux**, so a card
 that takes targets (an Activity card, an entities card with a label filter) can
 cover every alert, including ones added later, by that one label.
+
+## Custom voice sentences
+
+The voice commands are intents, so custom sentences in any language can use
+them (`custom_sentences/<language>/*.yaml`):
+
+| Intent | Slots |
+|---|---|
+| `AlertReduxAcknowledge` | `name` (optional) |
+| `AlertReduxUnacknowledge` | `name` (optional) |
+| `AlertReduxSnooze` | `name` (optional), `minutes` (optional, a number) |
+| `AlertReduxListFiring` | none |
+
+```yaml
+language: de
+intents:
+  AlertReduxAcknowledge:
+    data:
+      - sentences:
+          - "bestätige [den] [Alarm] {name}"
+lists:
+  name:
+    wildcard: true
+```
 
 ## History
 

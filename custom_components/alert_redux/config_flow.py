@@ -108,6 +108,8 @@ from .const import (
     CONF_PERSISTENT_CLEAR_ON_ACK,
     CONF_PERSISTENT_CLEAR_WHEN_ENDED,
     CONF_PRIORITY,
+    CONF_PROXY_SNOOZE_BUTTON,
+    CONF_PROXY_SWITCH,
     CONF_PROPAGATION,
     CONF_QUIET_BEHAVIOUR,
     CONF_QUIET_DATA,
@@ -142,6 +144,7 @@ from .const import (
     SECTION_NOTIFICATIONS,
     SECTION_QUIET_HOURS,
     SECTION_SUPERSESSION,
+    SECTION_VOICE,
     SUBENTRY_ALERT,
     SUBENTRY_GENERATOR,
     SUBENTRY_NOTIFIER_GROUP,
@@ -495,7 +498,8 @@ def _flatten(user_input: dict[str, Any]) -> dict[str, Any]:
     flat = dict(user_input)
     notifications = flat.pop(SECTION_NOTIFICATIONS, {})
     supersession = flat.pop(SECTION_SUPERSESSION, {})
-    return flat | notifications | supersession
+    voice = flat.pop(SECTION_VOICE, {})
+    return flat | notifications | supersession | voice
 
 
 def _alerts_selector(exclude: str | None) -> EntitySelector:
@@ -847,7 +851,23 @@ def _alert_schema(
         own,
         _other_generators(entry, own_generator) if generator else None,
     )
+    schema[vol.Required(SECTION_VOICE)] = _voice_section(defaults)
     return vol.Schema(schema)
+
+
+def _voice_section(defaults: dict[str, Any]) -> section:
+    """Return the voice assistants section: the proxies (spec §14.2)."""
+    return section(
+        vol.Schema(
+            {
+                vol.Required(
+                    key, default=defaults.get(key, False)
+                ): BooleanSelector()
+                for key in (CONF_PROXY_SWITCH, CONF_PROXY_SNOOZE_BUTTON)
+            }
+        ),
+        {"collapsed": True},
+    )
 
 
 def _other_generators(entry: ConfigEntry, own: str | None) -> list[SelectOptionDict]:
@@ -1141,6 +1161,10 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         data[CONF_SUPERSEDES] = supersedes
     if buttons := [_button(item) for item in user_input.get(CONF_BUTTONS) or []]:
         data[CONF_BUTTONS] = buttons
+    # The voice proxies, stored only when wanted (spec §14.2).
+    for key in (CONF_PROXY_SWITCH, CONF_PROXY_SNOOZE_BUTTON):
+        if user_input.get(key):
+            data[key] = True
     # A zero duration means the default.
     if to_timedelta(user_input.get(CONF_BUTTON_SNOOZE_DURATION)):
         data[CONF_BUTTON_SNOOZE_DURATION] = user_input[CONF_BUTTON_SNOOZE_DURATION]
