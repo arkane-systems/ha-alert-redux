@@ -27,6 +27,8 @@ export interface HomeAssistant {
 export interface AlertReduxAdminCardConfig {
   type: string;
   title?: string;
+  /** How many alerts a page shows; unset shows them all. */
+  page_size?: number | string;
 }
 
 export interface AlertReduxCardConfig {

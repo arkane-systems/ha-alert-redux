@@ -10,6 +10,7 @@ import {
   isAlertEntity,
   isFiring,
 } from "./alerts";
+import "./dialog";
 import { clockTime, elapsed, span } from "./format";
 import { sharedStyles } from "./styles";
 import type { Alert, AlertReduxAdminCardConfig, HomeAssistant } from "./types";
@@ -30,6 +31,7 @@ export class AlertReduxAdminCard extends LitElement {
     _busy: { state: true },
     _menu: { state: true },
     _untilOpen: { state: true },
+    _page: { state: true },
   };
 
   declare hass?: HomeAssistant;
@@ -40,6 +42,8 @@ export class AlertReduxAdminCard extends LitElement {
   declare _menu?: string;
   /** Whether the open suspend menu is showing its date and time field. */
   declare _untilOpen: boolean;
+  /** The page shown, from 0; kept within the pages there are. */
+  declare _page: number;
 
   private _tick?: number;
 
@@ -162,6 +166,14 @@ export class AlertReduxAdminCard extends LitElement {
         color: var(--secondary-text-color);
         font-size: 0.9rem;
       }
+      .pager {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        color: var(--secondary-text-color);
+        font-size: 0.85rem;
+      }
     `,
   ];
 
@@ -169,6 +181,7 @@ export class AlertReduxAdminCard extends LitElement {
     super();
     this._busy = new Set();
     this._untilOpen = false;
+    this._page = 0;
   }
 
   static getStubConfig(): Partial<AlertReduxAdminCardConfig> {
@@ -176,7 +189,12 @@ export class AlertReduxAdminCard extends LitElement {
   }
 
   static getConfigForm() {
-    return { schema: [{ name: "title", selector: { text: {} } }] };
+    return {
+      schema: [
+        { name: "title", selector: { text: {} } },
+        { name: "page_size", selector: { number: { min: 1, mode: "box" } } },
+      ],
+    };
   }
 
   setConfig(config: AlertReduxAdminCardConfig): void {
@@ -219,29 +237,68 @@ export class AlertReduxAdminCard extends LitElement {
     return false;
   }
 
+  /** The page size: a whole number of at least 1, or none (all on one page). */
+  private _pageSize(): number | undefined {
+    const size = Math.floor(Number(this._config?.page_size));
+    return size >= 1 ? size : undefined;
+  }
+
   render() {
     if (!this.hass || !this._config) return nothing;
+    // In card order: by priority, then by name.
     const alerts = collectAlerts(this.hass);
+    const ordered = PRIORITIES.flatMap((priority) =>
+      alerts.filter((alert) => alert.priority === priority).sort(compareName),
+    );
+    const size = this._pageSize();
+    const pages = size ? Math.ceil(ordered.length / size) : 1;
+    const page = Math.min(this._page, Math.max(pages - 1, 0));
+    const shown = size ? ordered.slice(page * size, (page + 1) * size) : ordered;
     const title = this._config.title;
     return html`
       <ha-card .header=${title || undefined}>
         <div class="content ${title ? "has-header" : ""}">
-          ${alerts.length
+          ${shown.length
             ? PRIORITIES.map((priority) => {
-                const group = alerts
-                  .filter((alert) => alert.priority === priority)
-                  .sort(compareName);
+                const group = shown.filter((alert) => alert.priority === priority);
                 if (!group.length) return nothing;
+                // The heading counts the priority's alerts on every page.
+                const total = alerts.filter((alert) => alert.priority === priority).length;
                 return html`
                   <div class="section-title p-${priority}">
-                    <span class="dot"></span>${PRIORITY_NAMES[priority]} (${group.length})
+                    <span class="dot"></span>${PRIORITY_NAMES[priority]} (${total})
                   </div>
                   <div class="group">${group.map((alert) => this._renderRow(alert))}</div>
                 `;
               })
             : html`<div class="empty">No alerts are configured.</div>`}
+          ${pages > 1 ? this._renderPager(page, pages) : nothing}
         </div>
       </ha-card>
+    `;
+  }
+
+  private _renderPager(page: number, pages: number) {
+    return html`
+      <div class="pager">
+        <button
+          class="chip-button"
+          aria-label="Previous page"
+          ?disabled=${page === 0}
+          @click=${() => (this._page = page - 1)}
+        >
+          <ha-icon icon="mdi:chevron-left"></ha-icon>
+        </button>
+        <span>Page ${page + 1} of ${pages}</span>
+        <button
+          class="chip-button"
+          aria-label="Next page"
+          ?disabled=${page >= pages - 1}
+          @click=${() => (this._page = page + 1)}
+        >
+          <ha-icon icon="mdi:chevron-right"></ha-icon>
+        </button>
+      </div>
     `;
   }
 

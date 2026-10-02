@@ -1623,7 +1623,10 @@ To make sure it gets fixed:
   many alerts a page shows, with controls to move between pages; unset, it
   shows them all, as now. Pages keep the grouping by priority. The main card
   isn't paged: it shows only firing alerts, and hiding one on another page
-  would defeat it.
+  would defeat it. [Decided, as built] The option is `page_size`; the alerts
+  are cut into pages in card order (priority, then name), a priority's heading
+  counts its alerts on every page, and the card shows "Page 2 of 5" with
+  previous and next buttons under the list when there's more than one page.
 - [Deferred, phase 13] On request (a click, not shown all the time), show a
   **copyable text summary** of an alert's settings. That's useful when setting up a
   matching alert.

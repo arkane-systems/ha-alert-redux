@@ -296,7 +296,12 @@ function build() {
     card.setConfig({
       type: admin ? "custom:alert-redux-admin-card" : "custom:alert-redux-card",
       title: admin ? "All alerts" : "Alerts",
+      // ?pagesize=5 pages the admin card; ?page=2 starts on the second page.
+      ...(params.has("pagesize") ? { page_size: Number(params.get("pagesize")) } : {}),
     });
+    if (params.has("page")) {
+      Object.assign(card, { _page: Number(params.get("page")) - 1 });
+    }
     column.append(card);
     cards.push(card);
   }

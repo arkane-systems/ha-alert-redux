@@ -107,10 +107,13 @@ listed at the bottom, and disabled alerts are only counted.
 ```yaml
 type: custom:alert-redux-admin-card
 title: All alerts                      # optional
+page_size: 20                          # optional: alerts per page; unset shows all
 ```
 
 Lists every alert by priority with its kind and state; admins get disable,
-enable, and suspend controls.
+enable, and suspend controls. With `page_size`, the list is paged (still in
+priority order, headings counting the whole priority) with previous and next
+buttons.
 
 Theme variables recolour priorities: `alert-redux-emergency-color`,
 `alert-redux-critical-color`, `alert-redux-warning-color`,
