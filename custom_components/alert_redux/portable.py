@@ -28,6 +28,9 @@ from homeassistant.util.ulid import ulid_now
 from .const import (
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_AREA_FROM_TARGET,
+    CONF_AREA_ID,
+    CONF_PLACEMENT,
     CONF_ACTION,
     CONF_ALERT,
     CONF_ALERT_STATES,
@@ -154,6 +157,9 @@ def export_definitions(
         if wanted is not None and subentry_id not in wanted:
             continue
         data = _export_data(dict(subentry.data), groups, generators)
+        if subentry.subentry_type == SUBENTRY_ALERT:
+            # An alert's is the registry's, applied once when it was added.
+            data.pop(CONF_PLACEMENT, None)
         definition = {KEY_ID: subentry_id, KEY_NAME: subentry.title, **data}
         if subentry.subentry_type == SUBENTRY_ALERT:
             alerts.append(definition)
@@ -310,6 +316,16 @@ _BUTTON = vol.Schema(
     }
 )
 
+# A generator's area and labels for its alerts (spec §11.6); the IDs are the
+# registry's, which aren't checked, as for the targets'.
+_PLACEMENT = vol.Schema(
+    {
+        vol.Optional(CONF_AREA_FROM_TARGET): bool,
+        vol.Optional(CONF_AREA_ID): _text,
+        vol.Optional(CONF_LABELS): [str],
+    }
+)
+
 _ALERT_RELATIONSHIP = vol.Schema(
     {
         vol.Required(CONF_ALERT): cv.entity_id,
@@ -429,6 +445,7 @@ def _schema(kind: AlertKind, generator: bool) -> vol.Schema:
         fields |= {
             vol.Optional(CONF_NAME_TEMPLATE): _text,
             vol.Required(CONF_TARGETS): _TARGETS,
+            vol.Optional(CONF_PLACEMENT): _PLACEMENT,
             vol.Optional(CONF_SUPERSEDES): [_GENERATOR_RELATIONSHIP],
         }
     else:
@@ -444,6 +461,15 @@ def _schema(kind: AlertKind, generator: bool) -> vol.Schema:
 _KEEP_EMPTY = frozenset(
     {CONF_NOTIFIER_GROUPS, CONF_REMINDER_SCHEDULE, CONF_THROTTLE, CONF_ALERT_STATES}
 )
+
+
+def _without_alert_placement(existing: ConfigSubentry, item: Item) -> dict[str, Any]:
+    """Return an existing definition's data. An alert's placement isn't part of
+    a definition (it was applied once, and lives in the registry)."""
+    data = dict(existing.data)
+    if item.subentry_type == SUBENTRY_ALERT:
+        data.pop(CONF_PLACEMENT, None)
+    return data
 
 
 def _defaults(kind: AlertKind) -> dict[str, Any]:
@@ -490,6 +516,18 @@ def _stored(data: dict[str, Any]) -> dict[str, Any]:
         data[CONF_BUTTON_SNOOZE_DURATION].values()
     ):
         del data[CONF_BUTTON_SNOOZE_DURATION]
+    if CONF_PLACEMENT in data:
+        placement = data[CONF_PLACEMENT]
+        # As the form stores it: the target's area, or a fixed one, and labels.
+        if placement.get(CONF_AREA_FROM_TARGET):
+            placement.pop(CONF_AREA_ID, None)
+        else:
+            placement.pop(CONF_AREA_FROM_TARGET, None)
+        for key in (CONF_AREA_ID, CONF_LABELS):
+            if not placement.get(key):
+                placement.pop(key, None)
+        if not placement:
+            del data[CONF_PLACEMENT]
     relationships = []
     for rel in data.get(CONF_SUPERSEDES, []):
         rel = dict(rel)
@@ -645,7 +683,7 @@ async def async_plan_import(
                 item.invalid = True
             elif {
                 **_defaults(AlertKind(item.data[CONF_KIND])),
-                **existing.data,
+                **_without_alert_placement(existing, item),
             } == item.data and existing.title == item.name:
                 item.action = ACTION_UNCHANGED
             elif not overwrite:

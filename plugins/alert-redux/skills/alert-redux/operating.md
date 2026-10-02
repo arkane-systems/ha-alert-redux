@@ -258,7 +258,9 @@ forms.
   generator's relationships. Import turns the names back into this instance's
   groups and generators, ignoring case; a name that doesn't exist is a problem.
   Groups themselves aren't exported: create them first. Areas and labels in a
-  generator's `targets` are the registry's IDs, and aren't checked.
+  generator's `targets` and `placement` are the registry's IDs, and aren't checked.
+  An alert's own area and labels (its `placement`) aren't exported: they live in the
+  entity registry.
 - **`id`** is the definition's subentry ID. Import keeps it, so importing a file
   again, here or on another instance, finds the same definitions. Leave it out
   in a hand-written file: the definition then matches the existing one of the

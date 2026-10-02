@@ -66,7 +66,10 @@ from .const import (
     CONF_GENERATOR,
     CONF_EXCLUDE,
     CONF_KIND,
+    CONF_AREA_FROM_TARGET,
+    CONF_AREA_ID,
     CONF_LABELS,
+    CONF_PLACEMENT,
     CONF_NAME_TEMPLATE,
     CONF_PATTERN,
     CONF_SUBJECT_ENTITY,
@@ -84,7 +87,7 @@ from .const import (
     VAR_TARGET_NAME,
     AlertKind,
 )
-from .definitions import AlertDefinition, generator_unique_id
+from .definitions import AlertDefinition, Placement, generator_unique_id
 from .model import AlertRuntime, Settings
 from .notifications import async_clear_notifications
 from .store import AlertStore
@@ -233,6 +236,8 @@ class Generator:
     name_template: str | None
     # The alert configuration every generated alert shares.
     alert_data: dict[str, Any]
+    # Where its alerts go in the registry (spec §11.6): the stored placement.
+    placement_config: dict[str, Any] = field(default_factory=dict)
     # By target key: what each alert was built from, and the entity.
     definitions: dict[str, AlertDefinition] = field(default_factory=dict)
     entities: dict[str, AlertEntity] = field(default_factory=dict)
@@ -262,8 +267,9 @@ class Generator:
         self.alert_data = {
             key: value
             for key, value in data.items()
-            if key not in (CONF_TARGETS, CONF_NAME_TEMPLATE)
+            if key not in (CONF_TARGETS, CONF_NAME_TEMPLATE, CONF_PLACEMENT)
         }
+        self.placement_config = dict(data.get(CONF_PLACEMENT) or {})
 
     @property
     def targets(self) -> list[str]:
@@ -295,6 +301,20 @@ class Generator:
             generator=self.subentry_id,
             target=candidate.entity_id,
             variables=variables,
+            placement=self._placement(candidate),
+        )
+
+    def _placement(self, candidate: Candidate) -> Placement | None:
+        """Return where a target's alert goes in the registry (spec §11.6): the
+        generator's labels, and the target's own area or a fixed one."""
+        config = self.placement_config
+        area_id = (
+            candidate.area
+            if config.get(CONF_AREA_FROM_TARGET)
+            else config.get(CONF_AREA_ID)
+        )
+        return Placement.from_stored(
+            {CONF_AREA_ID: area_id, CONF_LABELS: config.get(CONF_LABELS)}
         )
 
     def _name(
@@ -626,6 +646,7 @@ class GeneratorManager:
                 generator=definition.generator,
                 target=definition.target,
                 variables=definition.variables,
+                placement=Placement.from_stored(record.get("placement")),
             )
         return restored
 

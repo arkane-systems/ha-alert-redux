@@ -33,7 +33,8 @@ ha_config_set_helper(
     helper_type="config_subentry", action="create",
     entry_id=ENTRY, subentry_type="alert",
     config={"next_step_id": "state", "name": "…", …,
-            "notifications": {…}, "supersession": {}},
+            "notifications": {…}, "supersession": {},
+            "voice": {}, "placement": {}},
 )
 ```
 
@@ -87,7 +88,8 @@ patch: omitted fields keep their values. Sections (`event_durations`,
   about updates being a patch. An update doesn't carry over sections that are
   empty in the stored data, so a partial one fails with `supersession: required
   key not provided`. Read the edit form, and send every field you want kept, with
-  `"supersession": {}` when there are no relationships.
+  `"supersession": {}`, `"voice": {}`, and `"placement": {}` when they have nothing
+  in them.
 - **Phantom option keys.** `ha_get_integration` may show the options with extra,
   flattened copies of section fields (`hours`, `minutes`, `critical`, … at the top
   level). That's an HA-MCP display bug

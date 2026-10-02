@@ -202,6 +202,7 @@ CONF_THROTTLE_MINUTES = "throttle_minutes"
 SECTION_NOTIFICATIONS = "notifications"
 SECTION_SUPERSESSION = "supersession"
 SECTION_VOICE = "voice"
+SECTION_PLACEMENT = "placement"
 
 # Voice proxies for Alexa and Google (spec §14.2): a switch, and a snooze button,
 # each opted into per alert.
@@ -213,6 +214,9 @@ CONF_PROXY_SNOOZE_BUTTON = "proxy_snooze_button"
 CONF_NAME_TEMPLATE = "name_template"
 CONF_TARGETS = "targets"
 CONF_LABELS = "labels"
+CONF_PLACEMENT = "placement"
+CONF_AREA_ID = "area_id"
+CONF_AREA_FROM_TARGET = "area_from_target"
 CONF_AREAS = "areas"
 CONF_DOMAINS = "domains"
 CONF_DEVICE_CLASSES = "device_classes"

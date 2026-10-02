@@ -620,3 +620,52 @@ async def test_generators_by_name_in_one_file(
     )
     ids = {item["name"]: item["id"] for item in result["created"]}
     assert entry.subentries[ids["A"]].data["supersedes"] == [{"generator": ids["B"]}]
+
+
+async def test_alert_placement_is_not_exported_and_does_not_stop_unchanged(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A new alert's area and labels are the registry's once it's added: they aren't
+    a definition's, so they aren't exported, and importing the export finds the
+    alert unchanged."""
+    await setup_alerts(
+        alert_subentry(
+            "Back Door Open",
+            "door",
+            placement={"area_id": "hall", "labels": ["safety"]},
+        )
+    )
+    exported = await _export(hass)
+    assert "placement" not in exported["alerts"][0]
+    result = await _import(hass, exported)
+    assert [item["name"] for item in result["unchanged"]] == ["Back Door Open"]
+
+
+async def test_generator_placement_round_trips(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A generator's area and labels for its alerts are part of its definition."""
+    entry = await setup_alerts(
+        generator_subentry(
+            "Unlocked",
+            "state",
+            "gen",
+            targets={"domains": ["lock"]},
+            target_state="unlocked",
+            placement={"area_from_target": True, "labels": ["safety"]},
+        )
+    )
+    exported = await _export(hass)
+    assert exported["generators"][0]["placement"] == {
+        "area_from_target": True,
+        "labels": ["safety"],
+    }
+    assert (await _import(hass, exported))["unchanged"][0]["name"] == "Unlocked"
+
+    changed = copy.deepcopy(exported)
+    changed["generators"][0]["placement"] = {
+        "area_id": "porch",
+        "area_from_target": False,
+    }
+    await _import(hass, changed, overwrite=True)
+    assert dict(entry.subentries["gen"].data["placement"]) == {"area_id": "porch"}

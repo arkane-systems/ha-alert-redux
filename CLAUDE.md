@@ -55,6 +55,10 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `EntityComponent.async_setup_entry`; adds one entity per alert subentry, linked
     with `config_subentry_id` so HA removes it with the subentry, then starts the
     generators, and keeps the add-entities callback for alerts added later.
+  - `placement.py` — an alert's area and labels in the entity registry (spec §11.6):
+    applied once when an alert is added, and followed (as a diff) when a generated
+    alert's placement changes. `definitions.Placement` is what a definition carries;
+    a fixed alert's transient `placement` is split out of its subentry data.
   - `definitions.py` — `AlertDefinition`, what an alert entity is built from:
     unique ID, name, data, and for a generated alert its generator, target, and
     extra template variables. Fixed alerts' come from their subentries

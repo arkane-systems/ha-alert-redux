@@ -99,6 +99,8 @@ from .const import (
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
     CONF_ACTION,
+    CONF_AREA_ID,
+    CONF_LABELS,
     CONF_REQUIRE_UNLOCK,
     CONF_ALERT,
     CONF_ALERT_STATES,
@@ -168,6 +170,7 @@ from .const import (
 from .definitions import AlertDefinition, RelationshipResolver, generator_unique_id
 from .exposure import ASSIST, async_set_exposure
 from .labels import async_apply_label
+from .placement import async_apply_placement, async_follow_placement
 from .messages import Messages, MessageTracker, message_context
 from .buttons import BUTTON_ACK, BUTTON_SNOOZE, alert_buttons, custom_button_key
 from .model import (
@@ -309,6 +312,9 @@ class AlertEntity(Entity):
         self._message_key: tuple[Any, ...] | None = None
         # Whether this alert has been given the alerts label (spec §11.5).
         self._labelled = False
+        self._placed = False
+        # The placement last given to the registry, so a change can be followed.
+        self._applied_placement = definition.placement
         # Whether it's been exposed to Assist, and which proxies have been
         # exposed to Alexa and Google, once each (spec §14.1, §14.2).
         self._assist_exposed = False
@@ -584,12 +590,18 @@ class AlertEntity(Entity):
         if record is not None:
             self._runtime = AlertRuntime.from_dict(record["runtime"])
             self._labelled = record.get("labelled", False)
+            self._placed = record.get("placed", False)
             self._assist_exposed = record.get("assist_exposed", False)
             self.proxies_exposed = set(record.get("proxies_exposed", ()))
         if not self._labelled:
             self._labelled = True
             if (label_id := self.hass.data[DOMAIN].get(DATA_LABEL)) is not None:
                 async_apply_label(self.hass, self.entity_id, label_id)
+        if not self._placed:
+            # Once: the area and labels its configuration names (spec §11.6).
+            self._placed = True
+            if (placement := self._definition.placement) is not None:
+                async_apply_placement(self.hass, self.entity_id, placement)
         if not self._assist_exposed:
             self._assist_exposed = async_set_exposure(
                 self.hass, self.entity_id, {ASSIST: True}
@@ -1245,6 +1257,20 @@ class AlertEntity(Entity):
         pending expiry is cleared, or it would still end the firing unannounced.
         """
         self._configure(definition)
+        # Only a generated alert follows a change: a fixed alert's registry values
+        # are edited in place by its form, and the stored ones were applied once.
+        if (
+            self.hass is not None
+            and definition.generator is not None
+            and self._applied_placement != definition.placement
+        ):
+            async_follow_placement(
+                self.hass,
+                self.entity_id,
+                self._applied_placement,
+                definition.placement,
+            )
+        self._applied_placement = definition.placement
         if not self._has_duration:
             self._runtime.event_expires = None
         self._async_replan_reminder()
@@ -1509,6 +1535,17 @@ class AlertEntity(Entity):
                 ATTR_PRIORITY: self._priority,
                 "runtime": self._runtime.to_dict(),
                 "labelled": self._labelled,
+                "placed": self._placed,
+                # A generated alert's, so that the registry isn't touched again at
+                # startup, when its definition is rebuilt from what was stored.
+                "placement": (
+                    {
+                        CONF_AREA_ID: placement.area_id,
+                        CONF_LABELS: sorted(placement.labels),
+                    }
+                    if (placement := self._definition.placement) is not None
+                    else None
+                ),
                 "assist_exposed": self._assist_exposed,
                 "proxies_exposed": sorted(self.proxies_exposed),
                 # A generated alert's generator and target (spec §12.3).

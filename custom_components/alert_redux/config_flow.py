@@ -18,6 +18,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import section
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     ActionSelector,
     AreaSelector,
@@ -48,7 +49,11 @@ from homeassistant.util import slugify
 from .const import (
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_AREA_FROM_TARGET,
+    CONF_AREA_ID,
     CONF_AREAS,
+    CONF_PLACEMENT,
+    SECTION_PLACEMENT,
     CONF_DEVICE_CLASSES,
     CONF_DOMAINS,
     CONF_EXCLUDE,
@@ -505,7 +510,8 @@ def _flatten(user_input: dict[str, Any]) -> dict[str, Any]:
     notifications = flat.pop(SECTION_NOTIFICATIONS, {})
     supersession = flat.pop(SECTION_SUPERSESSION, {})
     voice = flat.pop(SECTION_VOICE, {})
-    return flat | notifications | supersession | voice
+    placement = flat.pop(SECTION_PLACEMENT, {})
+    return flat | notifications | supersession | voice | placement
 
 
 def _alerts_selector(exclude: str | None) -> EntitySelector:
@@ -857,8 +863,87 @@ def _alert_schema(
         own,
         _other_generators(entry, own_generator) if generator else None,
     )
+    schema[vol.Required(SECTION_PLACEMENT)] = _placement_section(defaults, generator)
     schema[vol.Required(SECTION_VOICE)] = _voice_section(defaults)
     return vol.Schema(schema)
+
+
+def _placement_section(defaults: dict[str, Any], generator: bool) -> section:
+    """Return the area and labels section (spec §11.6).
+
+    An alert's are the entity registry's: editing one pre-fills them from there,
+    and saving writes them back. A generator's are given to all its alerts: a
+    fixed area, or the target's own, and labels.
+    """
+    schema: dict[Any, Any] = {}
+    if generator:
+        schema[
+            vol.Required(
+                CONF_AREA_FROM_TARGET, default=defaults.get(CONF_AREA_FROM_TARGET, True)
+            )
+        ] = BooleanSelector()
+    schema[
+        vol.Optional(CONF_AREA_ID, description=_suggested(defaults, CONF_AREA_ID))
+    ] = AreaSelector()
+    schema[
+        vol.Optional(CONF_LABELS, description=_suggested(defaults, CONF_LABELS))
+    ] = LabelSelector(LabelSelectorConfig(multiple=True))
+    return section(vol.Schema(schema), {"collapsed": True})
+
+
+def _placement_data(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Return an alert form's area and labels, without what is empty."""
+    placement: dict[str, Any] = {}
+    if area := user_input.get(CONF_AREA_ID):
+        placement[CONF_AREA_ID] = area
+    if labels := user_input.get(CONF_LABELS):
+        placement[CONF_LABELS] = list(labels)
+    return placement
+
+
+def _generator_placement(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Return a generator form's placement: the target's area or a fixed one, and
+    labels. Nothing set stores nothing."""
+    placement: dict[str, Any] = {}
+    if user_input.get(CONF_AREA_FROM_TARGET):
+        placement[CONF_AREA_FROM_TARGET] = True
+    elif area := user_input.get(CONF_AREA_ID):
+        placement[CONF_AREA_ID] = area
+    if labels := user_input.get(CONF_LABELS):
+        placement[CONF_LABELS] = list(labels)
+    return placement
+
+
+def _registry_placement(hass: HomeAssistant, entity_id: str | None) -> dict[str, Any]:
+    """Return an alert's area and labels as the form shows them."""
+    entry = er.async_get(hass).async_get(entity_id) if entity_id else None
+    if entry is None:
+        return {}
+    return {CONF_AREA_ID: entry.area_id, CONF_LABELS: sorted(entry.labels)}
+
+
+def _write_registry_placement(
+    hass: HomeAssistant, entity_id: str | None, placement: dict[str, Any]
+) -> None:
+    """Write an alert's area and labels from its form to the entity registry."""
+    registry = er.async_get(hass)
+    if entity_id is not None and registry.async_get(entity_id) is not None:
+        registry.async_update_entity(
+            entity_id,
+            area_id=placement.get(CONF_AREA_ID),
+            labels=set(placement.get(CONF_LABELS, ())),
+        )
+
+
+def _generator_placement_defaults(data: dict[str, Any]) -> dict[str, Any]:
+    """Return a generator's stored placement as its form shows it. A generator
+    that has none is one that predates it: its alerts' areas aren't touched."""
+    stored = data.get(CONF_PLACEMENT) or {}
+    return {
+        CONF_AREA_FROM_TARGET: bool(stored.get(CONF_AREA_FROM_TARGET)),
+        CONF_AREA_ID: stored.get(CONF_AREA_ID),
+        CONF_LABELS: stored.get(CONF_LABELS),
+    }
 
 
 def _voice_section(defaults: dict[str, Any]) -> section:
@@ -1055,8 +1140,14 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
                 ):
                     errors["base"] = error
             if not errors:
+                placement = _placement_data(user_input)
                 if subentry is None:
+                    # The alert has no entity yet: the values travel with it, and
+                    # are applied once, when it's added (spec §11.6).
+                    if placement:
+                        data[CONF_PLACEMENT] = placement
                     return self.async_create_entry(title=name, data=data)
+                _write_registry_placement(self.hass, own, placement)
                 return self.async_update_and_abort(
                     self._get_entry(), subentry, title=name, data=data
                 )
@@ -1067,6 +1158,7 @@ class AlertSubentryFlowHandler(ConfigSubentryFlow):
             defaults = {
                 CONF_NAME: subentry.title,
                 **_alert_form_defaults(subentry.data),
+                **_registry_placement(self.hass, own),
             }
         else:
             defaults = {}
@@ -1542,6 +1634,7 @@ class GeneratorSubentryFlowHandler(ConfigSubentryFlow):
             defaults = {
                 CONF_NAME: subentry.title,
                 **_alert_form_defaults(subentry.data),
+                **_generator_placement_defaults(subentry.data),
             }
         else:
             defaults = {}
@@ -1604,6 +1697,8 @@ def _generator_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, An
         if value not in (None, "", []):
             targets[key] = value
     data[CONF_TARGETS] = targets
+    if placement := _generator_placement(user_input):
+        data[CONF_PLACEMENT] = placement
     return data
 
 

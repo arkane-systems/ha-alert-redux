@@ -99,6 +99,18 @@
                 "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too. For each, choose what acknowledging it does to this alert: nothing; acknowledge this alert, even before it fires; or snooze it, for the duration counted from that acknowledgement."
               }
             },
+            "placement": {
+              "name": "Area and labels",
+              "description": "Where the alert is in Home Assistant's entity registry, for cards and automations that pick alerts by area or label. Editing an alert shows its current area and labels, and saving sets them, so changes made on the entity's settings page show here next time. The Alert Redux label is among them, and can be removed.",
+              "data": {
+                "area_id": "Area",
+                "labels": "Labels"
+              },
+              "data_description": {
+                "area_id": "Optional. The area the alert is in.",
+                "labels": "Optional. Labels for the alert."
+              }
+            },
             "voice": {
               "name": "Voice assistants",
               "description": "Proxies for Alexa and Google Home, which can't see alerts themselves. Each is exposed to Alexa and Google (through Home Assistant Cloud) when it's created, and hidden from Assist, which has its own voice commands for alerts.",
@@ -187,6 +199,18 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -273,6 +297,18 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -353,6 +389,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
               }
             },
             "voice": {
@@ -443,6 +491,18 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -529,6 +589,18 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -609,6 +681,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
               }
             },
             "voice": {
@@ -695,6 +779,18 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -775,6 +871,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
               }
             },
             "voice": {
@@ -859,6 +967,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
               }
             },
             "voice": {
@@ -957,6 +1077,18 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -1049,6 +1181,18 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -1139,6 +1283,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
               }
             },
             "voice": {
@@ -1237,6 +1393,18 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -1325,6 +1493,18 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -1411,6 +1591,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data::labels%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::placement::data_description::labels%]"
               }
             },
             "voice": {
@@ -1564,6 +1756,20 @@
                 "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
               }
             },
+            "placement": {
+              "name": "Area and labels",
+              "description": "Where the generator's alerts go in the entity registry. Saving applies a change to the alerts it has made already: labels it adds or removes, and the area. Anything else on those alerts is left alone.",
+              "data": {
+                "area_from_target": "Use the target's area",
+                "area_id": "Area",
+                "labels": "Labels"
+              },
+              "data_description": {
+                "area_from_target": "Each alert goes in the area of the entity it is about, or else its device's. Turn off to use the area below.",
+                "area_id": "Optional. A fixed area for all the alerts, used when the target's area is off.",
+                "labels": "Optional. Labels given to all the alerts."
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -1674,6 +1880,20 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_from_target%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_from_target%]"
               }
             },
             "voice": {
@@ -1790,6 +2010,20 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_from_target%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_from_target%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -1894,6 +2128,20 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_from_target%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_from_target%]"
               }
             },
             "voice": {
@@ -2002,6 +2250,20 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_from_target%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_from_target%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -2106,6 +2368,20 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_from_target%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_from_target%]"
               }
             },
             "voice": {
@@ -2218,6 +2494,20 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_from_target%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_from_target%]"
               }
             },
             "voice": {
@@ -2334,6 +2624,20 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_from_target%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_from_target%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -2440,6 +2744,20 @@
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
             },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_from_target%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_from_target%]"
+              }
+            },
             "voice": {
               "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
               "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
@@ -2544,6 +2862,20 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "placement": {
+              "name": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::description%]",
+              "data": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data::area_from_target%]"
+              },
+              "data_description": {
+                "area_id": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_id%]",
+                "labels": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::labels%]",
+                "area_from_target": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::placement::data_description::area_from_target%]"
               }
             },
             "voice": {

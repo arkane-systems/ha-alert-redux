@@ -1304,6 +1304,29 @@ card filters (§13.1) and anything else that selects entities by area or label.
 - **Voice proxies** (§14.2) copy their alert's area and labels, and follow
   changes to them however they're made, except for the alerts label, which
   proxies don't get (§11.5).
+- [Decided, as built] **The form.** A collapsed **Area and labels** section
+  (`placement`) on every alert and generator form: an area and labels. Editing a
+  fixed alert pre-fills it from the registry and writes it back on saving (a label
+  left out is removed, the alerts label too); the subentry keeps nothing, so
+  there's nothing stale. A new alert's values are stored in the subentry as
+  `placement`, kept apart from the alert's configuration (`AlertDefinition.placement`,
+  not `data`), and applied once, when the entity is first added; a `placed` flag in
+  the stored record stops them being applied again.
+- [Decided, as built] **Generators.** The section also has *Use the target's area*
+  (on for a new generator; a generator made before this has none of it, so its
+  alerts' areas are left alone). The stored `placement` is
+  `{area_from_target | area_id, labels}`. Each generated alert is given the
+  target's area (the entity's, else its device's) or the fixed area, and the labels,
+  when it's added. A change then **follows**: saving the generator, or the target
+  moving to another area, adds the labels the generator now names, removes those it
+  no longer names, and sets the new area, leaving everything else on the alert alone
+  (labels added by hand, the alerts label). The placement an alert was built with is
+  kept in its stored record, so setting up again after a restart changes nothing.
+- [Decided, as built] **Export and import** (§16). An alert's placement was applied
+  once and now lives in the registry, so it isn't exported, and doesn't stop an
+  import finding the alert unchanged. A generator's placement is part of its
+  definition and is exported; its area and label IDs are the registry's and aren't
+  checked, as for its targets.
 
 ## 12. Configuration
 
@@ -2238,6 +2261,7 @@ Decisions with their reasons, in the order they were made.
 | 1.0.0 is 0.11.1 plus self-ending manual alerts and an entity refactor, after a shorter soak of its own | The 0.11.1 soak found only trivia, and a 1.0.0 identical to it would add nothing; the refactor keeps manual-only code out of the base class every kind shares [§20]. |
 | An alert's area and labels live in the entity registry; the form edits them there | One place for the values, so edits on the entity's settings page aren't overwritten, and proxies can follow the alert whichever way it was edited [§11.6]. |
 | Generated alerts default to their target's area (provisionally) | The alerts a generator makes are usually about entities in different areas, e.g. each door's *Left Open* alert [§11.6]. |
+| A generator's area and labels follow changes, as a diff | Editing a generator should reach the alerts it has made, without undoing what a user set by hand or the alerts label [§11.6]. |
 | Card filters are either scope, in the card's configuration (area, label), or view, on the card (hide acknowledged, priorities) | Scope is set once per placement, e.g. a card per room page; the view is what you change while looking at the card [§13.1]. |
 | The admin card can be paged; the main card isn't | The admin card lists every alert and gets long; the main card shows only firing alerts, which must never be hidden on another page [§13.2]. |
 | Custom buttons show on the main card too, from the same definitions | A *Close door* button is as useful on the dashboard as on the phone, and one definition can't drift apart from another [§13.1]. |
