@@ -1554,13 +1554,23 @@ To make sure it gets fixed:
     *Network*. As for generator targets (§12.3), an alert must match each of
     the two that's set, and any one value within each. Alerts outside the scope
     are left out of the whole card, including the no-data section and the
-    disabled count. How scope and supersession interact (a superseded alert in
-    scope under a root that isn't, or the other way round) is settled when it's
-    built.
+    disabled count. [Decided, as built] Scope applies **first**, then
+    supersession grouping: an in-scope alert whose superseder is out of scope
+    shows as a top-level alert, and an in-scope superseder just has nothing
+    folded under it, so the card never hides something in scope behind
+    something that isn't. The options are `areas` and `labels`, and the area
+    is the entity registry's own (alerts have no device).
   - **View, changed on the card itself**: hide acknowledged alerts, and show
     only some priorities. These are for changing while looking at the card, so
     they're controls on the card; the card's configuration only sets their
-    starting values.
+    starting values. [Decided, as built] The options are `hide_acknowledged` and
+    `priorities`. The controls are a **Hide acknowledged** button and a button per
+    priority present, in a row under the title (not shown when they'd have
+    nothing to do); the state lives in the card, so a reload returns to the
+    configured start. They are judged by the alert at the root of a supersession
+    group, which takes its superseded alerts with it, as they do for the summary
+    sensors (§11.2). The card says "N alerts hidden by the filters" so nothing
+    disappears silently; the no-data section and disabled count follow scope only.
 - Styling follows [weather_alerts_card](https://github.com/seevee/weather_alerts_card)
   [Decided, N31].
 - **Priority colours** [Decided]. Used for the sub-cards, the admin card, and the
