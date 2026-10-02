@@ -28,6 +28,17 @@ None.
 
 ## Done
 
+- **2026-10-02, install restart for 1.2.0. Area and labels aren't forced back
+  after a restart** (phase 13). Set up on the live instance before the install:
+  a throwaway generator (the target's area, plus a label) with one generated
+  alert, and a throwaway fixed alert (an area and a label), whose area and labels
+  were then changed by hand (a generated alert moved to another area and stripped
+  of the generator's label; the fixed alert given another area and no labels). After
+  the restart, a minute after the install, nothing had been put back on either, and
+  `alert_redux/info` reported 1.2.0. This covers the `placed` flag and the placement
+  stored with a generated alert's record (spec §11.6). The throwaways, their helper,
+  and their label were deleted afterwards.
+
 - **2026-10-02, install restart for phase 12. Exposure isn't forced back, and
   voice and proxies come back** (1.1.0). Test Voice Proxies (a state alert on
   `input_boolean.test_alert`, Quiet only, with both proxies) had been unexposed
