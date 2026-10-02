@@ -31,6 +31,7 @@ DATA_SUMMARY = "summary"
 DATA_GENERATORS = "generators"
 DATA_GENERATOR_SUBENTRIES = "generator_subentries"
 DATA_ADD_SENSORS = "add_sensors"
+DATA_PROXIES = "proxies"
 
 # The label applied to every alert (spec §11.5).
 ALERTS_LABEL_NAME = "Alert Redux"
@@ -200,6 +201,12 @@ CONF_THROTTLE_COUNT = "throttle_count"
 CONF_THROTTLE_MINUTES = "throttle_minutes"
 SECTION_NOTIFICATIONS = "notifications"
 SECTION_SUPERSESSION = "supersession"
+SECTION_VOICE = "voice"
+
+# Voice proxies for Alexa and Google (spec §14.2): a switch, and a snooze button,
+# each opted into per alert.
+CONF_PROXY_SWITCH = "proxy_switch"
+CONF_PROXY_SNOOZE_BUTTON = "proxy_snooze_button"
 
 # Generator subentry data keys (spec §12.3): the alert template's own keys, plus
 # the name template and the target criteria. Generators make condition alerts.
@@ -380,6 +387,9 @@ ATTR_LAST_ACKED_BY = "last_acked_by"
 ATTR_LAST_UNACKED = "last_unacked"
 ATTR_LAST_UNACKED_BY = "last_unacked_by"
 ATTR_SNOOZED_UNTIL = "snoozed_until"
+# On the voice proxies (spec §14.2): their alert, and the snooze button's duration.
+ATTR_ALERT = "alert"
+ATTR_SNOOZE_DURATION = "snooze_duration"
 ATTR_LAST_SNOOZED = "last_snoozed"
 ATTR_LAST_SNOOZED_BY = "last_snoozed_by"
 ATTR_DISABLED_UNTIL = "disabled_until"

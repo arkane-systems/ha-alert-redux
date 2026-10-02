@@ -7,6 +7,7 @@
 - It fires but nobody is told
 - Repairs issues
 - Refused actions
+- Voice
 - Generators
 - The cards
 - Logs
@@ -77,9 +78,24 @@ rewrites references to it; deleting an alert doesn't.
 |---|---|
 | `not_manual` | `fire` or `dismiss` on an alert that isn't manual. |
 | `not_acknowledgeable` | `ack` or `snooze` on an unacknowledgeable alert. |
+| `not_firing` | A proxy switch turned on, or a proxy snooze button pressed, while its alert isn't firing. |
 | `suspend_in_past` | `suspend` with `until` in the past. |
 | `not_generator` | `refresh_generator` on something that isn't a generator sensor. |
 | Unauthorized | `disable`, `enable`, or `suspend` by a non-admin user. |
+
+## Voice
+
+- **"I don't know an alert called …"**: the alert isn't exposed to Assist
+  (Settings → Voice assistants → Expose), or the name doesn't match; add an
+  alias to the alert's entity.
+- **Assist doesn't recognise the sentence at all** with Speech-to-Phrase: it
+  only knows sentences it was trained on, and can't learn these. Use another
+  speech-to-text engine, or type the command.
+- **An LLM agent turns the alert off instead**: check that the agent has the
+  Assist API (control) enabled; the alert_redux__ tools come with it.
+- **Alexa or Google doesn't see a proxy**: check that the proxy is exposed to
+  it, then ask the assistant to discover devices. Manual (non-cloud) setups
+  pick entities with their own filters.
 
 ## Generators
 

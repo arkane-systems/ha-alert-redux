@@ -98,6 +98,18 @@
               "data_description": {
                 "supersedes": "Optional. The alerts this one supersedes. Supersession is transitive: an alert superseded by one of these is superseded by this one too. For each, choose what acknowledging it does to this alert: nothing; acknowledge this alert, even before it fires; or snooze it, for the duration counted from that acknowledgement."
               }
+            },
+            "voice": {
+              "name": "Voice assistants",
+              "description": "Proxies for Alexa and Google Home, which can't see alerts themselves. Each is exposed to Alexa and Google (through Home Assistant Cloud) when it's created, and hidden from Assist, which has its own voice commands for alerts.",
+              "data": {
+                "proxy_switch": "Proxy switch",
+                "proxy_snooze_button": "Snooze button"
+              },
+              "data_description": {
+                "proxy_switch": "A switch with the alert's name, on while the alert is active (unacknowledged). Turning it off acknowledges the alert; turning it on again removes the acknowledgement. \"Alexa, turn off …\" acknowledges, and an Alexa routine can start when the switch turns on.",
+                "proxy_snooze_button": "A button called \"Snooze\" and the alert's name, which snoozes the alert for its snooze button duration (in Notifications and messages). Assistants show it as a scene."
+              }
             }
           }
         },
@@ -174,6 +186,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -248,6 +272,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -317,6 +353,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -394,6 +442,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -468,6 +528,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -537,6 +609,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -610,6 +694,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -679,6 +775,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -751,6 +859,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -836,6 +956,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -916,6 +1048,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -995,6 +1139,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -1080,6 +1236,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -1156,6 +1324,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -1231,6 +1411,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -1370,6 +1562,18 @@
               "data_description": {
                 "supersedes": "Optional. For each, choose either another generator, so that each of this generator's alerts supersedes that generator's alert for the same target (e.g. each door's Left Open over its Open), or a fixed alert, which each of this generator's alerts supersedes. Supersession is transitive. For each, choose what acknowledging the superseded alert does to this generator's alert: nothing; acknowledge it, even before it fires; or snooze it, for the duration counted from that acknowledgement."
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -1469,6 +1673,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -1572,6 +1788,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -1665,6 +1893,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -1760,6 +2000,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -1853,6 +2105,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -1953,6 +2217,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -2056,6 +2332,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -2150,6 +2438,18 @@
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
               }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
+              }
             }
           }
         },
@@ -2243,6 +2543,18 @@
               },
               "data_description": {
                 "supersedes": "[%key:component::alert_redux::config_subentries::generator::step::state::sections::supersession::data_description::supersedes%]"
+              }
+            },
+            "voice": {
+              "name": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::name%]",
+              "description": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::description%]",
+              "data": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data::proxy_snooze_button%]"
+              },
+              "data_description": {
+                "proxy_switch": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_switch%]",
+                "proxy_snooze_button": "[%key:component::alert_redux::config_subentries::alert::step::manual::sections::voice::data_description::proxy_snooze_button%]"
               }
             }
           }
@@ -2538,6 +2850,9 @@
   "exceptions": {
     "not_acknowledgeable": {
       "message": "{entity_id} can't be acknowledged or snoozed."
+    },
+    "not_firing": {
+      "message": "{entity_id} isn't firing."
     },
     "not_manual": {
       "message": "{entity_id} isn't a manual alert, so it can't be fired or dismissed by action."

@@ -59,8 +59,8 @@ async def _start(
     return await _choose(hass, result, kind)
 
 
-# The frontend always submits the notifications section, filled from its fields'
-# defaults; an empty one gets those defaults here too.
+# The frontend always submits the sections, filled from their fields' defaults;
+# an empty one gets those defaults here too.
 FORM = {
     "name": "Back Door Open",
     "priority": "critical",
@@ -69,6 +69,7 @@ FORM = {
     "ends_by_itself": False,
     "supersession": {},
     "notifications": {},
+    "voice": {},
 }
 
 
@@ -266,6 +267,7 @@ async def test_create_state_alert(
             "acknowledgeable": True,
             "supersession": {},
             "notifications": {},
+            "voice": {},
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -302,6 +304,7 @@ async def test_create_template_alert(
         "no_data_grace": {"hours": 0, "minutes": 2, "seconds": 0},
         "supersession": {},
         "notifications": {},
+        "voice": {},
     }
 
     # The template selector refuses templates that don't parse.
@@ -365,6 +368,7 @@ async def test_reconfigure_state_alert(
             "acknowledgeable": True,
             "supersession": {},
             "notifications": {},
+            "voice": {},
         },
     )
     assert result["reason"] == "reconfigure_successful"
@@ -452,6 +456,33 @@ async def test_messages_saved_and_prefilled(
     suggested = _suggested(result["data_schema"].schema["notifications"].schema.schema)
     assert suggested["message"] == "{{ name }} opened"
     assert suggested["display_message"] == "Close it"
+
+
+async def test_voice_proxies_saved_and_prefilled(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """The voice proxies are saved only when wanted, and pre-filled (§14.2)."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**FORM, "voice": {"proxy_switch": True, "proxy_snooze_button": False}},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    (subentry,) = entry.subentries.values()
+    assert subentry.data["proxy_switch"] is True
+    assert "proxy_snooze_button" not in subentry.data
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ALERT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
+    )
+    fields = {
+        str(key): key.default()
+        for key in result["data_schema"].schema["voice"].schema.schema
+    }
+    assert fields == {"proxy_switch": True, "proxy_snooze_button": False}
 
 
 async def test_buttons_saved_and_prefilled(
@@ -965,6 +996,7 @@ EVENT_FORM = {
     "acknowledgeable": True,
     "supersession": {},
     "notifications": {},
+    "voice": {},
 }
 
 
@@ -1090,6 +1122,7 @@ CONDITION_FORM = {
     "acknowledgeable": True,
     "supersession": {},
     "notifications": {},
+    "voice": {},
 }
 
 
@@ -1232,6 +1265,7 @@ async def test_create_alert_state_alert(
         "acknowledgeable": True,
         "supersession": {},
         "notifications": {},
+        "voice": {},
     }
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"], {**form, "alert_states": []}
@@ -1489,7 +1523,24 @@ GENERATOR_FORM = {
     "targets": {"domains": ["lock", " "], "pattern": " lock.*_door "},
     "notifications": {},
     "supersession": {},
+    "voice": {},
 }
+
+
+async def test_generator_voice_proxies(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A generator's form takes the voice proxies too, for all its alerts."""
+    entry = await setup_alerts()
+    result = await _start_generator(hass, entry, "state")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**GENERATOR_FORM, "voice": {"proxy_snooze_button": True}},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (subentry,) = entry.subentries.values()
+    assert subentry.data["proxy_snooze_button"] is True
+    assert "proxy_switch" not in subentry.data
 
 
 async def test_create_generator(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
@@ -1598,6 +1649,7 @@ async def test_threshold_generator_value(
         "hysteresis": 0,
         "targets": {"device_classes": ["battery"]},
         "notifications": {},
+        "voice": {},
         "supersession": {},
     }
     result = await _start_generator(hass, entry, "threshold")

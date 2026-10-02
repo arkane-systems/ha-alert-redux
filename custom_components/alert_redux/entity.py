@@ -138,6 +138,7 @@ from .const import (
     CONF_USER_DISMISSABLE,
     CONF_VALUE_TEMPLATE,
     DATA_LABEL,
+    DATA_PROXIES,
     DATA_STARTUP_UNTIL,
     DATA_SUMMARY,
     DATA_SUPERSESSION,
@@ -660,6 +661,22 @@ class AlertEntity(Entity):
                 if acked:
                     async_notifications_acknowledged(self.hass, self.entity_id)
                 supersession.async_ack_changed(self, acked=acked)
+        # The voice proxies follow (spec §14.2).
+        if (proxies := self.hass.data[DOMAIN].get(DATA_PROXIES)) is not None:
+            proxies.async_alert_written(self)
+
+    @callback
+    def async_proxy_exposed(self, kind: str) -> None:
+        """Remember that a proxy has been exposed, once (spec §14.2)."""
+        self.proxies_exposed.add(kind)
+        self._persist()
+
+    @callback
+    def async_proxy_forgotten(self, kind: str) -> None:
+        """Forget a removed proxy's exposure, so a new one is exposed again."""
+        if kind in self.proxies_exposed:
+            self.proxies_exposed.discard(kind)
+            self._persist()
 
     @callback
     def async_superseders_changed(self, *, announce: bool) -> None:

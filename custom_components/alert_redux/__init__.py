@@ -38,6 +38,7 @@ from .const import (
     DATA_LABEL,
     DATA_NOTIFIER,
     DATA_OPTIONS,
+    DATA_PROXIES,
     DATA_SETTINGS,
     DATA_STARTUP_UNTIL,
     DATA_STORE,
@@ -72,6 +73,7 @@ from .notifications import (
     async_quiet_hours_ended,
 )
 from .notifier import GroupConfig, Notification, Notifier
+from .proxies import ProxyManager
 from .issues import async_check_broken_references, async_check_default_groups
 from .store import AlertStore
 from .summary import SummaryCoordinator
@@ -82,8 +84,9 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-# The summary sensors (spec §11.2); alerts are our own domain's EntityComponent.
-PLATFORMS = [Platform.SENSOR]
+# The summary sensors (spec §11.2), and the voice proxies (§14.2); alerts are our
+# own domain's EntityComponent.
+PLATFORMS = [Platform.BUTTON, Platform.SENSOR, Platform.SWITCH]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -246,6 +249,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data[DATA_ENTITIES] = entities
     data[DATA_SUPERSESSION] = Supersession(hass, entities, settings)
     data[DATA_SUMMARY] = SummaryCoordinator(hass)
+    data[DATA_PROXIES] = ProxyManager(hass)
 
     @callback
     def _generated_alerts_changed() -> None:
@@ -398,6 +402,13 @@ def _async_alert_registry_updated(
     data = event.data
     if data["action"] == "update" and (old := data.get("old_entity_id")):
         _async_follow_rename(hass, entry, old, data["entity_id"])
+    if data["action"] == "update" and {"area_id", "labels"} & set(
+        data.get("changes", {})
+    ):
+        # The alert's proxies follow its area and labels (spec §11.6, §14.2).
+        for entity in hass.data[DOMAIN][DATA_ENTITIES].values():
+            if entity.entity_id == data["entity_id"]:
+                hass.data[DOMAIN][DATA_PROXIES].async_alert_registry_changed(entity)
     hass.data[DOMAIN][DATA_SUPERSESSION].async_refresh()
     async_check_broken_references(hass, entry)
 
