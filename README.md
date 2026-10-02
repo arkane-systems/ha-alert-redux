@@ -557,7 +557,10 @@ notifications softened by quiet hours.
 
 - Critical notifications bypass Do Not Disturb and silent mode, and the app needs
   **Critical Alerts** allowed in iOS settings. Time-sensitive notifications are read
-  aloud by Siri by default (on AirPods, say), which iOS settings can turn off.
+  aloud by Siri by default (on AirPods, say), which iOS settings can turn off. In
+  testing, a Critical alert came through a Sleep Focus but not plain Do Not Disturb,
+  which silences everything except what you allow (allow Home Assistant there if
+  you want it to), while an Emergency alert came through both.
 - Only mobile-app members are sent the level (`notify.mobile_app_*`), and Android
   ignores it.
 - To pin a phone to a level whatever the priority, give its member `data` like

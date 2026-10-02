@@ -162,6 +162,9 @@ firing alert, `_ended` then `_disabled`.
   There's no setting; a mobile member's own `data` with `push.interruption-level`
   wins (its other `push` keys are kept), so a phone can be pinned to a level.
   Done notifications, summaries, and quiet-hours softened deliveries never get one.
+  On an iPhone, `critical` comes through Do Not Disturb and silent mode, but
+  `time-sensitive` came through a Sleep Focus and not through Do Not Disturb unless
+  Home Assistant is allowed there.
 - **Failures:** a missing or failing notifier is retried until the retry timeout
   (5 minutes by default), surviving restarts; if nothing in the group got it, it
   goes to the fallback group.

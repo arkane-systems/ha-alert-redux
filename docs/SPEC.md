@@ -633,6 +633,13 @@ A group has:
   - Critical notifications bypass Do Not Disturb and silent mode, and need Critical
     Alerts allowed for the app in iOS settings. Time-sensitive notifications are, by
     default, read aloud by Siri (on AirPods, say), which iOS settings can turn off.
+  - [Checked on an iPhone, phase 13] An Emergency (`critical`) alert came through
+    Do Not Disturb with sound, despite the silent switch. A Critical
+    (`time-sensitive`) one came through a Sleep Focus but **not** through Do Not
+    Disturb, which lets through only what you allow: so a Critical alert reaches a
+    phone in Do Not Disturb only if Home Assistant is allowed there. A message sent
+    straight to the app with the same level behaved the same, so this is how iOS
+    treats the level, not something Alert Redux does.
 - [Decided] Groups are **not** exposed for use outside Alert Redux. General-purpose
   notification belongs in the possible future notifier integration (§9.1), not
   halfway here.
