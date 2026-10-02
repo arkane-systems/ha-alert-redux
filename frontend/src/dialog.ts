@@ -4,8 +4,9 @@ import { sharedStyles } from "./styles";
 
 /**
  * A small modal dialog for the admin card: a heading, a body, and a row of buttons
- * (the "actions" slot). It closes on Escape and on a click outside it, by firing
- * "closed"; whoever opened it removes it.
+ * (the "actions" slot). It is a native <dialog>, shown modally, so it sits in the
+ * browser's top layer whatever the card's surroundings are. It closes on Escape and
+ * on a click outside it, by firing "closed"; whoever opened it removes it.
  */
 export class AlertReduxDialog extends LitElement {
   static properties = {
@@ -18,32 +19,31 @@ export class AlertReduxDialog extends LitElement {
     sharedStyles,
     css`
       :host {
-        position: fixed;
-        inset: 0;
-        z-index: 8;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 16px;
-        box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.5);
+        display: contents;
       }
-      .dialog {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        width: 100%;
-        max-width: 640px;
-        max-height: 100%;
+      dialog {
         box-sizing: border-box;
-        padding: 20px;
+        width: calc(100% - 32px);
+        max-width: 640px;
+        max-height: calc(100% - 32px);
+        padding: 0;
+        border: none;
         border-radius: 16px;
         background: var(--card-background-color, #fff);
         color: var(--primary-text-color);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        overflow: hidden;
       }
-      .dialog:focus {
-        outline: none;
+      .inner {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-sizing: border-box;
+        max-height: calc(100vh - 32px);
+        padding: 20px;
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.5);
       }
       h2 {
         margin: 0;
@@ -72,46 +72,35 @@ export class AlertReduxDialog extends LitElement {
   }
 
   protected firstUpdated(): void {
-    this.renderRoot.querySelector<HTMLElement>(".dialog")?.focus();
+    this.renderRoot.querySelector("dialog")?.showModal();
   }
 
   render() {
     return html`
-      <div
-        class="dialog"
-        role="dialog"
-        aria-modal="true"
+      <dialog
         aria-label=${this.heading}
-        tabindex="-1"
-        @click=${(event: Event) => event.stopPropagation()}
-        @keydown=${this._keydown}
+        @click=${this._click}
+        @close=${this._close}
+        @cancel=${this._close}
       >
-        <h2>${this.heading}</h2>
-        <div class="body"><slot></slot></div>
-        <div class="actions"><slot name="actions"></slot></div>
-      </div>
+        <div class="inner">
+          <h2>${this.heading}</h2>
+          <div class="body"><slot></slot></div>
+          <div class="actions"><slot name="actions"></slot></div>
+        </div>
+      </dialog>
     `;
   }
 
-  connectedCallback(): void {
-    super.connectedCallback();
-    // A click that reaches the host is outside the dialog.
-    this.addEventListener("click", this._close);
+  /** A click on the dialog element itself, not its content, is on the backdrop. */
+  private _click(event: MouseEvent): void {
+    // Only the backdrop is the dialog element itself; the padding is inside .inner.
+    if (event.target === event.currentTarget) this._close(event);
   }
 
-  disconnectedCallback(): void {
-    super.disconnectedCallback();
-    this.removeEventListener("click", this._close);
-  }
-
-  private _keydown(event: KeyboardEvent): void {
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      this._close();
-    }
-  }
-
-  private _close = (): void => {
+  private _close = (event: Event): void => {
+    // The native close would follow; the owner removes the element.
+    event.preventDefault();
     this.dispatchEvent(new CustomEvent("closed"));
   };
 }
