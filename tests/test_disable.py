@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import inspect
 from typing import Any
 from unittest.mock import patch
 
@@ -10,6 +11,7 @@ import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import Context, Event, HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError, Unauthorized
+from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     async_capture_events,
@@ -302,6 +304,10 @@ async def test_admin_only(
     action used before that. The owner fixture makes sure the user created here
     isn't the owner.
     """
+    if native and "admin_only" not in inspect.signature(
+        EntityComponent.async_register_entity_service
+    ).parameters:
+        pytest.skip("admin_only on entity actions arrived in HA 2026.9")
     with patch(
         "custom_components.alert_redux._entity_services_take_admin_only",
         return_value=native,

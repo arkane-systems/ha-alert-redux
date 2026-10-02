@@ -5,7 +5,7 @@ snoozing, and asking which alerts are firing. They're reached three ways: by
 the English sentences below, attached as Home Assistant's own conversation
 triggers (which an Assist pipeline checks before any conversation agent, LLM
 agents included); by LLM agents, as tools (llm.py, or by Home Assistant itself
-before 2026.6); and by anyone's custom sentences, in any language.
+before 2026.8); and by anyone's custom sentences, in any language.
 
 The intents act through the alert actions, with the speaker's context, so the
 rules of §6 and §16 apply unchanged; they check the alert's state first only to

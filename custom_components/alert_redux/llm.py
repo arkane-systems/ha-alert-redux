@@ -1,6 +1,6 @@
 """LLM tools for Alert Redux's voice commands (spec §14.1).
 
-From Home Assistant 2026.6, integrations offer LLM agents their tools through
+From Home Assistant 2026.8, integrations offer LLM agents their tools through
 this platform; before that, Home Assistant offered every registered intent by
 itself, so older versions get the same tools without it. Only the llm
 integration imports this module.
@@ -14,12 +14,13 @@ from homeassistant.helpers import intent
 from homeassistant.helpers.llm import LLM_API_ASSIST, IntentTool, LLMContext, Tool
 
 from .const import DOMAIN
-from .voice import INTENT_LIST, INTENTS, async_exposed_alerts
+from .voice import INTENTS, async_exposed_alerts
 
 PROMPT = (
     "Alert Redux alerts (the alert_redux entities) are acknowledged, "
-    f"unacknowledged, and snoozed with the {DOMAIN}__ tools, never by turning "
-    f"them on or off. {DOMAIN}__{INTENT_LIST} says which alerts are firing."
+    "unacknowledged, and snoozed with the AlertReduxAcknowledge, "
+    "AlertReduxUnacknowledge, and AlertReduxSnooze tools, never by turning them "
+    "on or off. AlertReduxListFiring says which alerts are firing."
 )
 
 
@@ -34,8 +35,21 @@ def async_get_tools(
         return None
     handlers = {handler.intent_type: handler for handler in intent.async_get(hass)}
     tools: list[Tool] = [
-        IntentTool(f"{DOMAIN}__{intent_type}", handlers[intent_type])
+        _intent_tool(intent_type, handlers[intent_type])
         for intent_type in INTENTS
         if intent_type in handlers
     ]
     return LLMTools(tools=tools, prompt=PROMPT) if tools else None
+
+
+def _intent_tool(intent_type: str, handler: intent.IntentHandler) -> IntentTool:
+    """Return an intent's tool, named with the domain as HA asks from 2026.9.
+
+    In HA 2026.8, an IntentTool handled the intent its name named, so there the
+    tool takes the intent's own name; from 2026.9 it keeps the intent type
+    apart.
+    """
+    tool = IntentTool(f"{DOMAIN}__{intent_type}", handler)
+    if not hasattr(tool, "intent_type"):
+        tool = IntentTool(intent_type, handler)
+    return tool

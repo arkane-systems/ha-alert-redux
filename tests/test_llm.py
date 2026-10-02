@@ -1,8 +1,16 @@
-"""Tests for the voice commands as LLM tools (spec §14.1)."""
+"""Tests for the voice commands as LLM tools, from llm.py (spec §14.1).
+
+The llm integration's tools platform arrived in HA 2026.8; before that, HA
+offers registered intents by itself (test_llm_legacy.py).
+"""
 
 from __future__ import annotations
 
 import pytest
+
+pytest.importorskip("homeassistant.components.llm")
+
+# Imported once the skip has had its chance: llm.py needs the llm integration.
 from homeassistant.components.homeassistant.exposed_entities import (
     async_expose_entity,
 )
@@ -10,17 +18,27 @@ from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import llm
 from homeassistant.setup import async_setup_component
 
-from custom_components.alert_redux.llm import async_get_tools
+from custom_components.alert_redux.llm import async_get_tools  # noqa: E402
 
 from .conftest import SetupAlerts, state_alert
 
 BACK = "alert_redux.back_door_open"
-TOOLS = {
-    "alert_redux__AlertReduxAcknowledge",
-    "alert_redux__AlertReduxUnacknowledge",
-    "alert_redux__AlertReduxSnooze",
-    "alert_redux__AlertReduxListFiring",
+INTENTS = {
+    "AlertReduxAcknowledge",
+    "AlertReduxUnacknowledge",
+    "AlertReduxSnooze",
+    "AlertReduxListFiring",
 }
+
+
+def _ours(api: llm.APIInstance) -> dict[str, str]:
+    """Return our tools' names by intent type (HA 2026.8 names them by intent;
+    from 2026.9 they're prefixed alert_redux__)."""
+    return {
+        tool.name.removeprefix("alert_redux__"): tool.name
+        for tool in api.tools
+        if tool.name.removeprefix("alert_redux__") in INTENTS
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -50,8 +68,8 @@ async def test_tools_offered(hass: HomeAssistant, setup_alerts: SetupAlerts) -> 
     """The Assist API offers the four tools, with the prompt."""
     await _setup(hass, setup_alerts)
     api = await llm.async_get_api(hass, llm.LLM_API_ASSIST, _context())
-    assert TOOLS <= {tool.name for tool in api.tools}
-    assert "alert_redux__AlertReduxListFiring" in api.api_prompt
+    assert set(_ours(api)) == INTENTS
+    assert "AlertReduxListFiring" in api.api_prompt
 
 
 async def test_tools_need_an_exposed_alert(
@@ -70,7 +88,7 @@ async def test_tool_call(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None
     api = await llm.async_get_api(hass, llm.LLM_API_ASSIST, _context())
     result = await api.async_call_tool(
         llm.ToolInput(
-            tool_name="alert_redux__AlertReduxSnooze",
+            tool_name=_ours(api)["AlertReduxSnooze"],
             tool_args={"name": "back door open", "minutes": 20},
         )
     )

@@ -1654,12 +1654,15 @@ are exposed. They're reached through:
   sentence to the matching intent, with the speaker's context (so acknowledgements
   record who made them, R18), and returns the intent's reply as the spoken
   response.
-- **LLM agents.** From HA 2026.6, integrations offer LLM tools through an
+- **LLM agents.** From HA 2026.8, integrations offer LLM tools through an
   `llm.py` platform. Alert Redux offers the four intents as tools (named
   `alert_redux__…`), when at least one alert is exposed, with a short prompt
   saying that alerts are acknowledged and snoozed with these tools, not by turning
-  them off. Before 2026.6, HA offered every registered intent to LLM agents by
+  them off. Before 2026.8, HA offered every registered intent to LLM agents by
   itself, so older versions get the same tools with no extra code.
+  [Phase 12 as built] The platform arrived in 2026.8, not 2026.6 as first
+  researched. In 2026.8 itself, a tool handled the intent its name named, so
+  there the tools take the intents' own names; from 2026.9 they're prefixed.
 - **Custom sentences.** Anyone can write custom sentences for the intents by
   name, in any language. That's how languages other than English are covered for
   now; the README gives an example.
@@ -1682,7 +1685,11 @@ unexposed stays unexposed, and voice can't reach it.
 and their entity aliases, ignoring case, punctuation, a leading "the", and a
 trailing "alert". An exact match wins; failing that, a name that contains the
 spoken words, if only one does. When several alerts match, the reply names them
-and asks which.
+and asks which. [Phase 12 as built] Past four, it names four and asks for more
+of the name, since a long list is no use spoken. A trailing "please", "thanks",
+or "thank you" is ignored, in names and durations: a sentence's wildcard runs to
+the end of what was said, which matters most through LLM pipelines, where people
+speak more naturally.
 
 **Commands with no name** ("acknowledge the alert") act only when exactly one
 alert could take the action: the one unacknowledged alert for acknowledging, the
@@ -1795,9 +1802,10 @@ on.
 **The proxies themselves.**
 
 - They're a `switch` with the alert's exact name and a `button` named "Snooze
-  *name*", both following the alert's renames. Their entity IDs follow the
-  alert's object ID (`switch.workshop_door_left_open`,
-  `button.snooze_workshop_door_left_open`).
+  *name*", both following the alert's renames. Their entity IDs come from those
+  names when they're created (`switch.workshop_door_left_open`,
+  `button.snooze_workshop_door_left_open`), and then stay put, as an alert's do
+  (§12.2).
 - They have no device (§11.5, "Why not a device").
 - They copy the alert's area and labels (§11.6), but aren't given the alerts
   label (§11.5).
@@ -1810,15 +1818,23 @@ on.
   label's: done once, never forced back. Manual (non-cloud) Alexa and Google
   setups choose entities with their own filters; the README explains.
 
-**To check in real HA** (Alexa and Google Home, Nabu Casa):
+**Checked in real HA** [Phase 12 as built] (Alexa through Home Assistant
+Cloud, 2026-10-02):
 
-- **The phrases:** "Alexa, turn off *X*", "Alexa, is *X* on?", "Alexa, turn on
-  Snooze *X*" (or simply "Alexa, snooze *X*"), and "Hey Google, activate Snooze
-  *X*".
-- **Refusals:** what each assistant says when an action is refused.
-- **Routines:** whether the Alexa routine trigger is reliable (some community
-  reports say contact-sensor triggers are occasionally flaky).
-- **Newer assistants:** how Gemini for Home and Alexa+ handle all of the above.
+- **The phrases** work: "Alexa, is *X* on?", "Alexa, turn off *X*" (acknowledges),
+  "Alexa, turn on *X*" (removes the acknowledgement), and the snooze button as
+  "Alexa, turn on Snooze *X*" or "Alexa, Snooze *X*".
+- **Refusals** can't be heard: Alexa calls actions without waiting for them, so
+  it says "OK", and then shows the switch's real state (off). Refusals still
+  raise their error [Decided with the user], for the dashboard and automations;
+  Home Assistant logs each one an assistant asks for as an error.
+- **Routines** work: a routine started by the switch's contact sensor opening
+  announced the alert as it fired.
+- **Google Home** isn't connected to the instance it was built on, so it's
+  unverified; the proxies use HA's Google integration in the ordinary way
+  (on/off, and a scene).
+- **Newer assistants:** Alexa+ wasn't distinguished; Gemini for Home is
+  unverified, as above.
 
 ## 15. Startup, resilience, persistence
 
@@ -1986,7 +2002,7 @@ all" action.
 | ~~Q11~~ | ~~Remaining §9.9 details~~ Resolved: per-group threshold override; members that can't soften hold instead (§9.9). | §9.9 |
 | ~~Q12~~ | ~~Done notifications while throttled~~ Resolved: held, and covered by the throttling summary (§9.7). | §9.7, §9.8 |
 | Q13 | [Deferred] When should the condition alert kinds get a class or strategy object each? Not yet: the five kinds share one condition alert class, which branches on the kind in a few places (attributes, sources, judging, on/off edges), and the sources hide most of the differences. If more condition kinds are added, split it then. Event kinds are less likely to need this: a bus event alert is already just a trigger alert with an event trigger, so a new event kind would more likely be another trigger shape. | F23 |
-| ~~Q14~~ | ~~Raise the minimum HA version for phase 12?~~ Resolved: no, it stays 2025.3. Neither Assist nor the proxies need a newer version. The paths only older versions take (LLM tools before 2026.6, the `admin_only` fallback before 2026.9) are tested locally against an older HA, apart from CI (§20). | §14 |
+| ~~Q14~~ | ~~Raise the minimum HA version for phase 12?~~ Resolved: raised to **2026.6**. Phase 12 itself didn't need it, but testing locally against older HA (as decided here) found that 1.0.0 never worked on its declared 2025.3: its subentry forms need `_get_entry` (HA 2025.4); before 2025.12, every alert form's object selectors with typed fields are refused; and before 2026.6, lists of objects (notification buttons, supersession relationships, group actions) can't be saved. 2026.6 is the oldest release that works without workarounds [Decided with the user]. The paths HA 2026.6–2026.8 still take (LLM tools before 2026.8, the 2026.8 tool naming, the `admin_only` fallback before 2026.9) are tested locally (`scripts/test-against-ha.sh`), apart from CI. | §14 |
 
 ## 19. Decision log
 
@@ -2133,6 +2149,8 @@ Decisions with their reasons, in the order they were made.
 | One optional snooze button per alert, "Snooze *name*", for the alert's snooze button duration | One utterance; more durations would multiply entities, and a number entity needs two utterances and bare seconds; the name stays put when the duration changes [§14.2]. |
 | Proxies are exposed to Alexa and Google once, and hidden from Assist once | Opting in means wanting them there; in Assist they'd clash with the alerts' own names [§14.2]. |
 | The minimum HA version stays 2025.3 for phase 12 | Nothing in phase 12 needs a newer one; older paths are tested locally instead [§18, Q14]. |
+| ~~The minimum stays 2025.3~~ The minimum HA version is 2026.6 | Local testing found 1.0.0's forms needed 2026.6 all along; it's the oldest release that works without workarounds, and keeping a stated minimum that doesn't work helps nobody [§18, Q14]. |
+| Proxy refusals keep raising their error, though Alexa can't say so | The dashboard and automations still need to hear it; Alexa says "OK" but shows the real state, and Home Assistant logs the refusal [§14.2]. |
 | A duration that ran out while HA was down ends just after the first state is written | HA's logbook leaves out an entity's first state after a restart, so an ending before it had no row [§11.4, §15.1]. |
 | Alert Redux ships an agent skill, checked against the code by a test | Agents can drive Alert Redux through MCP, but had to dig through the forms' schemas to do it; a test keeps the skill from drifting as the code changes [§20]. |
 
@@ -2296,7 +2314,8 @@ control) and 6b (disabling and suspending, the card's disabled-alerts line, and 
 admin card), released together as 0.6.0. Disable, enable, and suspend are made
 admin-only with HA's `admin_only` flag on entity actions, which arrived in HA
 2026.9; on older versions they're registered as admin actions that dispatch to the
-entities in the same way, so the minimum HA version stays 2025.3. The entities' one-shot timers
+entities in the same way, so the minimum HA version stays 2025.3 (raised to 2026.6 in
+phase 12; see Q14). The entities' one-shot timers
 share a `PointTimer` helper, and the runtime's deadlines (reminder, snooze,
 suspension, event expiry) are synced to them in one place. Decisions from building
 it are recorded in §6.1–§6.4, §7.2, §9.5, §11.1, §11.3, §12.1, §13.1, §13.2, §16,
@@ -2455,7 +2474,7 @@ shorter soak of its own on the real instance before release.
 - Proxies (§14.2): the optional per-alert proxy switch and snooze button, their
   options in the alert and generator forms, and their exposure (Alexa and Google
   once, hidden from Assist once); the real-HA checks listed in §14.2.
-- The paths only older HA takes (LLM tools before 2026.6, the `admin_only`
+- The paths only older HA takes (LLM tools before 2026.8, the `admin_only`
   fallback before 2026.9) tested locally against an older HA, apart from CI (Q14).
 - Testing notes: `conversation` and `llm` go in `after_dependencies`, not
   `dependencies`. Tests that load `conversation` need the core `homeassistant`
@@ -2468,6 +2487,20 @@ LLM agent can use the tools on its own, and the proxies work with Alexa and
 Google Home.
 
 It was planned as 0.12.0, before 1.0.0 came first; it's now 1.1.0 [Decided].
+
+[Phase 12 as built] Built in two parts: 12a (Assist, after a spike that showed
+an integration's conversation trigger speaking its reply through both the
+built-in agent and a Claude pipeline) and 12b (the proxies), released together
+as 1.1.0. The intents and sentences are `voice.py`, the matching and replies
+`speech.py`, the LLM tools `llm.py`, and the proxies `proxies.py`, `switch.py`,
+and `button.py`. Exposing once is `exposure.py`, recorded in the alert's stored
+record beside the label. The real-HA run changed the replies (a long ambiguity
+asks for more of the name; courtesy words are ignored), found the snooze
+duration needed passing as seconds so the recorded action call can be stored,
+and confirmed the Alexa phrases and routine; Google Home is unverified. Testing
+against older HA raised the minimum to 2026.6 (Q14), and found the `llm`
+platform arrived in 2026.8. Decisions from building it are recorded in §14.1,
+§14.2, §18, and §19.
 
 ### Phase 13 — Late features (0.13.0 onwards; may be split)
 

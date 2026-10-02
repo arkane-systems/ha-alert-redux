@@ -24,7 +24,21 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-None.
+- **Set up 2026-10-02, phase 12. Exposure isn't forced back, and voice and
+  proxies come back** (1.1.0). Test Voice Proxies (a state alert on
+  `input_boolean.test_alert`, Quiet only, with both proxies) was unexposed from
+  Assist, and its snooze button from Google, by hand at 00:20 UTC. After the
+  next install restart, check that:
+  - `alert_redux.test_voice_proxies` is still unexposed from Assist, and the
+    other alerts still exposed;
+  - `switch.test_voice_proxies` and `button.snooze_test_voice_proxies` keep
+    their entity IDs, the switch follows the alert's state, the button is
+    still unexposed from Google, and both are still exposed to Alexa and hidden
+    from Assist;
+  - "what alerts are firing" through the built-in agent answers (the sentence
+    triggers reattach after a restart).
+
+  Then delete Test Voice Proxies, and check its proxies go with it.
 
 ## Done
 

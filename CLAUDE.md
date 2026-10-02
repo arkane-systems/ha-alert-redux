@@ -22,7 +22,8 @@ phase 8 (the summary sensors, the logbook platform, and the `_data_restored`
 event), and phase 9 (replacing and clearing notifications, and notification
 buttons), and phase 10 (throttling and quiet hours), and phase 11 (generators,
 including generated supersession), and, for 1.0.0, manual alerts that end by
-themselves (spec §4.3).
+themselves (spec §4.3), and phase 12 (voice control: Assist commands, and proxy
+switches and snooze buttons for Alexa and Google Home).
 
 ## Specification
 
@@ -113,7 +114,7 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `hass.data`, which each alert reports to (by unique ID) from
     `async_write_ha_state` and withdraws from when removed; it recomputes once
     per burst of reports and tells the sensors.
-  - `sensor.py` — the summary sensors (spec §11.2), the one platform forwarded
+  - `sensor.py` — the summary sensors (spec §11.2), one of the platforms forwarded
     from the config entry, and a `GeneratorSensor` per generator (§12.3). No
     device and no label; their entity IDs are set explicitly, whatever the
     names.
@@ -123,6 +124,33 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `triggers.py` — `TriggerWatcher`: attaches HA triggers once HA has started and
     after the startup delay, handing on each firing's variables made JSON-safe.
     Used by event alerts and on/off sides.
+  - `speech.py` — what voice commands hear and say, without HA (spec §14.1):
+    normalising and matching spoken alert names (`Candidate`, `match`),
+    spoken durations (`parse_duration`), and the English replies.
+  - `voice.py` — the four intents (acknowledge, unacknowledge, snooze, and
+    which alerts are firing), registered with the entry, and their English
+    sentences, attached as HA's own conversation triggers once HA has started
+    (a pipeline checks them before any agent). The intents act through the alert
+    actions with the speaker's context; `async_exposed_alerts` is the alerts
+    exposed to an assistant.
+  - `llm.py` — the LLM tools platform (HA 2026.8+): the intents as
+    `alert_redux__…` tools. Only the `llm` integration imports it; older HA
+    offers registered intents to LLM agents by itself.
+  - `exposure.py` — `async_set_exposure`: exposing an entity to assistants, done
+    once and remembered in the alert's stored record (`assist_exposed`,
+    `proxies_exposed`), like the label.
+  - `proxies.py` — the voice proxies (spec §14.2): `ProxyEntity`, the base of
+    the proxy switch and snooze button, and `ProxyManager` in `hass.data`, which
+    the alerts report to from `async_write_ha_state`: it makes and removes
+    proxies to match each alert's options (with the alert's or generator's
+    `config_subentry_id`), keeps their state, copies the alert's area and labels
+    (not the alerts label), exposes them to Alexa and Google and hides them from
+    Assist once, and removes them when an alert is forgotten
+    (`generators.async_forget_alert`).
+  - `switch.py`, `button.py` — the proxy platforms: `ProxySwitch` (on while the
+    alert is active; off acknowledges, on unacknowledges, refused with
+    `not_firing` while it isn't firing) and `ProxySnoozeButton`. Not to be
+    confused with `buttons.py`, the notification buttons.
   - `messages.py` — the message template context (`message_context`, shared with
     notifications) and `MessageTracker`, which renders the on and display messages
     for the card and re-renders them as the entities they read change.
@@ -201,6 +229,8 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   `screenshots/`, the README's pictures of the cards: the dev preview's theme
   columns (without its toolbar), at 1.5× scale, quantized to 256 colours.
 - **`tests/`** — smoke tests using `pytest-homeassistant-custom-component`.
+- **`scripts/test-against-ha.sh`** — runs the tests against an older HA (see
+  Testing).
 - **`plugins/alert-redux/`** — the **agent skill** (spec §20, 1.0.0): how-tos and
   best practices for agents configuring, operating, and building on Alert Redux
   (`skills/alert-redux/SKILL.md` and its reference files), packaged as a Claude
@@ -237,6 +267,15 @@ The test plugin tracks current HA, which needs Python 3.14; keep
 `requirements_test.txt` close to the HA version actually in use, since HA behaviour
 changes between releases (spec §11.5 records one that bit us). CI also runs HACS
 validation and hassfest.
+
+CI tests only the current HA. The minimum (`hacs.json`, 2026.6) and the paths
+only older HA takes (LLM tools before 2026.8, `admin_only` before 2026.9) are
+tested locally with `scripts/test-against-ha.sh <plugin version>`, which builds
+`.venvs/<version>` for that `pytest-homeassistant-custom-component` release (with
+packages as of its release date) and runs pytest there: `0.13.340` is HA 2026.6,
+`0.13.357` is HA 2026.8. Run it before a release that touches HA APIs. Before
+writing a workaround for an older HA, find with it how far the minimum would
+have to move, and take the options to the user.
 
 Checks of behaviour across a restart on the real HA instance don't get restarts of
 their own: they're set up at the end of a real-HA run and checked after the next
