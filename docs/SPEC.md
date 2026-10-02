@@ -1042,6 +1042,8 @@ built.
   [Decided, phase 7] Also `pre_acked_by` and `pre_snoozed_until` (§8.3), and
   `broken_references` (§12.4), a list of entity IDs.
   [Decided, phase 9] `buttons` lists the labels of the alert's custom buttons.
+  [Decided, phase 13] `buttons_require_unlock` lists the labels of those marked
+  **Require unlock**, which the main card asks to confirm (§13.1).
   [Decided, phase 10] `throttle` is the effective throttle, `[count, minutes]`,
   or null; `throttled_since` is when throttling started, or null (§9.8).
 - **Generator provenance:** `generated_by` (§12.3). [Decided, phase 11] The
@@ -1534,10 +1536,15 @@ To make sure it gets fixed:
     pressed it, through a new `alert_redux.press_button` action (§16), keeping
     to the rule that anything the card does is also an action (§14).
   - The card doesn't have the phones' limit of three buttons.
-  - Settled when it's built: the layout; whether a button can be limited to the
-    card or to notifications; and what a **Require unlock** button (§9.11), which
-    only means something on iOS, does on a dashboard anyone can reach: ask for
-    confirmation, or not appear on the card at all.
+  - [Decided, as built] The buttons sit in the alert's controls row, before Dismiss,
+    Snooze, and Acknowledge, and wrap on a narrow card. Labels are unique within
+    an alert, which the forms and import enforce (`button_label_duplicate`), because
+    the label is how a button is pressed. A button can't be limited to the card or
+    to notifications: one definition, both places.
+  - [Decided, as built] A **Require unlock** button (§9.11), which only means
+    something on iOS, asks for confirmation on the card ("Run 'Lock up'?
+    Confirm / Cancel", in place), since a dashboard has no unlocked phone to rely
+    on. The alert's `buttons_require_unlock` attribute tells the card which.
 - **Filters** [Decided, R22; phase 13]. There are two sorts, set in different
   places:
   - **Scope, set once in the card's configuration** (and its visual editor):
@@ -1980,7 +1987,7 @@ area, label, …):
 | `alert_redux.disable` / `alert_redux.enable` | Disable or enable. Admin only (phase 6). |
 | `alert_redux.suspend` | Suspend for a `duration`, or `until` a time. Admin only (phase 6). |
 | `alert_redux.fire` / `alert_redux.dismiss` | Fire or dismiss a manual alert; `fire` can take `data`. |
-| `alert_redux.press_button` | Run one of an alert's custom buttons (§9.11), as the main card does (§13.1). Takes the button's `label`. [Decided; phase 13] Labels are unique within an alert, so the label is enough. |
+| `alert_redux.press_button` | Run one of an alert's custom buttons (§9.11), as the main card does (§13.1). Takes the button's `label`. [Decided; phase 13] Labels are unique within an alert, so the label is enough. A label the alert doesn't have is the error `no_such_button`. It isn't admin-only: it runs only that button's action, as the caller. |
 | `alert_redux.refresh_generator` | Re-evaluate a generator's targets now (debugging; §12.3). [Decided, phase 11] Takes the generators' sensors as `entity_id`. |
 | `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off) and `dry_run` (default off). Not entity actions: `export` takes an optional `entity_id` list (alerts, or generators' sensors; default all). |
 

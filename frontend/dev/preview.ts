@@ -203,6 +203,8 @@ const ALERTS: HassEntity[] = [
     missing_inputs: ["cover.garage_door"],
   }),
   alert("washing_done", "Washing Finished", "notice", "active", {
+    buttons: ["Start dryer", "Lock up"],
+    buttons_require_unlock: ["Lock up"],
     icon: "mdi:washing-machine",
     kind: "manual",
     user_dismissable: true,
@@ -461,6 +463,7 @@ function hassFor(dark: boolean): HomeAssistant {
         update(entityId, { state: "ack", ...attributes(ago(-minutes)) });
       }
       if (service === "dismiss") update(entityId, { state: "idle" });
+      if (service === "press_button") console.log("press_button", entityId, data?.label);
       return undefined;
     },
   };

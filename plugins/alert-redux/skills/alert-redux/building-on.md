@@ -100,7 +100,8 @@ snooze_durations: [15, 30, 60, 120]   # optional: the snooze menu, in minutes
 ```
 
 It shows every firing alert (by priority, unacknowledged first, newest first),
-with acknowledge, snooze, and (for dismissable manual alerts) dismiss controls;
+with acknowledge, snooze, and (for dismissable manual alerts) dismiss controls,
+and the alert's custom buttons (one marked Require unlock asks to confirm);
 superseded alerts fold under the alert superseding them, alerts without data are
 listed at the bottom, and disabled alerts are only counted.
 

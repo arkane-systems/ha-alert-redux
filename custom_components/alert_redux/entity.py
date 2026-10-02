@@ -28,6 +28,7 @@ from .const import (
     ATTR_ATTRIBUTE,
     ATTR_BROKEN_REFERENCES,
     ATTR_BUTTONS,
+    ATTR_BUTTONS_REQUIRE_UNLOCK,
     ATTR_CONDITION,
     ATTR_DELAY_OFF,
     ATTR_DELAY_OFF_UNTIL,
@@ -98,6 +99,7 @@ from .const import (
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
     CONF_ACTION,
+    CONF_REQUIRE_UNLOCK,
     CONF_ALERT,
     CONF_ALERT_STATES,
     CONF_ATTRIBUTE,
@@ -557,6 +559,11 @@ class AlertEntity(Entity):
             ATTR_PRE_SNOOZED_UNTIL: runtime.pre_ack_deadline(now),
             ATTR_BROKEN_REFERENCES: self._broken_references,
             ATTR_BUTTONS: [button[CONF_LABEL] for button in self._custom_buttons],
+            ATTR_BUTTONS_REQUIRE_UNLOCK: [
+                button[CONF_LABEL]
+                for button in self._custom_buttons
+                if button.get(CONF_REQUIRE_UNLOCK)
+            ],
             ATTR_GENERATED_BY: self._generated_by(),
         }
         if (duration := self._duration) is not None:
@@ -1367,6 +1374,31 @@ class AlertEntity(Entity):
                 "%s: tapped a notification button it no longer has", self.entity_id
             )
             return
+        await self._async_run_button(button, context)
+
+    async def async_press_button(self, label: str) -> None:
+        """Press one of the alert's custom buttons by its label, as the main card
+        does (spec §13.1, §16): only that button's configured action runs, as the
+        user who pressed it (the action call's context), whatever the alert's
+        state."""
+        button = next(
+            (b for b in self._custom_buttons if b[CONF_LABEL] == label), None
+        )
+        if button is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_such_button",
+                translation_placeholders={
+                    "entity_id": self.entity_id,
+                    "label": label,
+                },
+            )
+        await self._async_run_button(button, self._context or Context())
+
+    async def _async_run_button(
+        self, button: dict[str, Any], context: Context
+    ) -> None:
+        """Run a custom button's action sequence as the user in context."""
         label = button[CONF_LABEL]
         try:
             sequence = await async_validate_actions_config(

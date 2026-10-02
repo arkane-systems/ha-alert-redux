@@ -41,6 +41,7 @@ export class AlertReduxCard extends LitElement {
     _busy: { state: true },
     _snoozeMenu: { state: true },
     _expanded: { state: true },
+    _confirm: { state: true },
   };
 
   declare hass?: HomeAssistant;
@@ -53,6 +54,8 @@ export class AlertReduxCard extends LitElement {
   declare _snoozeMenu?: string;
   /** The entity IDs of alerts whose superseded alerts are shown. */
   declare _expanded: Set<string>;
+  /** A "Require unlock" button waiting for the user to confirm it (spec §13.1). */
+  declare _confirm?: { entityId: string; label: string };
 
   private _tick?: number;
   private _progressTick?: number;
@@ -295,11 +298,12 @@ export class AlertReduxCard extends LitElement {
   private _renderControls(alert: Alert) {
     const busy = this._busy.has(alert.entityId);
     const dismiss = alert.kind === "manual" && alert.userDismissable;
-    if (!alert.acknowledgeable && !dismiss) return nothing;
+    if (!alert.acknowledgeable && !dismiss && !alert.buttons.length) return nothing;
     const snoozed = alert.state === "ack" && alert.snoozedUntil;
     const menuOpen = this._snoozeMenu === alert.entityId;
     return html`
       <div class="controls">
+        ${alert.buttons.map((label) => this._renderButton(alert, label, busy))}
         ${dismiss
           ? html`<button
               ?disabled=${busy}
@@ -344,6 +348,39 @@ export class AlertReduxCard extends LitElement {
       </div>
       ${menuOpen ? this._renderSnoozeMenu(alert, busy) : nothing}
     `;
+  }
+
+  /**
+   * One of the alert's custom buttons (spec §13.1). One marked "Require unlock"
+   * turns into a confirmation first, since the dashboard has no unlocked phone to
+   * rely on.
+   */
+  private _renderButton(alert: Alert, label: string, busy: boolean) {
+    const confirming =
+      this._confirm?.entityId === alert.entityId && this._confirm.label === label;
+    if (confirming) {
+      return html`<span class="confirm">
+        Run "${label}"?
+        <button class="primary" ?disabled=${busy} @click=${() => this._press(alert, label)}>
+          Confirm
+        </button>
+        <button @click=${() => (this._confirm = undefined)}>Cancel</button>
+      </span>`;
+    }
+    return html`<button
+      ?disabled=${busy}
+      @click=${() =>
+        alert.unlockButtons.includes(label)
+          ? (this._confirm = { entityId: alert.entityId, label })
+          : this._press(alert, label)}
+    >
+      <ha-icon icon="mdi:gesture-tap-button"></ha-icon>${label}
+    </button>`;
+  }
+
+  private _press(alert: Alert, label: string): void {
+    this._confirm = undefined;
+    void this._call(alert, "press_button", { label });
   }
 
   /**
@@ -435,7 +472,7 @@ export class AlertReduxCard extends LitElement {
 
   private async _call(
     alert: Alert,
-    service: "ack" | "unack" | "dismiss" | "snooze",
+    service: "ack" | "unack" | "dismiss" | "snooze" | "press_button",
     data: Record<string, unknown> = {},
   ): Promise<void> {
     if (!this.hass) return;

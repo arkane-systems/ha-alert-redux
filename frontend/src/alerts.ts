@@ -43,6 +43,9 @@ const toDate = (value: unknown): Date | null => {
 const toText = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
 
+const textList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map(String) : [];
+
 export function toAlert(entity: HassEntity): Alert {
   const attributes = entity.attributes;
   const priority = PRIORITIES.includes(attributes.priority as Priority)
@@ -68,9 +71,9 @@ export function toAlert(entity: HassEntity): Alert {
       : [],
     snoozedUntil: toDate(attributes.snoozed_until),
     disabledUntil: toDate(attributes.disabled_until),
-    supersededBy: Array.isArray(attributes.superseded_by)
-      ? attributes.superseded_by.map(String)
-      : [],
+    supersededBy: textList(attributes.superseded_by),
+    buttons: textList(attributes.buttons),
+    unlockButtons: textList(attributes.buttons_require_unlock),
     generatedBy: toText(attributes.generated_by),
   };
 }

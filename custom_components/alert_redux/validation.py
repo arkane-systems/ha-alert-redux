@@ -170,9 +170,13 @@ async def async_check_buttons(
     hass: HomeAssistant, buttons: list[dict[str, Any]]
 ) -> str | None:
     """Return an error key for notification buttons that aren't complete and valid."""
+    labels = [button[CONF_LABEL] for button in buttons]
+    if any(not button[CONF_LABEL] or not button[CONF_ACTION] for button in buttons):
+        return "button_incomplete"
+    # A button is pressed by its label (spec §16), so labels are unique.
+    if len(set(labels)) != len(labels):
+        return "button_label_duplicate"
     for button in buttons:
-        if not button[CONF_LABEL] or not button[CONF_ACTION]:
-            return "button_incomplete"
         try:
             await async_validate_actions_config(
                 hass, cv.SCRIPT_SCHEMA(button[CONF_ACTION])

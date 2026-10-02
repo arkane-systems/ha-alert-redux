@@ -105,3 +105,15 @@ import:
       default: false
       selector:
         boolean:
+
+press_button:
+  target:
+    entity:
+      integration: alert_redux
+      domain: alert_redux
+  fields:
+    label:
+      required: true
+      example: Close door
+      selector:
+        text:

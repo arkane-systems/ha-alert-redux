@@ -80,6 +80,7 @@ rewrites references to it; deleting an alert doesn't.
 | `not_acknowledgeable` | `ack` or `snooze` on an unacknowledgeable alert. |
 | `not_firing` | A proxy switch turned on, or a proxy snooze button pressed, while its alert isn't firing. |
 | `suspend_in_past` | `suspend` with `until` in the past. |
+| `no_such_button` | `press_button` with a label the alert has no button for. |
 | `not_generator` | `refresh_generator` on something that isn't a generator sensor. |
 | `not_exportable` | `export` with an entity that isn't an Alert Redux alert or generator. |
 | `import_refused` | `import` found problems, and imported nothing; the message lists them (codes in [operating.md](operating.md#exporting-and-importing)). |

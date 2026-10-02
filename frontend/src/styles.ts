@@ -294,6 +294,14 @@ export const cardStyles = css`
     gap: 8px;
   }
 
+  .confirm {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+  }
+
   /* --- Superseded alerts, behind a disclosure under their superseder --- */
   .superseded {
     display: flex;

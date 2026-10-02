@@ -411,6 +411,19 @@ async def test_all_or_nothing_lists_every_problem(
             "invalid_trigger",
         ),
         (
+            _file(
+                {
+                    "name": "A",
+                    "kind": "manual",
+                    "buttons": [
+                        {"label": "Close", "action": [{"action": "test.x"}]},
+                        {"label": "Close", "action": [{"action": "test.y"}]},
+                    ],
+                }
+            ),
+            "button_label_duplicate",
+        ),
+        (
             _file(generators=[{"name": "G", "kind": "state", "target_state": "on"}]),
             "invalid_definition",
         ),

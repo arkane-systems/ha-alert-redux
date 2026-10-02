@@ -76,7 +76,7 @@ Templates that return a value must be **clearly** true or false: anything else
 | `display_message` | template | A different message for the card. |
 | `reminder_message` | template | Default gives the name and how long it's been firing. |
 | `done_message` | template | Sent when it stops firing. |
-| `buttons` | list of `{label, action, require_unlock}` | Mobile notification buttons; `action` is an action sequence. Labels must be filled in. |
+| `buttons` | list of `{label, action, require_unlock}` | Mobile notification buttons; `action` is an action sequence. Labels must be filled in, and each used once (the card presses a button by its label). |
 | `button_snooze_duration` | duration | How long the Snooze Alert button snoozes. |
 
 Message templates can use `name`, `entity_id`, `priority`, `subject_entity_id`,
@@ -262,7 +262,7 @@ A form that's refused comes back with an error key:
 | `supersedes_self`, `supersedes_duplicate`, `supersedes_cycle`, `relationship_target` | Fix the relationships. |
 | `propagation_unacknowledgeable` | Set propagation to `none`, or make the alert acknowledgeable. |
 | `snooze_duration_missing` | A `snooze` relationship needs `snooze_duration`. |
-| `button_incomplete`, `invalid_button_action` | Each button needs a label and a valid action. |
+| `button_incomplete`, `button_label_duplicate`, `invalid_button_action` | Each button needs a label (used once) and a valid action. |
 | `targets_required` | Generators: set at least one target criterion. |
 | `no_members`, `action_missing`, `invalid_data` | Notifier groups: add a member; set each action; `data` must be a mapping. |
 

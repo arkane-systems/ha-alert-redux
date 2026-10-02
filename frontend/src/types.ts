@@ -88,6 +88,10 @@ export interface Alert {
   disabledUntil: Date | null;
   /** The firing alerts that supersede this one, transitively (spec §8.1). */
   supersededBy: string[];
+  /** The labels of the alert's custom buttons (spec §9.11, §13.1). */
+  buttons: string[];
+  /** The labels of those marked "Require unlock", which the card confirms first. */
+  unlockButtons: string[];
   /** A generated alert's generator: its sensor's entity ID (spec §12.3). */
   generatedBy: string | null;
 }

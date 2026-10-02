@@ -562,6 +562,20 @@ async def test_invalid_buttons(
     assert result["errors"] == {"base": error}
 
 
+async def test_duplicate_button_labels(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A button is pressed by its label, so each label is used once."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    button = {"label": "Close", "action": [{"action": "test.x"}]}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**FORM, "supersession": {}, "notifications": {"buttons": [button, button]}},
+    )
+    assert result["errors"] == {"base": "button_label_duplicate"}
+
+
 async def _start_group(
     hass: HomeAssistant, entry: MockConfigEntry, subentry_id: str | None = None
 ) -> dict[str, Any]:

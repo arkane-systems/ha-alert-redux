@@ -1448,7 +1448,8 @@
         "propagation_unacknowledgeable": "This alert can't be acknowledged, so acknowledgements can't be passed on to it. Set each relationship to do nothing, or make the alert acknowledgeable.",
         "snooze_duration_missing": "A relationship set to snooze this alert needs a duration to snooze it for.",
         "button_incomplete": "Each notification button needs a label and an action.",
-        "invalid_button_action": "A notification button's action isn't valid."
+        "invalid_button_action": "A notification button's action isn't valid.",
+        "button_label_duplicate": "Each notification button needs its own label."
       },
       "abort": {
         "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
@@ -2579,7 +2580,8 @@
         "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself, for some target.",
         "propagation_unacknowledgeable": "[%key:component::alert_redux::config_subentries::alert::error::propagation_unacknowledgeable%]",
         "snooze_duration_missing": "[%key:component::alert_redux::config_subentries::alert::error::snooze_duration_missing%]",
-        "relationship_target": "Each relationship needs either a generator or a fixed alert, not both."
+        "relationship_target": "Each relationship needs either a generator or a fixed alert, not both.",
+        "button_label_duplicate": "Each notification button needs its own label."
       },
       "abort": {
         "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
@@ -2876,6 +2878,16 @@
           "description": "Check the definitions and say what would happen, without changing anything."
         }
       }
+    },
+    "press_button": {
+      "name": "Press button",
+      "description": "Runs one of an alert's custom buttons (the ones on its notifications), as the main card does, by its label. Only that button's configured action runs, as the user who calls this action.",
+      "fields": {
+        "label": {
+          "name": "Label",
+          "description": "The button's label."
+        }
+      }
     }
   },
   "exceptions": {
@@ -2902,6 +2914,9 @@
     },
     "import_refused": {
       "message": "Nothing was imported:\n{problems}"
+    },
+    "no_such_button": {
+      "message": "{entity_id} has no button labelled \"{label}\"."
     }
   },
   "options": {

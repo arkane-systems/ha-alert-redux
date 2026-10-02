@@ -26,6 +26,7 @@ All take alert entities as a normal `target` (`entity_id`, area, label, …).
 | `alert_redux.disable` | | Disable until enabled. **Admin only.** |
 | `alert_redux.enable` | | Enable a disabled or suspended alert. **Admin only.** |
 | `alert_redux.suspend` | `duration` or `until` | Disable for a while, or until a time (local time if no zone). **Admin only.** |
+| `alert_redux.press_button` | `label` (required) | Run one of the alert's custom buttons by its label, as the main card does: only its action, as the caller, whatever the alert's state. |
 | `alert_redux.refresh_generator` | `entity_id`: generator sensors | Re-evaluate a generator's targets now. For debugging. |
 | `alert_redux.export` | `entity_id`: alerts or generator sensors (optional; default all) | Return alert and generator definitions as response data. Anyone may call it. |
 | `alert_redux.import` | `definitions` (the export's form), `overwrite` (default off), `dry_run` (default off) | Create or replace alerts and generators. **Admin only.** Returns what was created, updated, and left unchanged. |
@@ -40,6 +41,7 @@ nothing. These raise errors instead:
 - `ack` or `snooze` on an unacknowledgeable alert: `not_acknowledgeable`.
 - `suspend` until a time in the past: `suspend_in_past`.
 - `refresh_generator` on something that isn't a generator sensor: `not_generator`.
+- `press_button` with a label the alert doesn't have: `no_such_button`.
 - `export` with an entity that isn't an Alert Redux alert or generator: `not_exportable`.
 - `import` that would change nothing because it's refused: `import_refused`,
   with every problem listed.
@@ -68,7 +70,7 @@ Every alert: `kind`, `priority`, `acknowledgeable`, `subject_entity`,
 `display_message` (rendered while firing), `notifier_groups` (names),
 `reminder_schedule`, `next_reminder`, `throttle`, `throttled_since`, `supersedes`,
 `superseded_by`, `pre_acked_by`, `pre_snoozed_until`, `broken_references`,
-`buttons` (labels), `generated_by` (the generator's sensor, for generated alerts).
+`buttons` (labels), `buttons_require_unlock` (the labels marked Require unlock), `generated_by` (the generator's sensor, for generated alerts).
 The `_by` attributes are user IDs. `fire_count` counts the fires of the
 **current** firing (firing again adds to it), and goes back to 0 when the firing
 ends; `fire_data` and `firing_since` clear then too.

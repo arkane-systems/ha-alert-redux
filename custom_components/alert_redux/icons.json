@@ -63,6 +63,9 @@
     },
     "import": {
       "service": "mdi:import"
+    },
+    "press_button": {
+      "service": "mdi:gesture-tap-button"
     }
   }
 }

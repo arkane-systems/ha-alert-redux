@@ -34,6 +34,7 @@ from .const import (
     ATTR_DEFINITIONS,
     ATTR_DRY_RUN,
     ATTR_DURATION,
+    ATTR_LABEL,
     ATTR_OVERWRITE,
     ATTR_UNTIL,
     CONF_ALERT,
@@ -65,6 +66,7 @@ from .const import (
     SERVICE_EXPORT,
     SERVICE_FIRE,
     SERVICE_IMPORT,
+    SERVICE_PRESS_BUTTON,
     SERVICE_REFRESH_GENERATOR,
     SERVICE_SNOOZE,
     SERVICE_SUSPEND,
@@ -123,6 +125,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_SNOOZE,
         {vol.Required(ATTR_DURATION): cv.positive_time_period},
         "async_snooze",
+    )
+    # The main card's custom buttons (spec §13.1): anyone who can use the card may
+    # press one, as themselves.
+    component.async_register_entity_service(
+        SERVICE_PRESS_BUTTON,
+        {vol.Required(ATTR_LABEL): cv.string},
+        "async_press_button",
     )
     # Disabling is for maintenance and debugging, not everyday use (spec §16).
     _register_admin_entity_service(
