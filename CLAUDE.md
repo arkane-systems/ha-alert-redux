@@ -185,7 +185,7 @@ time, each ending with tests, a run in real HA, green CI, and a release (`0.N.0`
     members are showing each key's notification, so clears reach exactly those,
     spec §9.10, and notifications held for quiet hours). Quiet hours (§9.9) are
     the notifier's: notifications carry an `urgency` (Alert Redux maps it from
-    the priority), loud groups hold or soften, and when their quiet-hours entity
+    the priority) and an `interruption` (the iOS level, spec §9.3; the owner chooses it), loud groups hold or soften, and when their quiet-hours entity
     turns off, the owner's `on_quiet_ended` callback says what to send. Named `notifier`, not `notify`: a `notify.py` would be loaded as
     a notify platform.
   - `buttons.py` — notification buttons (spec §9.11): building an alert's

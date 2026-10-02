@@ -547,6 +547,23 @@ one there runs the same action (as you), through `alert_redux.press_button`; a b
 marked **Only from an unlocked phone** asks you to confirm first. Give each button of
 an alert its own label.
 
+### iOS interruption levels
+
+On an iPhone, the mobile app can let a notification through Focus and silent mode.
+Alert Redux does this by priority, with no setting: the on and reminder
+notifications of **Emergency** alerts are sent as `critical`, and **Critical** alerts
+as `time-sensitive`. Done notifications and summaries aren't, and nor are
+notifications softened by quiet hours.
+
+- Critical notifications bypass Do Not Disturb and silent mode, and the app needs
+  **Critical Alerts** allowed in iOS settings. Time-sensitive notifications are read
+  aloud by Siri by default (on AirPods, say), which iOS settings can turn off.
+- Only mobile-app members are sent the level (`notify.mobile_app_*`), and Android
+  ignores it.
+- To pin a phone to a level whatever the priority, give its member `data` like
+  `push: {interruption-level: active}`: a level you set yourself wins, and your
+  other `push` options are kept.
+
 ### When a notifier fails
 
 A notifier that's missing (e.g. its integration hasn't loaded yet) or fails is

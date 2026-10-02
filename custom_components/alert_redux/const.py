@@ -68,6 +68,13 @@ class Priority(StrEnum):
         return len(Priority) - 1 - self.rank
 
 
+# The iOS interruption level that mobile notifications of the higher priorities
+# are sent with, so they get through Focus and silent modes (spec §9.3).
+INTERRUPTION_LEVELS: dict[Priority, str] = {
+    Priority.EMERGENCY: "critical",
+    Priority.CRITICAL: "time-sensitive",
+}
+
 DEFAULT_PRIORITY_ICONS: dict[Priority, str] = {
     Priority.EMERGENCY: "mdi:alarm-light",
     Priority.CRITICAL: "mdi:alert-octagon",

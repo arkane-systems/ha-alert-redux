@@ -611,10 +611,28 @@ A group has:
 
   A group holding both kinds of destination should be split into two groups, and an
   alert can use both.
-- [Deferred, phase 13] Mobile members send higher-priority alerts with iOS
-  **interruption levels** matching their priority: `critical` for Emergency and
-  `time-sensitive` for Critical (proposed mapping), so they get through Focus and
-  silent modes.
+- [Decided; phase 13] Mobile members send higher-priority alerts with iOS
+  **interruption levels** matching their priority, so they get through Focus and
+  silent modes: `critical` for Emergency and `time-sensitive` for Critical, sent as
+  the mobile app's `push: {interruption-level: …}`. There's no setting for it; if
+  there's demand for time-sensitive lower-priority alerts, it can be added then.
+  - Only the **on** and **reminder** notifications carry a level, since the alert is
+    asking for attention. Done notifications and the summaries (throttling, quiet
+    hours) don't.
+  - Only **mobile-app members** get it (`notify.mobile_app_*`, or a member whose
+    mobile setting says to treat it as one; the same test as for replacing and
+    buttons), since other notify actions may reject an unknown key.
+  - **The member's own data wins**: if its `data` sets `push.interruption-level`,
+    that is kept, and its other `push` keys are merged with it. That pins a phone to
+    a level, whatever the priority.
+  - A **softened** quiet-hours delivery (§9.9) never gets it.
+  - The level travels with the notification (`Notification.interruption`), so a
+    retried or held notification keeps it; the notifier module doesn't know about
+    priorities, the owner chooses the level.
+  - Android ignores `push`, so nothing changes there.
+  - Critical notifications bypass Do Not Disturb and silent mode, and need Critical
+    Alerts allowed for the app in iOS settings. Time-sensitive notifications are, by
+    default, read aloud by Siri (on AirPods, say), which iOS settings can turn off.
 - [Decided] Groups are **not** exposed for use outside Alert Redux. General-purpose
   notification belongs in the possible future notifier integration (§9.1), not
   halfway here.
@@ -2307,6 +2325,7 @@ Decisions with their reasons, in the order they were made.
 | A duration that ran out while HA was down ends just after the first state is written | HA's logbook leaves out an entity's first state after a restart, so an ending before it had no row [§11.4, §15.1]. |
 | Alert Redux ships an agent skill, checked against the code by a test | Agents can drive Alert Redux through MCP, but had to dig through the forms' schemas to do it; a test keeps the skill from drifting as the code changes [§20]. |
 | Latching alerts (§10) replace the acknowledgement queue (R7), in a late phase 15 | The real need is a firing that ended before anyone saw it; a per-alert setting answers it on the existing model, where a queue would be a subsystem. One item per alert, with the fire count shown, is simpler than one per firing [§10]. |
+| iOS interruption levels follow priority (Emergency critical, Critical time-sensitive), without a setting | Apple's levels match our top two priorities; a member's own `push` data is the escape hatch, and a setting waits for demand [§9.3]. |
 | The quiet-hours summary stays an ordinary notification | The queue it might have used is gone; the summary already tells you what you missed [§9.9]. |
 | Displayed state names in a state alert are dropped (N38) | Translations, device classes, and entities' own state names make recognising them a lot of complexity for marginal gain; a state alert's target stays the real state. Revisit if HA's state selector becomes usable for it [§4.1]. |
 | Phase 13 is 1.2.0, phase 14 1.2.1, phase 15 1.3.0 | Integration feature phases are minor releases; phase 14 ships tools, not integration features, so it takes a patch version [§20]. |

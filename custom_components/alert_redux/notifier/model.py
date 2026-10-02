@@ -76,6 +76,8 @@ class Notification:
     A final notification is the last of its lifecycle (e.g. "resolved"): members can
     be set to clear the earlier ones instead of showing it, and it has no buttons.
     Quiet hours affect notifications whose urgency is below a threshold (§9.9).
+    The interruption is how hard the notification pushes on a mobile app that
+    can say so (an iOS interruption level, spec §9.3); None leaves it alone.
     """
 
     title: str
@@ -85,6 +87,7 @@ class Notification:
     buttons: tuple[Button, ...] = ()
     final: bool = False
     urgency: int = 0
+    interruption: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,11 +135,16 @@ class ActionMember:
         return (KIND_ACTION, self.action, *self.target)
 
     @property
-    def replaces(self) -> bool:
-        """Return whether notifications carry a tag, to replace and clear them."""
+    def mobile_app(self) -> bool:
+        """Return whether the member is a mobile app, or is set to be treated as one."""
         if self.mobile is MobileFeatures.AUTOMATIC:
             return self.action.startswith(MOBILE_APP_PREFIX)
         return self.mobile is not MobileFeatures.NONE
+
+    @property
+    def replaces(self) -> bool:
+        """Return whether notifications carry a tag, to replace and clear them."""
+        return self.mobile_app
 
     @property
     def shows_buttons(self) -> bool:
@@ -326,6 +334,7 @@ def notification_to_dict(notification: Notification) -> dict[str, Any]:
         ],
         "final": notification.final,
         "urgency": notification.urgency,
+        "interruption": notification.interruption,
     }
 
 
@@ -342,4 +351,5 @@ def notification_from_dict(data: Mapping[str, Any]) -> Notification:
         ),
         data.get("final", False),
         data.get("urgency", 0),
+        data.get("interruption"),
     )

@@ -89,6 +89,12 @@ async def async_deliver(
     extra: dict[str, Any] = {}
     if member_data := member.quiet_data if soft else member.data:
         extra = dict(render_data(hass, member_data, notification.variables))
+    # The notification's interruption level goes to mobile apps, unless the member's
+    # own data sets one (it wins), and never to a softened delivery (spec §9.3).
+    if notification.interruption and member.mobile_app and not soft:
+        push = extra.get("push", {})
+        if isinstance(push, Mapping) and "interruption-level" not in push:
+            extra["push"] = {**push, "interruption-level": notification.interruption}
     # Alert Redux's own keys win over the member's data.
     if member.replaces:
         extra["tag"] = tag

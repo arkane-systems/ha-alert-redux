@@ -142,6 +142,7 @@ from .const import (
     CONF_USER_DISMISSABLE,
     CONF_VALUE_TEMPLATE,
     DATA_LABEL,
+    INTERRUPTION_LEVELS,
     DATA_PROXIES,
     DATA_STARTUP_UNTIL,
     DATA_SUMMARY,
@@ -907,6 +908,7 @@ class AlertEntity(Entity):
                 snooze=self.button_snooze,
             ),
             "urgency": self._priority.urgency,
+            "interruption": INTERRUPTION_LEVELS.get(self._priority),
         }
 
     def quiet_hours_reminder(self) -> Notification | None:

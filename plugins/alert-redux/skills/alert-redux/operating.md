@@ -156,6 +156,12 @@ firing alert, `_ended` then `_disabled`.
 - **Buttons** (mobile app): the alert's own buttons, then Acknowledge and Snooze
   Alert; Android shows three. A custom button runs only its configured action, as
   the person who tapped it.
+- **iOS interruption levels** (mobile app): on and reminder notifications of
+  Emergency alerts are sent as `critical`, and Critical alerts as `time-sensitive`
+  (`push: {interruption-level: …}`), so they get through Focus and silent modes.
+  There's no setting; a mobile member's own `data` with `push.interruption-level`
+  wins (its other `push` keys are kept), so a phone can be pinned to a level.
+  Done notifications, summaries, and quiet-hours softened deliveries never get one.
 - **Failures:** a missing or failing notifier is retried until the retry timeout
   (5 minutes by default), surviving restarts; if nothing in the group got it, it
   goes to the fallback group.
