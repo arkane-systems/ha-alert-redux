@@ -8,7 +8,7 @@ built-in `alert` integration, which is
 > (optionally ending by itself), state, on/off, threshold, template, alert state,
 > trigger, and bus event alerts. The card shows, acknowledges, and snoozes them,
 > they send on, reminder, and done notifications (with throttling, quiet hours,
-> and buttons), the admin card disables and suspends them, alerts can supersede
+> and buttons), the admin card lists, exports, imports, edits, and suspends them, alerts can supersede
 > each other, generators make alerts for every matching entity, summary sensors
 > and the Activity card make them easy to build on, and an agent skill lets AI
 > agents set them up for you. Voice control and more card features arrive in 1.x
@@ -206,6 +206,11 @@ target (each door's *Left Open* over its *Open*), or choose a fixed alert, which
 each of its alerts supersedes. Propagation works as for alerts. The admin card
 marks generated alerts "generated".
 
+A generator's **Area and labels** section gives all its alerts labels, and an area:
+the area of the entity each is about (the default), or a fixed one. Saving the
+generator updates the alerts it has made: the labels it adds or removes and the
+area, but not what you set by hand.
+
 Each generator also has a sensor, `sensor.alert_redux_generator_<name>`: the number
 of alerts it has made, with its `targets`, those `alerts`, and any `problems`.
 `alert_redux.refresh_generator` re-evaluates a generator's targets at once, for
@@ -244,7 +249,10 @@ down ends as soon as it's back.
 | `alert_redux.disable` | Disables an alert until it's enabled. Admin only. |
 | `alert_redux.enable` | Enables a disabled or suspended alert. Admin only. |
 | `alert_redux.suspend` | Disables an alert for a `duration`, or `until` a time (local time if it has no time zone). Admin only. |
+| `alert_redux.press_button` | Runs one of an alert's custom buttons by its `label`, as the card does: only that button's action, as the user who calls it. |
 | `alert_redux.refresh_generator` | Re-evaluates the targets of the generators whose sensors are given as `entity_id`. |
+| `alert_redux.export` | Returns alert and generator definitions as response data (optionally only those of the `entity_id`s given). See [Exporting and importing](#exporting-and-importing). |
+| `alert_redux.import` | Creates or replaces alerts and generators from definitions: `definitions`, `overwrite` (default off), `dry_run` (default off). Admin only. |
 
 An action that doesn't apply to an alert's current state (such as acknowledging an
 idle alert) does nothing.
@@ -257,6 +265,45 @@ data:
   data:
     opened_by: keypad
 ```
+
+### Exporting and importing
+
+There is no YAML configuration, so `alert_redux.export` and `alert_redux.import` are
+how alerts are copied between instances, kept under version control, or created by
+a script. `export` returns the definitions of every alert and generator (or those
+of the `entity_id`s you give; a generated alert gives its generator), and `import`
+takes them back. The admin card has **Export** and **Import** buttons for the same
+(YAML to copy or download; YAML or JSON in).
+
+```yaml
+format: alert_redux
+version: 1
+alerts:
+  - id: 01M3D2A71TKEQW9ECF1G30J4TZ
+    name: Garage Door Left Open
+    kind: state
+    priority: warning
+    entity_id: cover.garage_door
+    target_state: open
+    delay_on: {hours: 0, minutes: 10, seconds: 0}
+    notifier_groups: [Phone]
+generators: []
+```
+
+- A definition is the alert's settings as stored, flattened (no form sections;
+  anything left at its default is left out). Notifier groups, and generators named
+  by other generators, are written by **name**, and turned back into this instance's
+  groups on import; groups themselves aren't exported, so create them first.
+- `id` is kept on import, so importing a file again, here or elsewhere, finds the
+  same alerts. Without one (a file you wrote by hand), a definition matches the
+  existing alert or generator of that name.
+- **Nothing is half-imported.** Every definition is checked first, with the same
+  checks as the forms, and if any is wrong, or would replace an existing alert
+  without `overwrite`, nothing is imported and the error lists every problem.
+  `dry_run` does the checks and says what would happen. A definition identical to
+  the existing one is left as it is, so importing twice does no harm. An existing
+  alert's kind can't be changed by an import.
+- An alert's area and labels live in the entity registry and aren't exported.
 
 ### Events
 
@@ -310,17 +357,24 @@ Alert state is saved as it changes and restored after a restart.
 
 ### Summary sensors
 
-Seven sensors summarise every alert, so glue needs to follow only one entity:
+Eight sensors summarise every alert, so glue needs to follow only one entity:
 
 | Sensor | State |
 |---|---|
 | `sensor.alert_redux_highest_priority` | the highest priority among firing alerts, or `none` |
-| `sensor.alert_redux_highest_unacked_priority` | the same, counting only unacknowledged (`active`) alerts |
+| `sensor.alert_redux_highest_unacked_priority` | the same, counting only unacknowledged (`active`) alerts that aren't superseded |
 | `sensor.alert_redux_firing` | how many alerts are firing (`active` or `ack`) |
-| `sensor.alert_redux_active` | how many are firing and unacknowledged |
+| `sensor.alert_redux_active` | how many are firing and unacknowledged, not counting superseded alerts |
 | `sensor.alert_redux_acknowledged` | how many are acknowledged |
+| `sensor.alert_redux_superseded` | how many firing alerts another firing alert supersedes |
 | `sensor.alert_redux_no_data` | how many are missing data, including firing alerts in their grace period |
 | `sensor.alert_redux_disabled` | how many are disabled or suspended (a diagnostic sensor) |
+
+A superseded alert is hidden on the card and sends no notifications, so it doesn't
+hold up the *unacknowledged* figures: acknowledging the alert you can see quiets a
+signal light. `firing` and `highest_priority` still count it, and
+`sensor.alert_redux_superseded` lists what is left out. (`active` plus
+`acknowledged` can therefore be less than `firing`.)
 
 Each count sensor lists the alerts it counts in its `entity_ids` attribute, and the
 firing and active sensors also count each priority (`emergency: 0`,
@@ -348,6 +402,15 @@ actions:
             {{ {'emergency': 'red', 'critical': 'orange', 'warning': 'yellow',
                 'notice': 'green', 'informational': 'blue'}[trigger.to_state.state] }}
 ```
+
+### Area and labels
+
+An alert's **Area and labels** section sets its area and labels in the entity
+registry, so they can be used by the card's scope and by anything else that picks
+entities by area or label. It is an editor for the registry's values: editing an
+alert shows what the registry has now (changes made on the entity's settings page
+included), and saving writes your choices back, so removing a label there removes
+it. For a new alert, the values are applied once, when it's created.
 
 ### The Alert Redux label
 
@@ -479,6 +542,11 @@ the default from the integration's options (1 hour). It's named so as not to be
 confused with the app's own *Snooze* options, which only snooze the notification on
 the phone; the alert itself isn't snoozed.
 
+The alert's own buttons are on the [card](#lovelace-card) too, defined once. Pressing
+one there runs the same action (as you), through `alert_redux.press_button`; a button
+marked **Only from an unlocked phone** asks you to confirm first. Give each button of
+an alert its own label.
+
 ### When a notifier fails
 
 A notifier that's missing (e.g. its integration hasn't loaded yet) or fails is
@@ -534,9 +602,13 @@ Add it to a dashboard as **Alert Redux** from the card picker, or in YAML:
 type: custom:alert-redux-card
 title: Alerts # optional
 snooze_durations: [15, 30, 60, 120, 240] # optional: the snooze menu, in minutes
+areas: [workshop] # optional: only alerts in these areas (area IDs)
+labels: [network] # optional: only alerts with one of these labels (label IDs)
+hide_acknowledged: false # optional: start with acknowledged alerts hidden
+priorities: [emergency, critical] # optional: start showing only these
 ```
 
-Both options can also be set in the card's visual editor.
+The options can also be set in the card's visual editor.
 
 ![The Alert Redux card with a range of alerts, in the light and dark themes](assets/screenshots/main-card.png)
 
@@ -556,6 +628,18 @@ Alerts that have no data are listed in their own section at the bottom, with the
 inputs they're missing. Disabled alerts aren't shown, only counted ("2 alerts
 disabled"). When nothing is firing, the card says so.
 
+An alert's own **buttons** (see [Buttons](#buttons)) are on its box too, before
+the usual controls; one marked *only from an unlocked phone* asks you to confirm.
+
+**Filters.** `areas` and `labels` set the card's **scope**: it shows only alerts in
+one of those areas and with one of those labels (each, when set), so a room's page
+can show just that room's alerts. Alerts outside the scope are left out of the whole
+card, including the no-data list and the disabled count. Scope applies before
+superseded alerts are folded under their superseders. Under the title, buttons
+**hide acknowledged** alerts or show only some **priorities**, for changing while
+you look at the card (`hide_acknowledged` and `priorities` set where they start);
+the card says how many alerts they hide.
+
 The priority colours can be changed from a theme, with `alert-redux-emergency-color`,
 `alert-redux-critical-color`, `alert-redux-warning-color`, `alert-redux-notice-color`,
 and `alert-redux-informational-color`.
@@ -564,17 +648,35 @@ and `alert-redux-informational-color`.
 
 The admin card lists **every** alert, grouped by priority, with its kind and state
 (and when it started firing, when a snooze or suspension ends, which alert is
-superseding it, and so on). Admins
-get buttons to disable or enable each alert, and to suspend it for 1 hour to a week
-or until a date and time; everyone else sees the list without them. It comes in the
-same install as the main card: add **Alert Redux admin** from the card picker, or
+superseding it, and so on). It comes in the same install as the main card: add
+**Alert Redux admin** from the card picker, or
 
 ```yaml
 type: custom:alert-redux-admin-card
 title: All alerts # optional
+page_size: 20 # optional: alerts per page; unset shows them all
 ```
 
+With `page_size`, the list is paged (still by priority, with each heading counting
+the whole priority), and the card keeps its height on a short last page so the
+dashboard doesn't rearrange itself.
+
+Everyone gets, on each row, a **Summary** button: a text summary of the alert's
+settings to copy (handy when setting up a matching alert), or its definition as
+YAML. Everyone also gets **Export** (all definitions as YAML, to copy or download).
+Admins also get, on each row, buttons to **edit**, **delete**, **disable** or
+**enable**, and **suspend** it for 1 hour to a week or until a date and time, and
+**Import**, **Add alert**, and **Add generator** above the list.
+
 ![The Alert Redux admin card, in the light and dark themes](assets/screenshots/admin-card.png)
+
+Adding and editing use the same forms as **Settings → Devices & Services → Alert
+Redux**, shown in a dialog on the card (a generated alert edits and deletes its
+generator). **Import** takes pasted YAML (or JSON) or a file; **Check** says what
+would happen without changing anything. Notifier groups are still edited in Home
+Assistant's own pages.
+
+![The settings summary dialog](assets/screenshots/admin-summary.png)
 
 ### After installing or upgrading
 
