@@ -97,6 +97,10 @@ resource needs adding.
 type: custom:alert-redux-card
 title: Alerts                          # optional
 snooze_durations: [15, 30, 60, 120]   # optional: the snooze menu, in minutes
+areas: [workshop, garage]              # optional scope: area IDs
+labels: [network]                      # optional scope: label IDs
+hide_acknowledged: true                # optional: start with acknowledged hidden
+priorities: [emergency, critical]      # optional: start showing only these
 ```
 
 It shows every firing alert (by priority, unacknowledged first, newest first),
@@ -104,6 +108,16 @@ with acknowledge, snooze, and (for dismissable manual alerts) dismiss controls,
 and the alert's custom buttons (one marked Require unlock asks to confirm);
 superseded alerts fold under the alert superseding them, alerts without data are
 listed at the bottom, and disabled alerts are only counted.
+
+`areas` and `labels` set the card's **scope**: it shows only alerts in one of the
+areas and with one of the labels (each, when set), and leaves the rest out of the
+whole card, including the no-data list and the disabled count. Scope applies before
+superseded alerts are folded, so an alert whose superseder is out of scope shows on
+its own. Area and label IDs are the registry's (an alert's area and labels are set in
+its form, or on its entity page). `hide_acknowledged` and `priorities` only set the
+starting state of the card's **filter buttons** (hide acknowledged; one per priority
+present), which change what's shown without changing the configuration; the card
+says how many alerts they hide.
 
 ```yaml
 type: custom:alert-redux-admin-card

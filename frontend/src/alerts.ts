@@ -1,4 +1,4 @@
-import type { Alert, HassEntity, HomeAssistant, Priority } from "./types";
+import type { Alert, EntityRegistryDisplay, HassEntity, HomeAssistant, Priority } from "./types";
 
 export const DOMAIN = "alert_redux";
 
@@ -188,4 +188,38 @@ export function remainingFraction(alert: Alert, now: number = Date.now()): numbe
   const total = alert.eventExpires.getTime() - alert.lastFired.getTime();
   if (total <= 0) return null;
   return Math.min(1, Math.max(0, (alert.eventExpires.getTime() - now) / total));
+}
+
+/** A card option that takes one value or a list, as a list of non-empty text. */
+export function asList(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+  return items.map(String).filter((item) => item !== "");
+}
+
+/**
+ * Whether an alert is in the card's scope (spec §13.1): in one of the areas and
+ * with one of the labels, for each of the two that is set. Alerts have no device,
+ * so the registry entry's own area is the area. With no registry (a frontend too
+ * old to give it), or nothing set, everything is in scope.
+ */
+export function inScope(
+  entry: EntityRegistryDisplay | undefined,
+  areas: string[],
+  labels: string[],
+): boolean {
+  if (!areas.length && !labels.length) return true;
+  if (!entry) return false;
+  if (areas.length && !(entry.area_id && areas.includes(entry.area_id))) return false;
+  if (labels.length && !(entry.labels ?? []).some((label) => labels.includes(label))) {
+    return false;
+  }
+  return true;
+}
+
+/** The priorities a card option names, or all of them. */
+export function viewPriorities(value: unknown): Set<Priority> {
+  const named = asList(value).filter((item): item is Priority =>
+    PRIORITIES.includes(item as Priority),
+  );
+  return new Set(named.length ? named : PRIORITIES);
 }

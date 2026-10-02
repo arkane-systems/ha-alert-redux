@@ -7,8 +7,17 @@ export interface HassEntity {
   last_changed: string;
 }
 
+/** The entity registry's display entry for an entity (area and labels). */
+export interface EntityRegistryDisplay {
+  entity_id: string;
+  area_id?: string | null;
+  labels?: string[];
+}
+
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
+  /** The entity registry's display entries (HA 2023.3 on). */
+  entities?: Record<string, EntityRegistryDisplay>;
   /**
    * Call an action. With returnResponse, the action's response data comes back as
    * `response`; without notifyOnError, a failure is thrown to the caller only.
@@ -60,6 +69,16 @@ export interface AlertReduxCardConfig {
    * strings.
    */
   snooze_durations?: (number | string)[];
+  /**
+   * Scope (spec §13.1): the areas, and the labels, the card is for. An alert must
+   * be in one of the areas and have one of the labels, when each is set.
+   */
+  areas?: string | string[];
+  labels?: string | string[];
+  /** The view controls' starting values: hide acknowledged alerts, and show only
+   * these priorities. */
+  hide_acknowledged?: boolean;
+  priorities?: Priority | Priority[];
 }
 
 export type Priority = "emergency" | "critical" | "warning" | "notice" | "informational";

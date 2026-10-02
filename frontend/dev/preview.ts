@@ -379,9 +379,28 @@ function stateForm(flow_id: string, errors: Record<string, string>, extra = {}) 
   };
 }
 
+// The entity registry: some alerts have areas and labels, for the scope options.
+const REGISTRY: Record<string, { area_id: string | null; labels: string[] }> = {
+  smoke_kitchen: { area_id: "kitchen", labels: ["safety"] },
+  flood_basement: { area_id: "basement", labels: ["safety"] },
+  server_room_hot: { area_id: "office", labels: ["network"] },
+  back_door_open: { area_id: "hall", labels: [] },
+  back_door_left_open: { area_id: "hall", labels: [] },
+  leak_bathroom: { area_id: "bathroom", labels: ["safety"] },
+};
+
 function hassFor(dark: boolean): HomeAssistant {
   return {
     states: empty ? {} : states,
+    entities: Object.fromEntries(
+      Object.keys(states).map((entityId) => [
+        entityId,
+        {
+          entity_id: entityId,
+          ...(REGISTRY[entityId.replace("alert_redux.", "")] ?? { area_id: null, labels: [] }),
+        },
+      ]),
+    ),
     themes: { darkMode: dark },
     locale: { language: "en-GB" },
     user: { is_admin: !params.has("user") },
@@ -484,6 +503,12 @@ function build() {
     card.setConfig({
       type: admin ? "custom:alert-redux-admin-card" : "custom:alert-redux-card",
       title: admin ? "All alerts" : "Alerts",
+      // ?areas=kitchen,hall and ?labels=safety scope the main card; ?hide starts it with
+      // acknowledged alerts hidden, and ?prios=critical,warning with only those shown.
+      ...(params.has("areas") ? { areas: params.get("areas")!.split(",") } : {}),
+      ...(params.has("labels") ? { labels: params.get("labels")!.split(",") } : {}),
+      ...(params.has("hide") ? { hide_acknowledged: true } : {}),
+      ...(params.has("prios") ? { priorities: params.get("prios")!.split(",") } : {}),
       // ?pagesize=5 pages the admin card; ?page=2 starts on the second page.
       ...(params.has("pagesize") ? { page_size: Number(params.get("pagesize")) } : {}),
     });

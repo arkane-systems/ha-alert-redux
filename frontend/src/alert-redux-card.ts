@@ -2,7 +2,11 @@ import { LitElement, html, nothing, type PropertyValues } from "lit";
 
 import {
   DEFAULT_SNOOZE_DURATIONS,
+  PRIORITIES,
   PRIORITY_NAMES,
+  asList,
+  inScope,
+  viewPriorities,
   cardMessage,
   collectAlerts,
   compareFiring,
@@ -16,7 +20,7 @@ import {
 } from "./alerts";
 import { clockTime, elapsed, remaining, span } from "./format";
 import { cardStyles, sharedStyles } from "./styles";
-import type { Alert, AlertReduxCardConfig, HomeAssistant } from "./types";
+import type { Alert, AlertReduxCardConfig, HomeAssistant, Priority } from "./types";
 
 declare global {
   interface Window {
@@ -42,6 +46,8 @@ export class AlertReduxCard extends LitElement {
     _snoozeMenu: { state: true },
     _expanded: { state: true },
     _confirm: { state: true },
+    _hideAcknowledged: { state: true },
+    _priorities: { state: true },
   };
 
   declare hass?: HomeAssistant;
@@ -55,6 +61,9 @@ export class AlertReduxCard extends LitElement {
   /** The entity IDs of alerts whose superseded alerts are shown. */
   declare _expanded: Set<string>;
   /** A "Require unlock" button waiting for the user to confirm it (spec §13.1). */
+  /** The view controls (spec §13.1): the config sets their starting values. */
+  declare _hideAcknowledged: boolean;
+  declare _priorities: Set<Priority>;
   declare _confirm?: { entityId: string; label: string };
 
   private _tick?: number;
@@ -69,6 +78,8 @@ export class AlertReduxCard extends LitElement {
     super();
     this._busy = new Set();
     this._expanded = new Set();
+    this._hideAcknowledged = false;
+    this._priorities = new Set(PRIORITIES);
   }
 
   static getStubConfig(): Partial<AlertReduxCardConfig> {
@@ -76,6 +87,19 @@ export class AlertReduxCard extends LitElement {
   }
 
   static getConfigForm() {
+    const labels: Record<string, string> = {
+      snooze_durations: "Snooze durations",
+      areas: "Only these areas",
+      labels: "Only these labels",
+      hide_acknowledged: "Start with acknowledged alerts hidden",
+      priorities: "Start with only these priorities shown",
+    };
+    const helpers: Record<string, string> = {
+      snooze_durations: `The snooze menu, in minutes. Leave empty for ${DEFAULT_SNOOZE_DURATIONS.join(", ")}.`,
+      areas: "The card shows only alerts in these areas. Leave empty for every alert.",
+      labels: "The card shows only alerts with one of these labels. Leave empty for every alert.",
+      priorities: "The priorities shown when the card loads; the card's own buttons change them. Leave empty for all.",
+    };
     return {
       schema: [
         { name: "title", selector: { text: {} } },
@@ -83,24 +107,46 @@ export class AlertReduxCard extends LitElement {
           name: "snooze_durations",
           selector: { text: { multiple: true, type: "number", suffix: "min" } },
         },
+        { name: "areas", selector: { area: { multiple: true } } },
+        { name: "labels", selector: { label: { multiple: true } } },
+        { name: "hide_acknowledged", selector: { boolean: {} } },
+        {
+          name: "priorities",
+          selector: {
+            select: {
+              multiple: true,
+              mode: "list",
+              options: PRIORITIES.map((value) => ({ value, label: PRIORITY_NAMES[value] })),
+            },
+          },
+        },
       ],
-      computeLabel: (schema: { name: string }) =>
-        schema.name === "snooze_durations" ? "Snooze durations" : undefined,
-      computeHelper: (schema: { name: string }) =>
-        schema.name === "snooze_durations"
-          ? `The snooze menu, in minutes. Leave empty for ${DEFAULT_SNOOZE_DURATIONS.join(", ")}.`
-          : undefined,
+      computeLabel: (schema: { name: string }) => labels[schema.name],
+      computeHelper: (schema: { name: string }) => helpers[schema.name],
     };
   }
 
   setConfig(config: AlertReduxCardConfig): void {
     this._config = config;
+    this._hideAcknowledged = config.hide_acknowledged === true;
+    this._priorities = viewPriorities(config.priorities);
+  }
+
+  /** The alerts in the card's scope: its areas and labels (spec §13.1). */
+  private _scoped(): Alert[] {
+    if (!this.hass) return [];
+    const areas = asList(this._config?.areas);
+    const labels = asList(this._config?.labels);
+    const alerts = collectAlerts(this.hass);
+    // Without the registry (a frontend too old to give it) the scope can't be told.
+    if (!this.hass.entities) return alerts;
+    return alerts.filter((alert) => inScope(this.hass!.entities![alert.entityId], areas, labels));
   }
 
   getCardSize(): number {
     if (!this.hass) return 2;
-    const alerts = collectAlerts(this.hass);
-    const groups = groupSuperseded(alerts.filter(isFiring).sort(compareFiring));
+    const alerts = this._scoped();
+    const groups = this._visible(groupSuperseded(alerts.filter(isFiring).sort(compareFiring)));
     const shown = groups.reduce(
       (size, group) =>
         size +
@@ -136,6 +182,9 @@ export class AlertReduxCard extends LitElement {
     if (changed.size !== 1 || !changed.has("hass")) return true;
     const old = changed.get("hass") as HomeAssistant | undefined;
     if (!old || !this.hass || old.themes?.darkMode !== this.hass.themes?.darkMode) {
+      return true;
+    }
+    if (old.entities !== this.hass.entities && (this._config?.areas || this._config?.labels)) {
       return true;
     }
     const states = this.hass.states;
@@ -179,8 +228,12 @@ export class AlertReduxCard extends LitElement {
   render() {
     this._hasProgress = false;
     if (!this.hass || !this._config) return nothing;
-    const alerts = collectAlerts(this.hass);
+    const alerts = this._scoped();
     const firing = alerts.filter(isFiring).sort(compareFiring);
+    const allGroups = groupSuperseded(firing);
+    const groups = this._visible(allGroups);
+    const hidden = allGroups.reduce((n, g) => n + 1 + g.superseded.length, 0) -
+      groups.reduce((n, g) => n + 1 + g.superseded.length, 0);
     const noData = alerts.filter((alert) => alert.state === "no_data").sort(compareNoData);
     const disabled = alerts.filter((alert) => alert.state === "disabled").length;
     const title = this._config.title;
@@ -190,9 +243,18 @@ export class AlertReduxCard extends LitElement {
       <ha-card .header=${title || undefined}>
         <div class="content ${title ? "has-header" : ""} ${dark ? "dark" : "light"}">
           ${this._serverVersion ? this._renderBanner(this._serverVersion) : nothing}
-          ${firing.length
-            ? groupSuperseded(firing).map((group) => this._renderGroup(group))
-            : html`<div class="empty">No alerts are firing.</div>`}
+          ${this._renderFilters(firing)}
+          ${groups.length
+            ? groups.map((group) => this._renderGroup(group))
+            : html`<div class="empty">
+                ${firing.length ? "No firing alerts match the filters." : "No alerts are firing."}
+              </div>`}
+          ${hidden && groups.length
+            ? html`<div class="disabled-line">
+                <ha-icon icon="mdi:filter-outline"></ha-icon>${hidden}
+                ${hidden === 1 ? "alert" : "alerts"} hidden by the filters
+              </div>`
+            : nothing}
           ${noData.length ? this._renderNoData(noData) : nothing}
           ${disabled
             ? html`<div class="disabled-line">
@@ -203,6 +265,54 @@ export class AlertReduxCard extends LitElement {
         </div>
       </ha-card>
     `;
+  }
+
+  /** The groups the view controls let through: judged by the alert at the root. */
+  private _visible(groups: AlertGroup[]): AlertGroup[] {
+    return groups.filter(
+      ({ alert }) =>
+        this._priorities.has(alert.priority) &&
+        !(this._hideAcknowledged && alert.state === "ack"),
+    );
+  }
+
+  /**
+   * The view controls (spec §13.1): hide acknowledged alerts, and show only some
+   * priorities. They're for changing while looking at the card; the card's
+   * configuration only sets where they start.
+   */
+  private _renderFilters(firing: Alert[]) {
+    const present = PRIORITIES.filter((p) => firing.some((alert) => alert.priority === p));
+    const anyAcknowledged = firing.some((alert) => alert.state === "ack");
+    if (present.length < 2 && !anyAcknowledged && !this._hideAcknowledged) return nothing;
+    return html`<div class="filters" role="group" aria-label="Filters">
+      ${anyAcknowledged || this._hideAcknowledged
+        ? html`<button
+            class="chip-button"
+            aria-pressed=${this._hideAcknowledged ? "true" : "false"}
+            @click=${() => (this._hideAcknowledged = !this._hideAcknowledged)}
+          >
+            <ha-icon icon="mdi:eye-off-outline"></ha-icon>Hide acknowledged
+          </button>`
+        : nothing}
+      ${present.length > 1
+        ? present.map(
+            (priority) => html`<button
+              class="chip-button p-${priority}"
+              aria-pressed=${this._priorities.has(priority) ? "true" : "false"}
+              @click=${() => this._togglePriority(priority)}
+            >
+              <span class="dot"></span>${PRIORITY_NAMES[priority]}
+            </button>`,
+          )
+        : nothing}
+    </div>`;
+  }
+
+  private _togglePriority(priority: Priority): void {
+    const next = new Set(this._priorities);
+    if (!next.delete(priority)) next.add(priority);
+    this._priorities = next;
   }
 
   private _renderBanner(version: string) {
