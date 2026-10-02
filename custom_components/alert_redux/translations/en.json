@@ -2845,6 +2845,34 @@
           "description": "The generator sensors to refresh."
         }
       }
+    },
+    "export": {
+      "name": "Export definitions",
+      "description": "Returns alert and generator definitions as response data, in the form the import action takes. Notifier groups and other generators are written by name. Groups themselves aren't included.",
+      "fields": {
+        "entity_id": {
+          "name": "Alerts and generators",
+          "description": "The alerts, or generators' sensors, to export. All of them if not set."
+        }
+      }
+    },
+    "import": {
+      "name": "Import definitions",
+      "description": "Creates alerts and generators from definitions in the form the export action returns. All or nothing: if any definition is invalid, or would replace an existing one without overwrite, nothing is imported. Notifier groups named in the definitions must exist.",
+      "fields": {
+        "definitions": {
+          "name": "Definitions",
+          "description": "The exported definitions."
+        },
+        "overwrite": {
+          "name": "Overwrite",
+          "description": "Replace existing alerts and generators with the same ID (or, without one, the same name). Without it, an import that would replace one is refused."
+        },
+        "dry_run": {
+          "name": "Dry run",
+          "description": "Check the definitions and say what would happen, without changing anything."
+        }
+      }
     }
   },
   "exceptions": {
@@ -2862,6 +2890,15 @@
     },
     "not_generator": {
       "message": "{entity_id} isn't an Alert Redux generator."
+    },
+    "not_set_up": {
+      "message": "Alert Redux isn't set up."
+    },
+    "not_exportable": {
+      "message": "{entity_id} isn't an Alert Redux alert or generator."
+    },
+    "import_refused": {
+      "message": "Nothing was imported:\n{problems}"
     }
   },
   "options": {

@@ -8,9 +8,17 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, Platform
-from homeassistant.core import CoreState, Event, HomeAssistant, ServiceCall, callback
+from homeassistant.core import (
+    CoreState,
+    Event,
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     config_validation as cv,
@@ -23,7 +31,10 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_DATA,
+    ATTR_DEFINITIONS,
+    ATTR_DRY_RUN,
     ATTR_DURATION,
+    ATTR_OVERWRITE,
     ATTR_UNTIL,
     CONF_ALERT,
     CONF_DEFAULT_GROUPS,
@@ -51,7 +62,9 @@ from .const import (
     SERVICE_DISABLE,
     SERVICE_DISMISS,
     SERVICE_ENABLE,
+    SERVICE_EXPORT,
     SERVICE_FIRE,
+    SERVICE_IMPORT,
     SERVICE_REFRESH_GENERATOR,
     SERVICE_SNOOZE,
     SERVICE_SUSPEND,
@@ -73,6 +86,12 @@ from .notifications import (
     async_quiet_hours_ended,
 )
 from .notifier import GroupConfig, Notification, Notifier
+from .portable import (
+    async_apply_import,
+    async_plan_import,
+    describe_problems,
+    export_definitions,
+)
 from .proxies import ProxyManager
 from .issues import async_check_broken_references, async_check_default_groups
 from .store import AlertStore
@@ -137,8 +156,95 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         _async_refresh_generator,
         vol.Schema({vol.Required(ATTR_ENTITY_ID): cv.entity_ids}),
     )
+    # Exporting and importing definitions (spec §16). Anyone may export; import
+    # changes configuration.
+    async def _async_export(call: ServiceCall) -> ServiceResponse:
+        return _export(hass, call)
+
+    async def _async_import(call: ServiceCall) -> ServiceResponse:
+        return await _import(hass, call)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_EXPORT,
+        _async_export,
+        vol.Schema({vol.Optional(ATTR_ENTITY_ID): cv.entity_ids}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    service.async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_IMPORT,
+        _async_import,
+        vol.Schema(
+            {
+                vol.Required(ATTR_DEFINITIONS): cv.match_all,
+                vol.Optional(ATTR_OVERWRITE, default=False): cv.boolean,
+                vol.Optional(ATTR_DRY_RUN, default=False): cv.boolean,
+            }
+        ),
+        SupportsResponse.OPTIONAL,
+    )
     async_setup_websocket(hass)
     return True
+
+
+def _loaded_entry(hass: HomeAssistant) -> ConfigEntry:
+    """Return the config entry, for the actions that aren't entity actions."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries or entries[0].state is not ConfigEntryState.LOADED:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN, translation_key="not_set_up"
+        )
+    return entries[0]
+
+
+@callback
+def _export(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
+    """Return the definitions of the targeted alerts and generators, or all."""
+    entry = _loaded_entry(hass)
+    if ATTR_ENTITY_ID not in call.data:
+        return export_definitions(entry)
+    registry = er.async_get(hass)
+    subentry_ids: set[str] = set()
+    for entity_id in call.data[ATTR_ENTITY_ID]:
+        registry_entry = registry.async_get(entity_id)
+        subentry = (
+            entry.subentries.get(registry_entry.config_subentry_id or "")
+            if registry_entry is not None and registry_entry.platform == DOMAIN
+            else None
+        )
+        if subentry is None or subentry.subentry_type not in (
+            SUBENTRY_ALERT,
+            SUBENTRY_GENERATOR,
+        ):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_exportable",
+                translation_placeholders={"entity_id": entity_id},
+            )
+        subentry_ids.add(subentry.subentry_id)
+    return export_definitions(entry, subentry_ids)
+
+
+async def _import(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
+    """Import definitions, all or nothing."""
+    entry = _loaded_entry(hass)
+    plan = await async_plan_import(
+        hass,
+        entry,
+        call.data[ATTR_DEFINITIONS],
+        overwrite=call.data[ATTR_OVERWRITE],
+    )
+    if plan.problems:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="import_refused",
+            translation_placeholders={"problems": describe_problems(plan.problems)},
+        )
+    if not call.data[ATTR_DRY_RUN]:
+        async_apply_import(hass, entry, plan)
+    return plan.result(dry_run=call.data[ATTR_DRY_RUN])
 
 
 @callback

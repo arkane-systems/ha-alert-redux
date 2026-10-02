@@ -337,9 +337,14 @@ SERVICE_DISABLE = "disable"
 SERVICE_ENABLE = "enable"
 SERVICE_SUSPEND = "suspend"
 SERVICE_REFRESH_GENERATOR = "refresh_generator"
+SERVICE_EXPORT = "export"
+SERVICE_IMPORT = "import"
 
 ATTR_DATA = "data"
 ATTR_UNTIL = "until"
+ATTR_DEFINITIONS = "definitions"
+ATTR_OVERWRITE = "overwrite"
+ATTR_DRY_RUN = "dry_run"
 
 # Events (spec §11.3).
 EVENT_FIRED = f"{DOMAIN}_fired"

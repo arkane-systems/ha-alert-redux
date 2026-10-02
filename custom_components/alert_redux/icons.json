@@ -54,6 +54,12 @@
     },
     "suspend": {
       "service": "mdi:timer-pause-outline"
+    },
+    "export": {
+      "service": "mdi:export"
+    },
+    "import": {
+      "service": "mdi:import"
     }
   }
 }

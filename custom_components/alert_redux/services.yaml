@@ -78,3 +78,30 @@ refresh_generator:
           integration: alert_redux
           domain: sensor
           multiple: true
+
+export:
+  fields:
+    entity_id:
+      required: false
+      selector:
+        entity:
+          integration: alert_redux
+          multiple: true
+
+import:
+  fields:
+    definitions:
+      required: true
+      example: '{"format": "alert_redux", "version": 1, "alerts": []}'
+      selector:
+        object:
+    overwrite:
+      required: false
+      default: false
+      selector:
+        boolean:
+    dry_run:
+      required: false
+      default: false
+      selector:
+        boolean:
