@@ -67,7 +67,7 @@ changes. It can't be fired or dismissed manually [Decided, R3].
 
 | Kind | Configuration |
 |---|---|
-| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. [Deferred, phase 13, N38] A target state typed as its displayed name, e.g. "open" for a door binary sensor whose state is `on`, never matches. Recognising displayed names and storing the real state is to be considered in phase 13. |
+| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. [Decided, phase 13, N38] A target state is the entity's real state, e.g. `on` for a door binary sensor: typing its displayed name, "open", never matches. Recognising displayed names was considered and dropped: translations, device classes, and entities' own state names make it a lot of added complexity for marginal gain. It may be revisited if Home Assistant's state selector becomes usable for this. |
 | **On/off** | Separate *on* and *off* criteria, each a condition and/or trigger. Turns on when the on criterion becomes true, and off when the off criterion becomes true (edge-triggered, as in Alert2). [Decided, phase 5] Each side is a template, triggers, or both. A template-only side counts on its false-to-true change; a side with triggers counts when one fires while its template (if any) is true. The off side is edge-triggered too: an off criterion already true when the alert fires has to go false and true again. An unknown previous value counts as false, so an on criterion already true when a new alert is first evaluated fires it. The edge state is persisted, so a restart or a data dropout doesn't create a false edge. Only the side that can change the state counts for missing data (the on side while idle, the off side while firing). |
 | **Threshold** | A numeric value (from an entity, attribute, or template) with a minimum and/or maximum, and hysteresis. The limits can themselves come from entities or templates [P18]. [Decided, phase 5] The limits are templates, where a plain number works as-is. It fires when the value is strictly above the maximum or below the minimum, and a firing ends once the value is back inside by the hysteresis (an absolute amount, default 0). A value, or a configured limit, that isn't a number means no data. |
 | **Template** | A template that evaluates to true or false. The fully general option. [Decided, phase 2] Only a clearly true or false result counts (`true`/`on`/`yes`/`1`, `false`/`off`/`no`/`0`, or a real boolean or number). An error, an undefined variable, or a result of `none`, `unknown`, `unavailable`, or anything else means no data (§4.4). A template binary sensor would read those as false, but for an alert that silently hides a broken template. |
@@ -2308,6 +2308,8 @@ Decisions with their reasons, in the order they were made.
 | Alert Redux ships an agent skill, checked against the code by a test | Agents can drive Alert Redux through MCP, but had to dig through the forms' schemas to do it; a test keeps the skill from drifting as the code changes [§20]. |
 | Latching alerts (§10) replace the acknowledgement queue (R7), in a late phase 15 | The real need is a firing that ended before anyone saw it; a per-alert setting answers it on the existing model, where a queue would be a subsystem. One item per alert, with the fire count shown, is simpler than one per firing [§10]. |
 | The quiet-hours summary stays an ordinary notification | The queue it might have used is gone; the summary already tells you what you missed [§9.9]. |
+| Displayed state names in a state alert are dropped (N38) | Translations, device classes, and entities' own state names make recognising them a lot of complexity for marginal gain; a state alert's target stays the real state. Revisit if HA's state selector becomes usable for it [§4.1]. |
+| Phase 13 is 1.2.0, phase 14 1.2.1, phase 15 1.3.0 | Integration feature phases are minor releases; phase 14 ships tools, not integration features, so it takes a patch version [§20]. |
 
 ## 20. Phase plan
 
@@ -2322,7 +2324,7 @@ one starts, and each ends with a usable release.
   restart don't get restarts of their own. They're set up at the end of a run and
   checked after the next install restart, through the ledger in
   `docs/restart-checks.md`;
-- CI green, and a `0.N.0` release (manifest version bumped, card rebuilt), so HACS
+- CI green, and a release (manifest version bumped, card rebuilt; `0.N.0` before 1.0.0, then see below), so HACS
   can install it;
 - the spec updated if building the phase changed any decisions.
 
@@ -2657,7 +2659,7 @@ against older HA raised the minimum to 2026.6 (Q14), and found the `llm`
 platform arrived in 2026.8. Decisions from building it are recorded in §14.1,
 §14.2, §18, and §19.
 
-### Phase 13 — Late features (0.13.0 onwards; may be split)
+### Phase 13 — Late features (1.2.0)
 
 - Card filters: scope by area and label in the card's configuration, and
   hide-acknowledged and per-priority controls on the card (§13.1).
@@ -2671,21 +2673,18 @@ platform arrived in 2026.8. Decisions from building it are recorded in §14.1,
 - iOS interruption levels for Emergency and Critical alerts (§9.3).
 - Review the layout and grouping of the configuration forms for each kind of
   alert (§12.1).
-- Consider recognising displayed state names in a state alert's target state,
-  e.g. "open" for a door binary sensor's `on`, and storing the real state
-  (§4.1; assessment in `docs/spec-notes.md`, N38).
 - Setting an alert's area and labels in its configuration form, when it's created
   or edited, with the registry as where they live; and for generators, labels and
   a fixed area or the target's area (§11.6).
 
-### Phase 14 — Converter utilities
+### Phase 14 — Converter utilities (1.2.1)
 
 - Standalone tools in this repository, not shipped in the integration, that
   convert into an import file (§17):
   - an `alert:` YAML section from the built-in `alert` integration;
   - Alert2 alerts.
 
-### Phase 15 — Latching alerts
+### Phase 15 — Latching alerts (1.3.0)
 
 [Decided; provisional, until the rest of the list is done] Last, because it changes
 the alert lifecycle (§7).
@@ -2695,6 +2694,12 @@ the alert lifecycle (§7).
   the fire count shown when it's more than one), acknowledging it by every route
   that acknowledges an alert, and what it does to reminders, notifications, the
   summary sensors, and supersession.
+
+**Versions from 1.0.0** [Decided]: a phase that adds integration features is a minor
+release, so phase 12 is 1.1.0, phase 13 1.2.0, and phase 15 1.3.0. Phase 14 ships
+tools that aren't part of the integration, so it doesn't bump the minor version: the
+release cut after it is 1.2.1. (Phases 13 and 14 are done in order, so 1.2.1 follows
+1.2.0; phase 15 follows as 1.3.0.)
 
 **1.0.0** comes after phase 11, once the core feature set is proven in daily use,
 with phases 12–15 as 1.x releases [Decided, provisionally]. It adds self-ending

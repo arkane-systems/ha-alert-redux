@@ -477,6 +477,7 @@ notification.
 
 Points to raise once the capture phase is over. These are not objections yet.
 
+  **[Later: dropped. The complexity wasn't worth the gain; see SPEC §4.1 and the decision log.]**
 - **F1 (N8, N7):** `unavailable` is a reserved state in Home Assistant. The frontend,
   history, and templates treat it as "the entity itself isn't working", and
   `available = False` makes attributes disappear. That seems to clash with N1

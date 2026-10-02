@@ -30,7 +30,7 @@ the export and import actions.
 
 **`docs/SPEC.md` is the authoritative design** for the integration and cards. Read it
 before implementing anything, and follow its phase plan (§20): build one phase at a
-time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
+time, each ending with tests, a run in real HA, green CI, and a release (`0.N.0` before 1.0.0; the version rule is in spec §20).
 
 - Every point is tagged **[Decided]**, **[Deferred]**, and so on. Don't reopen a
   Decided point while implementing. If building a phase shows that a decision
