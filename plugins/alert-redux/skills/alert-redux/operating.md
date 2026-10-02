@@ -9,6 +9,7 @@
 - Notifications
 - Supersession
 - Voice
+- Exporting and importing
 - Restarts
 
 ## Actions
@@ -26,6 +27,11 @@ All take alert entities as a normal `target` (`entity_id`, area, label, …).
 | `alert_redux.enable` | | Enable a disabled or suspended alert. **Admin only.** |
 | `alert_redux.suspend` | `duration` or `until` | Disable for a while, or until a time (local time if no zone). **Admin only.** |
 | `alert_redux.refresh_generator` | `entity_id`: generator sensors | Re-evaluate a generator's targets now. For debugging. |
+| `alert_redux.export` | `entity_id`: alerts or generator sensors (optional; default all) | Return alert and generator definitions as response data. Anyone may call it. |
+| `alert_redux.import` | `definitions` (the export's form), `overwrite` (default off), `dry_run` (default off) | Create or replace alerts and generators. **Admin only.** Returns what was created, updated, and left unchanged. |
+
+`export` and `import` aren't entity actions: `export` takes an optional
+`entity_id` list, and neither takes a `target`. See Exporting and importing.
 
 An action that doesn't fit the current state (acknowledging an idle alert) does
 nothing. These raise errors instead:
@@ -34,6 +40,9 @@ nothing. These raise errors instead:
 - `ack` or `snooze` on an unacknowledgeable alert: `not_acknowledgeable`.
 - `suspend` until a time in the past: `suspend_in_past`.
 - `refresh_generator` on something that isn't a generator sensor: `not_generator`.
+- `export` with an entity that isn't an Alert Redux alert or generator: `not_exportable`.
+- `import` that would change nothing because it's refused: `import_refused`,
+  with every problem listed.
 
 ## States
 
@@ -206,6 +215,80 @@ the alert isn't firing. Both have an `alert` attribute (the alert's entity ID);
 the button also has `snooze_duration` (seconds). On Alexa, a switch is also a
 contact sensor, open while on, so an Alexa routine can announce an alert firing.
 The proxies take the alert's area and labels, but not the "Alert Redux" label.
+
+## Exporting and importing
+
+`alert_redux.export` returns (use `return_response`) the definitions as they are
+stored, which is also what `import` takes. It is the way to copy alerts to
+another instance, keep them under version control, or script changes: there are
+no create or edit actions, and an import goes through the same checks as the
+forms.
+
+```json
+{
+  "format": "alert_redux",
+  "version": 1,
+  "alerts": [
+    {
+      "id": "01M3D2A71TKEQW9ECF1G30J4TZ",
+      "name": "Garage Door Left Open",
+      "kind": "state",
+      "priority": "warning",
+      "acknowledgeable": true,
+      "entity_id": "cover.garage_door",
+      "target_state": "open",
+      "delay_on": {"hours": 0, "minutes": 10, "seconds": 0},
+      "notifier_groups": ["Phone"]
+    }
+  ],
+  "generators": []
+}
+```
+
+- A definition is the form's fields, **flattened** (no `notifications`,
+  `supersession`, or `voice` sections) and **as stored**: a setting that uses the
+  default is simply absent, a reminder schedule is a list of minutes
+  (`[10, 20]`), a throttle is `[count, minutes]` (`[]` for none). The field
+  names are those in [configuring.md](configuring.md). A generator has
+  `name_template` and `targets`, and no entity (state, threshold) or alert
+  (alert state); its relationships name a `generator` or an `alert`.
+- **Notifier groups are written by name**, and so are the generators in a
+  generator's relationships. Import turns the names back into this instance's
+  groups and generators, ignoring case; a name that doesn't exist is a problem.
+  Groups themselves aren't exported: create them first. Areas and labels in a
+  generator's `targets` are the registry's IDs, and aren't checked.
+- **`id`** is the definition's subentry ID. Import keeps it, so importing a file
+  again, here or on another instance, finds the same definitions. Leave it out
+  in a hand-written file: the definition then matches the existing one of the
+  same type and name (ignoring case), or is new.
+- Durations may be written as a number of seconds or `"HH:MM:SS"`; they are
+  stored as the duration object. A priority or acknowledgeability left out is
+  `warning` and `true`, as in the forms. Fields that are empty are left out.
+- A definition identical to the existing one is `unchanged`, so repeating an
+  import is harmless. A **different** one replaces the existing one only with
+  `overwrite`; its kind can't change (`kind_changed`; delete and import again).
+  An alert's runtime state, its area, and its labels aren't touched.
+- **All or nothing.** Everything is checked first, including supersession cycles
+  across the whole file, and if anything is wrong nothing is imported and the
+  error (`import_refused`) lists each problem as `<type> '<name>': <code>
+  (<detail>)`. `dry_run` does the checks, returns what would happen, and changes
+  nothing.
+
+| Problem code | Meaning |
+|---|---|
+| `invalid_file` | Not an export: wrong `format` or `version`, or an unknown top-level key. |
+| `invalid_definition` | A missing name or required field, an unknown field, a wrong type, or an unknown kind; the detail says which. |
+| `duplicate_in_file` | Two definitions with the same name (or id) in the file. |
+| `exists` | It would replace an existing definition and `overwrite` is off. |
+| `name_exists` | Its name is another definition's. |
+| `id_in_use` | Its id belongs to a subentry of another type. |
+| `kind_changed` | It would change an existing definition's kind. |
+| `entity_id_clash` | A new alert's entity ID would be another alert's. |
+| `unknown_group`, `unknown_generator` | A name that doesn't match a group or generator. |
+| `relationship_target` | A generator relationship names both, or neither, of a generator and an alert. |
+
+Any other code is the forms' validation error for the same mistake: see
+[configuring.md](configuring.md).
 
 ## Restarts
 

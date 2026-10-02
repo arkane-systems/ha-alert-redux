@@ -1929,7 +1929,7 @@ area, label, …):
 | `alert_redux.fire` / `alert_redux.dismiss` | Fire or dismiss a manual alert; `fire` can take `data`. |
 | `alert_redux.press_button` | Run one of an alert's custom buttons (§9.11), as the main card does (§13.1). Takes the button's `label`. [Decided; phase 13] Labels are unique within an alert, so the label is enough. |
 | `alert_redux.refresh_generator` | Re-evaluate a generator's targets now (debugging; §12.3). [Decided, phase 11] Takes the generators' sensors as `entity_id`. |
-| `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off). |
+| `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off) and `dry_run` (default off). Not entity actions: `export` takes an optional `entity_id` list (alerts, or generators' sensors; default all). |
 
 **Managing alert definitions by action** [Decided, Q10]. There are **no** separate
 create or edit actions. Instead:
@@ -1950,6 +1950,35 @@ create or edit actions. Instead:
   - [Decided] "Existing" is decided by each definition's **stable ID**, which export
     includes. A new definition whose entity ID would clash with a different existing
     alert is also a conflict.
+- [Decided; phase 13] **The file.** `{format: alert_redux, version: 1, alerts: [...],
+  generators: [...]}`. Each definition is `id` (the subentry ID), `name` (the
+  title), and the subentry's stored data, flattened as stored (no form sections;
+  settings that use the default are absent), with `kind` as text. Instance-specific
+  references are **names**: `notifier_groups` lists the groups' names, and a
+  generator relationship's `generator` is the other generator's name. Import maps
+  them back, ignoring case, and an unknown name is a problem. Groups, global
+  options, runtime state, and the registry's area and labels are not exported.
+  Alert references stay entity IDs; dangling ones are allowed, as in the forms
+  (§12.4). Export/import of notifier groups, as a whole, to rebuild an instance,
+  is a possible later feature.
+- [Decided; phase 13] **Matching.** Import creates a new definition with the `id`
+  it was exported with, so importing a file again, on this or another instance,
+  finds the same definitions. A definition without an `id` (hand-written, or from a
+  converter) matches the existing one of its type with the same name, ignoring
+  case, else is new. A new definition (or a rename) with another's name is a
+  conflict (`name_exists`), as is an `id` belonging to a subentry of another type.
+- [Decided; phase 13] A definition identical to the existing one is `unchanged`,
+  not a conflict, so repeating an import is harmless. A different one needs
+  `overwrite`. An existing definition's **kind can't change** by import (the
+  entities are made per kind, and the forms can't change it either).
+- [Decided; phase 13] Import checks with the forms' own checks
+  (`validation.py`), run over the definitions as the import would leave them, so
+  supersession cycles across the file are caught. Leftovers a form would fill in
+  are filled in: priority `warning`, acknowledgeable, and the kind's other
+  defaults; durations may be seconds or `HH:MM:SS`.
+- [Decided; phase 13] `dry_run` checks and reports without changing anything. The
+  response lists `created`, `updated`, and `unchanged` definitions; a refusal is
+  one `import_refused` error listing every problem.
 - [Decided] Import is an **admin-only** action, since it changes configuration.
   Export is available to everyone, like reading any other entity data.
 - There's no `alert_redux.delete` action for now. It can be added later if a use
@@ -2029,6 +2058,8 @@ Decisions with their reasons, in the order they were made.
 | Snooze-end reminder rule: remind now unless a scheduled reminder is under 5 min away | The alert speaks up when the snooze ends, without a double reminder; reminders show the real firing duration [§6.2, §8.3]. |
 | `subject_entity_name` (subject entity) in message templates | Generated alerts can share one message template without deriving names from the alert name [§9.5]. |
 | Export/import actions instead of create/edit actions; import won't overwrite without a flag | One validation path; protects existing definitions from accidental replacement [Q10]. |
+| Export files name notifier groups and generators, and keep subentry IDs | A file moves between instances, and re-imports find the same definitions [phase 13]. |
+| Import checks with the forms' own checks, over the whole file, all or nothing | One validation path; a cycle between two imported alerts is caught [phase 13]. |
 | All three notifier kinds supported | The entity model can't carry `data`, and mobile features still need the legacy actions [S1–S4]. |
 | Alert Redux's own notifier groups, flagged loud or quiet | Integrations can't say whether they're noisy; only you know [N34, N35]. |
 | Notifier layer as a self-contained module, not a separate integration (yet) | Avoids a two-step install and two-repo churn while the design settles; extract it later [N36, R24]. |
@@ -2511,7 +2542,7 @@ platform arrived in 2026.8. Decisions from building it are recorded in §14.1,
 - Custom notification buttons on the main card, and the `alert_redux.press_button`
   action (§13.1, §16).
 - Creating and editing alerts from the admin card (§13.2).
-- The export and import actions and admin-card controls (§13.2, §16).
+- The export and import actions (§16; implemented) and their admin-card controls (§13.2).
 - The admin card shows a copyable summary of an alert's settings on request
   (§13.2).
 - iOS interruption levels for Emergency and Critical alerts (§9.3).

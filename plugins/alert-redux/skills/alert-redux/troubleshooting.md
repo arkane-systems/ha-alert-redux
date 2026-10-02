@@ -81,7 +81,10 @@ rewrites references to it; deleting an alert doesn't.
 | `not_firing` | A proxy switch turned on, or a proxy snooze button pressed, while its alert isn't firing. |
 | `suspend_in_past` | `suspend` with `until` in the past. |
 | `not_generator` | `refresh_generator` on something that isn't a generator sensor. |
-| Unauthorized | `disable`, `enable`, or `suspend` by a non-admin user. |
+| `not_exportable` | `export` with an entity that isn't an Alert Redux alert or generator. |
+| `import_refused` | `import` found problems, and imported nothing; the message lists them (codes in [operating.md](operating.md#exporting-and-importing)). |
+| `not_set_up` | `export` or `import` while Alert Redux isn't set up. |
+| Unauthorized | `disable`, `enable`, `suspend`, or `import` by a non-admin user. |
 
 ## Voice
 

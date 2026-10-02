@@ -23,7 +23,8 @@ event), and phase 9 (replacing and clearing notifications, and notification
 buttons), and phase 10 (throttling and quiet hours), and phase 11 (generators,
 including generated supersession), and, for 1.0.0, manual alerts that end by
 themselves (spec §4.3), and phase 12 (voice control: Assist commands, and proxy
-switches and snooze buttons for Alexa and Google Home).
+switches and snooze buttons for Alexa and Google Home), and, so far in phase 13,
+the export and import actions.
 
 ## Specification
 
@@ -71,6 +72,14 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `config_subentry_id`, and kept in `DATA_ENTITIES` by unique ID like the
     fixed ones. Also `async_forget_alert`, which drops a deleted alert's record
     and announces it.
+  - `validation.py` — the checks of an alert's or generator's stored data that the
+    config flows and import share: kind checks, references and supersession
+    cycles (over `Definitions`: the alerts and generators as they are or as an
+    import leaves them).
+  - `portable.py` — export and import (spec §16): `export_definitions`, the stored-data
+    schemas per kind, `async_plan_import` (collects every problem; names to IDs,
+    create / update / unchanged), `async_apply_import`. The actions are in
+    `__init__.py`.
   - `entity.py` — `AlertEntity`, the base every kind shares and never used on its
     own (state, attributes, actions, events, persistence, and the rendered messages
     while firing; snoozing, disabling, and suspending; durations and their expiry,

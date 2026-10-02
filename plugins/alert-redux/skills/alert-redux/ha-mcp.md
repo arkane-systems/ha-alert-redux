@@ -65,7 +65,9 @@ patch: omitted fields keep their values. Sections (`event_durations`,
 
 - Actions: `ha_call_service("alert_redux", "ack", entity_id="alert_redux.x")`;
   `fire` with `data={"data": {…}}`; `snooze` with
-  `data={"duration": {"minutes": 30}}`.
+  `data={"duration": {"minutes": 30}}`. `export` returns its definitions only
+  with `return_response=True` (they come back as `service_response`); `import`
+  takes `data={"definitions": {…}, "overwrite": …, "dry_run": …}`.
 - Logbook: `ha_get_logs(entity_id="alert_redux.x")`. Log messages:
   `ha_get_logs(source="system", search="alert_redux")`.
 - Repairs issues: `ha_call_service(ws_command="repairs/list_issues", data={})`.
