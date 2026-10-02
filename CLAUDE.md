@@ -266,7 +266,10 @@ pytest
 The test plugin tracks current HA, which needs Python 3.14; keep
 `requirements_test.txt` close to the HA version actually in use, since HA behaviour
 changes between releases (spec §11.5 records one that bit us). CI also runs HACS
-validation and hassfest.
+validation and hassfest. The voice tests set up `conversation`, so
+`requirements_test.txt` also pins its components' requirements (`hassil` and
+the rest); when bumping the plugin, update them from the new HA's manifests
+(`conversation`, `assist_pipeline`, `tts`, `ffmpeg`, `stt`, `wake_word`).
 
 CI tests only the current HA. The minimum (`hacs.json`, 2026.6) and the paths
 only older HA takes (LLM tools before 2026.8, `admin_only` before 2026.9) are
