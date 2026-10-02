@@ -3,6 +3,8 @@
 import * as mdi from "@mdi/js";
 
 import "../src/main";
+import en from "../../custom_components/alert_redux/translations/en.json";
+import { collectAlerts } from "../src/alerts";
 import type { HassEntity, HomeAssistant } from "../src/types";
 
 // --- Stand-ins for the frontend's own elements ------------------------------------
@@ -54,6 +56,60 @@ class StubIcon extends HTMLElement {
   }
 }
 customElements.define("ha-icon", StubIcon);
+
+/** The frontend's localize, answered from the integration's own English strings. */
+function localize(key: string, values?: Record<string, string | number>): string {
+  let node: unknown = en;
+  for (const part of key.replace(/^component\.alert_redux\./, "").split(".")) {
+    node = (node as Record<string, unknown> | undefined)?.[part];
+  }
+  if (typeof node !== "string") return "";
+  return node.replace(/\{(\w+)\}/g, (_match, name: string) => String(values?.[name] ?? ""));
+}
+
+/** A stand-in for ha-form: a text box per field, sections as groups. */
+class StubForm extends HTMLElement {
+  hass?: unknown;
+  schema: { name: string; type?: string; schema?: unknown[] }[] = [];
+  data: Record<string, unknown> = {};
+  error: Record<string, string> = {};
+  computeLabel!: (schema: unknown, data: unknown, options?: { path?: string[] }) => string;
+  computeHelper!: (schema: unknown, options?: { path?: string[] }) => string;
+  computeError!: (error: string, schema: unknown) => string;
+  connectedCallback() {
+    queueMicrotask(() => this._render());
+  }
+  private _render() {
+    const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
+    const field = (item: any, data: Record<string, unknown>, path: string[]): string => {
+      if (item.type === "expandable") {
+        const inner = (item.schema as unknown[]).map((child) =>
+          field(child, (data[item.name] ?? {}) as Record<string, unknown>, [item.name]),
+        );
+        return `<details><summary>${this.computeLabel(item, this.data)}</summary>${inner.join("")}</details>`;
+      }
+      const error = this.error?.[item.name];
+      return `<label style="display:block;margin:6px 0">
+        <div>${this.computeLabel(item, this.data, { path })}${item.required ? " *" : ""}</div>
+        <input data-name="${item.name}" data-path="${path.join(".")}"
+          value="${String(data[item.name] ?? "").replace(/"/g, "&quot;")}" style="width:100%" />
+        <small>${this.computeHelper(item, { path })}</small>
+        ${error ? `<div style="color:red">${this.computeError(error, item)}</div>` : ""}</label>`;
+    };
+    root.innerHTML = this.schema.map((item) => field(item, this.data, [])).join("");
+    root.querySelectorAll("input").forEach((input) =>
+      input.addEventListener("input", () => {
+        const next = structuredClone(this.data);
+        const path = input.dataset.path ? input.dataset.path.split(".") : [];
+        let target = next;
+        for (const part of path) target = (target[part] ??= {}) as Record<string, unknown>;
+        target[input.dataset.name!] = input.value;
+        this.dispatchEvent(new CustomEvent("value-changed", { detail: { value: next } }));
+      }),
+    );
+  }
+}
+customElements.define("ha-form", StubForm);
 
 // --- Mock alerts ------------------------------------------------------------------
 
@@ -281,14 +337,71 @@ function update(entityId: string, changes: Partial<HassEntity>) {
   refresh();
 }
 
+// A stand-in for the subentry flow API: a kind menu, then one state-alert form that
+// refuses the name "Bad", then a created entry.
+function mockFlow(method: string, path: string, body?: Record<string, unknown>) {
+  const flow_id = "flow1";
+  if (method === "DELETE") return {};
+  if (path.endsWith("/flow")) {
+    if (body?.subentry_id) return stateForm(flow_id, {});
+    const type = (body?.handler as string[])[1];
+    return { type: "menu", flow_id, step_id: "user", menu_options: type === "alert" ? ["manual", "state"] : ["state"] };
+  }
+  if (body?.next_step_id) return stateForm(flow_id, {});
+  const name = String((body as { name?: string }).name ?? "");
+  if (name === "Bad") return stateForm(flow_id, { name: "name_exists" }, { base: "name_exists" });
+  return { type: "create_entry", flow_id };
+}
+
+function stateForm(flow_id: string, errors: Record<string, string>, extra = {}) {
+  return {
+    type: "form",
+    flow_id,
+    step_id: "state",
+    errors: { ...errors, ...extra },
+    description_placeholders: {},
+    data_schema: [
+      { name: "name", type: "string", required: true },
+      { name: "priority", type: "select", required: true, default: "warning" },
+      { name: "entity_id", type: "string", required: true },
+      { name: "target_state", type: "string", required: true },
+      {
+        name: "notifications",
+        type: "expandable",
+        schema: [
+          { name: "use_default_groups", type: "boolean", default: true },
+          { name: "message", type: "string" },
+        ],
+      },
+    ],
+  };
+}
+
 function hassFor(dark: boolean): HomeAssistant {
   return {
     states: empty ? {} : states,
     themes: { darkMode: dark },
     locale: { language: "en-GB" },
     user: { is_admin: !params.has("user") },
-    async callWS<T>() {
+    localize,
+    async loadBackendTranslation() {
+      return localize;
+    },
+    async callWS<T>(message: { type: string; entity_id?: string }) {
+      if (message.type === "config_entries/get") return [{ entry_id: "entry1" }] as T;
+      if (message.type === "config/entity_registry/get") {
+        const generated = states[String(message.entity_id)]?.attributes.generated_by;
+        void generated;
+        return { config_entry_id: "entry1", config_subentry_id: `sub_${message.entity_id}` } as T;
+      }
+      if (message.type === "config_entries/subentries/delete") {
+        console.log("delete", message);
+        return null as T;
+      }
       return { version: stale ? "9.9.9" : __CARD_VERSION__ } as T;
+    },
+    async callApi<T>(method: string, path: string, body?: Record<string, unknown>) {
+      return mockFlow(method, path, body) as T;
     },
     async callService(_domain, service, data) {
       if (service === "export") {
@@ -384,6 +497,23 @@ function build() {
   if (params.has("expanded")) {
     const expanded = new Set(Object.keys(states));
     for (const card of cards) Object.assign(card, { _expanded: expanded });
+  }
+  // ?add, ?addgen, ?edit=<object ID>, or ?delete=<object ID> open those dialogs.
+  const flowParam = params.has("add")
+    ? { type: "alert", entryId: "entry1" }
+    : params.has("addgen")
+      ? { type: "generator", entryId: "entry1" }
+      : params.has("edit")
+        ? { type: "alert", entryId: "entry1", subentryId: "sub1" }
+        : undefined;
+  if (flowParam) for (const card of cards) Object.assign(card, { _flow: flowParam });
+  if (params.has("delete")) {
+    const alert = collectAlerts(hassFor(false)).find((a) => a.entityId.endsWith(params.get("delete")!));
+    for (const card of cards) {
+      Object.assign(card, {
+        _delete: { alert, entryId: "entry1", subentryId: "sub1", generator: false, referrers: ["Back Door Left Open"] },
+      });
+    }
   }
   // ?summary=<object ID>, ?export, or ?import opens that dialog.
   const dialog = params.has("summary")

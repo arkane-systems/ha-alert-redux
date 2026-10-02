@@ -11,6 +11,8 @@ import {
   isFiring,
 } from "./alerts";
 import "./dialog";
+import "./flow-dialog";
+import { deleteSubentry, entryId, subentryOf, type SubentryType } from "./flow-client";
 import "./transfer-dialog";
 import { clockTime, elapsed, span } from "./format";
 import { sharedStyles } from "./styles";
@@ -34,6 +36,8 @@ export class AlertReduxAdminCard extends LitElement {
     _untilOpen: { state: true },
     _page: { state: true },
     _transfer: { state: true },
+    _flow: { state: true },
+    _delete: { state: true },
   };
 
   declare hass?: HomeAssistant;
@@ -47,6 +51,16 @@ export class AlertReduxAdminCard extends LitElement {
   /** The page shown, from 0; kept within the pages there are. */
   declare _page: number;
   /** The summary, export, or import dialog that's open, if any. */
+  /** The flow dialog that's open: to add (no subentry), or edit, an alert or generator. */
+  declare _flow?: { type: SubentryType; entryId: string; subentryId?: string };
+  /** The deletion awaiting confirmation. */
+  declare _delete?: {
+    alert: Alert;
+    entryId: string;
+    subentryId: string;
+    generator: boolean;
+    referrers: string[];
+  };
   declare _transfer?: { mode: "summary" | "export" | "import"; entityId?: string };
 
   private _tick?: number;
@@ -172,10 +186,12 @@ export class AlertReduxAdminCard extends LitElement {
       }
       .toolbar {
         display: flex;
+        flex-wrap: wrap;
         justify-content: flex-end;
         gap: 8px;
       }
       .toolbar button {
+        white-space: nowrap;
         padding: 4px 12px;
         font-size: 0.8rem;
         --mdc-icon-size: 16px;
@@ -279,8 +295,14 @@ export class AlertReduxAdminCard extends LitElement {
             </button>
             ${admin
               ? html`<button @click=${() => (this._transfer = { mode: "import" })}>
-                  <ha-icon icon="mdi:import"></ha-icon>Import
-                </button>`
+                    <ha-icon icon="mdi:import"></ha-icon>Import
+                  </button>
+                  <button @click=${() => this._add("alert")}>
+                    <ha-icon icon="mdi:plus"></ha-icon>Add alert
+                  </button>
+                  <button @click=${() => this._add("generator")}>
+                    <ha-icon icon="mdi:plus"></ha-icon>Add generator
+                  </button>`
               : nothing}
           </div>
           ${shown.length
@@ -300,6 +322,16 @@ export class AlertReduxAdminCard extends LitElement {
           ${pages > 1 ? this._renderPager(page, pages) : nothing}
         </div>
       </ha-card>
+      ${this._flow
+        ? html`<alert-redux-flow-dialog
+            .hass=${this.hass}
+            .subentryType=${this._flow.type}
+            .entryId=${this._flow.entryId}
+            .subentryId=${this._flow.subentryId}
+            @closed=${() => (this._flow = undefined)}
+          ></alert-redux-flow-dialog>`
+        : nothing}
+      ${this._delete ? this._renderDelete(this._delete) : nothing}
       ${this._transfer
         ? html`<alert-redux-transfer-dialog
             .hass=${this.hass}
@@ -360,7 +392,15 @@ export class AlertReduxAdminCard extends LitElement {
               <ha-icon icon="mdi:text-box-outline"></ha-icon>
             </button>
             ${admin
-              ? html`${disabled
+              ? html`<button
+                    aria-label=${`Edit ${alert.name}`}
+                    title="Edit"
+                    ?disabled=${busy}
+                    @click=${() => this._edit(alert)}
+                  >
+                    <ha-icon icon="mdi:pencil-outline"></ha-icon>
+                  </button>
+                  ${disabled
                     ? html`<button
                         class="primary"
                         ?disabled=${busy}
@@ -380,6 +420,14 @@ export class AlertReduxAdminCard extends LitElement {
                       class="caret"
                       icon=${this._menu === alert.entityId ? "mdi:menu-up" : "mdi:menu-down"}
                     ></ha-icon>
+                  </button>
+                  <button
+                    aria-label=${`Delete ${alert.name}`}
+                    title="Delete"
+                    ?disabled=${busy}
+                    @click=${() => this._confirmDelete(alert)}
+                  >
+                    <ha-icon icon="mdi:delete-outline"></ha-icon>
                   </button>`
               : nothing}
           </div>
@@ -424,6 +472,106 @@ export class AlertReduxAdminCard extends LitElement {
           : nothing}
       </div>
     `;
+  }
+
+  private _renderDelete(pending: NonNullable<AlertReduxAdminCard["_delete"]>) {
+    const { alert, generator, referrers } = pending;
+    return html`
+      <alert-redux-dialog
+        .heading=${generator ? "Delete generator?" : "Delete alert?"}
+        @closed=${() => (this._delete = undefined)}
+      >
+        <div>
+          ${generator
+            ? html`This deletes <b>${this._generatorName(alert)}</b> and all the alerts it makes.`
+            : html`This deletes <b>${alert.name}</b>.`}
+          Its history stays in the logbook.
+        </div>
+        ${referrers.length
+          ? html`<div>
+              Alerts that refer to it will keep working but get a Repairs issue:
+              ${referrers.join(", ")}.
+            </div>`
+          : nothing}
+        <button slot="actions" @click=${() => (this._delete = undefined)}>Cancel</button>
+        <button slot="actions" class="primary" @click=${() => this._deleteNow(pending)}>
+          Delete
+        </button>
+      </alert-redux-dialog>
+    `;
+  }
+
+  private _generatorName(alert: Alert): string {
+    const sensor = alert.generatedBy ? this.hass?.states[alert.generatedBy] : undefined;
+    const name = String(sensor?.attributes.friendly_name ?? alert.generatedBy ?? alert.name);
+    return name.replace(/^Alert Redux generator /, "");
+  }
+
+  /** Add an alert or generator: the flow's own first step asks what kind. */
+  private async _add(type: SubentryType): Promise<void> {
+    if (!this.hass) return;
+    try {
+      const id = await entryId(this.hass);
+      if (id) this._flow = { type, entryId: id };
+    } catch (err) {
+      this._notify(err);
+    }
+  }
+
+  /** Edit an alert, or for a generated alert its generator (§12.3). */
+  private async _edit(alert: Alert): Promise<void> {
+    const target = await this._target(alert);
+    if (target) this._flow = target;
+  }
+
+  private async _confirmDelete(alert: Alert): Promise<void> {
+    const target = await this._target(alert);
+    if (!target?.subentryId) return;
+    const referrers = Object.values(this.hass?.states ?? {})
+      .filter(
+        (entity) =>
+          isAlertEntity(entity.entity_id) &&
+          Array.isArray(entity.attributes.supersedes) &&
+          (entity.attributes.supersedes as string[]).includes(alert.entityId),
+      )
+      .map((entity) => String(entity.attributes.friendly_name ?? entity.entity_id));
+    this._delete = {
+      alert,
+      entryId: target.entryId,
+      subentryId: target.subentryId,
+      generator: target.type === "generator",
+      referrers,
+    };
+  }
+
+  private async _deleteNow(pending: NonNullable<AlertReduxAdminCard["_delete"]>): Promise<void> {
+    this._delete = undefined;
+    if (!this.hass) return;
+    try {
+      await deleteSubentry(this.hass, pending.entryId, pending.subentryId);
+    } catch (err) {
+      this._notify(err);
+    }
+  }
+
+  /** The subentry that defines an alert: its own, or its generator's. */
+  private async _target(
+    alert: Alert,
+  ): Promise<{ type: SubentryType; entryId: string; subentryId: string } | undefined> {
+    if (!this.hass) return undefined;
+    try {
+      const found = await subentryOf(this.hass, alert.generatedBy ?? alert.entityId);
+      return found && { type: alert.generatedBy ? "generator" : "alert", ...found };
+    } catch (err) {
+      this._notify(err);
+      return undefined;
+    }
+  }
+
+  private _notify(err: unknown): void {
+    this._fire("hass-notification", {
+      message: (err as { message?: string } | undefined)?.message ?? String(err),
+    });
   }
 
   private _kind(alert: Alert): string {
@@ -528,9 +676,7 @@ export class AlertReduxAdminCard extends LitElement {
         ...data,
       });
     } catch (err) {
-      this._fire("hass-notification", {
-        message: (err as { message?: string } | undefined)?.message ?? String(err),
-      });
+      this._notify(err);
     } finally {
       const busy = new Set(this._busy);
       busy.delete(alert.entityId);
@@ -553,6 +699,6 @@ if (!customElements.get("alert-redux-admin-card")) {
   window.customCards.push({
     type: "alert-redux-admin-card",
     name: "Alert Redux admin",
-    description: "Lists every Alert Redux alert, shows its settings, exports and imports definitions, and lets admins disable, enable, and suspend alerts.",
+    description: "Lists every Alert Redux alert, shows its settings, exports and imports definitions, and lets admins add, edit, delete, disable, enable, and suspend alerts.",
   });
 }

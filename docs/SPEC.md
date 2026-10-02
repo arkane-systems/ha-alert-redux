@@ -1606,8 +1606,22 @@ To make sure it gets fixed:
   read-only list. Suspend offers 1 hour, 4 hours, 8 hours, 1 day, 1 week, or
   **Until…** a date and time. It ships in the same bundle as the main card, so
   there's no second resource.
-- Later phase: create and edit alerts and generators from the card, making it a
-  friendlier front end to the subentry flows.
+- [Decided, phase 13] **Create, edit, and delete from the card** (admins only),
+  as a front end to the same subentry flows the integration page uses, so there's
+  one validation path. "Add alert" and "Add generator" in the card's toolbar, and
+  Edit and Delete buttons on each row (a generated alert edits and deletes its
+  generator, and the confirmation says so). The card drives the flow over Home
+  Assistant's REST API (`config/config_entries/subentries/flow`) and shows each
+  step in a dialog: menus as buttons, forms with Home Assistant's own form
+  element, labelled from the integration's translations, with the flow's errors
+  and its description placeholders (the "referrers" text) as the integration
+  page shows them. Home Assistant's own flow dialog can't be opened by a custom
+  card, which is why the card has a renderer. If the form element can't be
+  loaded in the browser, the dialog says so and links to the integration's
+  settings page. Deleting asks first, naming the alerts that supersede the one
+  deleted (they keep working and get a Repairs issue, §12.4), and calls
+  `config_entries/subentries/delete`. Notifier groups are still edited in Home
+  Assistant's own pages.
 - [Decided, F27; late phase] Export/import of alert definitions, to make up for
   losing YAML's version control and text editing. Also available as actions (§16).
   [Decided, as built] **Export** (a button for everyone; the actions are open to

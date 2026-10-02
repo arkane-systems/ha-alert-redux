@@ -227,6 +227,10 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `src/dialog.ts`, `src/transfer-dialog.ts`, `src/describe.ts` — the admin card's
     modal dialog element; its summary / export / import dialog (from the export and
     import actions); and `describe`, the pure text summary of an exported definition.
+  - `src/flow-client.ts`, `src/flow-dialog.ts` — create and edit from the admin
+    card: a client for HA's subentry flow REST API (and the entity registry /
+    delete calls), and the dialog that renders each flow step with HA's `ha-form`,
+    labelled from the integration's translations.
   - `src/alert-redux-card.ts` — the main card element; `src/alert-redux-admin-card.ts`
     — the admin card; `alerts.ts` (reading, sorting, and classifying alert entities),
     `format.ts`, `styles.ts` (`sharedStyles` for both cards, plus the main card's),

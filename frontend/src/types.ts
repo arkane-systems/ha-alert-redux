@@ -22,6 +22,20 @@ export interface HomeAssistant {
     returnResponse?: boolean,
   ): Promise<{ response?: unknown } | undefined>;
   callWS<T>(message: { type: string; [key: string]: unknown }): Promise<T>;
+  /** Call Home Assistant's REST API, e.g. the config flows. */
+  callApi<T>(
+    method: "GET" | "POST" | "DELETE",
+    path: string,
+    parameters?: Record<string, unknown>,
+  ): Promise<T>;
+  /** The frontend's translation of a key, filled in with values. */
+  localize?(key: string, values?: Record<string, string | number>): string;
+  /** Load an integration's backend translations (config flow strings, say). */
+  loadBackendTranslation?(
+    category: string,
+    integration?: string | string[],
+    configFlow?: boolean,
+  ): Promise<(key: string, values?: Record<string, string | number>) => string>;
   themes?: { darkMode?: boolean };
   locale?: { language?: string };
   user?: { is_admin: boolean };

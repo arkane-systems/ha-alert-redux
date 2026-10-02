@@ -121,6 +121,11 @@ as JSON, to copy or download) and, for admins, **Import** (paste or choose a
 file; **Check** is a dry run). They use the `alert_redux.export` and
 `alert_redux.import` actions (see [operating.md](operating.md#exporting-and-importing)).
 
+Admins also get **Add alert** and **Add generator** buttons, and Edit and Delete
+buttons on each row. They run the same subentry flows as the integration page
+(so the forms and their checks are identical); a generated alert's Edit and
+Delete act on its generator. Deleting asks first.
+
 Theme variables recolour priorities: `alert-redux-emergency-color`,
 `alert-redux-critical-color`, `alert-redux-warning-color`,
 `alert-redux-notice-color`, `alert-redux-informational-color`.
