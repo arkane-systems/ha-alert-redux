@@ -15,6 +15,8 @@ from .messages import readable_duration
 
 # The query names this many alerts, then says how many more there are.
 QUERY_LIMIT = 5
+# Asking which alert was meant names at most this many.
+WHICH_LIMIT = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,12 +38,25 @@ def normalise(text: str) -> str:
     "The Back-Door alert" and "back door" are the same. An empty result means
     no alert was named: "acknowledge the alert" names none.
     """
-    words = re.sub(r"[^\w\s]", " ", text.lower()).split()
+    words = _without_courtesy(re.sub(r"[^\w\s]", " ", text.lower()).split())
     if words and words[0] == "the":
         words = words[1:]
     if words and words[-1] in ("alert", "alerts"):
         words = words[:-1]
     return " ".join(words)
+
+
+def _without_courtesy(words: list[str]) -> list[str]:
+    """Return words without a trailing "please", "thanks", or "thank you".
+
+    A sentence's wildcard takes everything to the end, so "snooze the back door
+    for ten minutes please" would otherwise end its duration with "please".
+    """
+    while words and words[-1] in ("please", "thanks"):
+        words = words[:-1]
+    if words[-2:] == ["thank", "you"]:
+        words = words[:-2]
+    return words
 
 
 def match(spoken: str, candidates: Iterable[Candidate]) -> list[Candidate]:
@@ -78,7 +93,28 @@ _UNITS = {
     "hrs": 3600,
 }
 
-_ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+_ONES = [
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+]
 _TENS = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
 _NUMBER_WORDS = {word: value for value, word in enumerate(_ONES)} | {
     word: 20 + 10 * index for index, word in enumerate(_TENS)
@@ -95,7 +131,7 @@ def parse_duration(text: str) -> timedelta | None:
     text = re.sub(r"[^\w\s.]", " ", text.lower().replace("-", " "))
     text = re.sub(r"\bhalf (?:an|a) hour\b", "30 minutes", text)
     text = re.sub(r"\bhalf (?:an|a) minute\b", "30 seconds", text)
-    words = text.split()
+    words = _without_courtesy(text.split())
     total = 0.0
     number: float | None = None
     last_unit: int | None = None
@@ -182,15 +218,16 @@ def not_acknowledgeable(name: str) -> str:
 
 def no_such_alert(spoken: str) -> str:
     """Reply to a name that matches no alert."""
-    words = spoken.split()
-    if words and words[0].lower() == "the":
-        words = words[1:]
-    return f"I don't know an alert called {' '.join(words)}."
+    return f"I don't know an alert called {normalise(spoken)}."
 
 
 def which_one(names: Sequence[str]) -> str:
-    """Ask which of several alerts was meant."""
-    return f"Which one: {_join(sorted(names), 'or')}?"
+    """Ask which of several alerts was meant; past a few, ask for more of it."""
+    names = sorted(names)
+    if len(names) > WHICH_LIMIT:
+        shown = ", ".join(names[:WHICH_LIMIT])
+        return f"{len(names)} alerts match that, like {shown}. Say more of the name."
+    return f"Which one: {_join(names, 'or')}?"
 
 
 def nothing_to(action: str) -> str:
@@ -240,4 +277,6 @@ def _describe(alert: Firing) -> str:
 def _join(parts: Sequence[str], word: str, separator: str = ", ") -> str:
     if len(parts) < 2:
         return "".join(parts)
-    return f"{separator.join(parts[:-1])}{separator if len(parts) > 2 else ' '}{word} {parts[-1]}"
+    # "A or B", "A, B, or C"; with another separator, always "A; and B".
+    before = separator if len(parts) > 2 or separator != ", " else " "
+    return f"{separator.join(parts[:-1])}{before}{word} {parts[-1]}"

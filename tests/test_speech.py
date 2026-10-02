@@ -23,6 +23,8 @@ SERVER = Candidate("alert_redux.server_room_hot", "Server Room Hot")
         ("alerts", ""),
         ("", ""),
         ("Server room, hot!", "server room hot"),
+        ("the back door alert please", "back door"),
+        ("back door, thank you", "back door"),
     ],
 )
 def test_normalise(text: str, expected: str) -> None:
@@ -68,6 +70,8 @@ def test_match_ambiguous_and_none() -> None:
         ("90 seconds", 90),
         ("a minute", 60),
         ("Ten mins", 600),
+        ("ten minutes please", 600),
+        ("an hour, thanks", 3600),
     ],
 )
 def test_parse_duration(text: str, seconds: int) -> None:
@@ -93,8 +97,12 @@ def test_replies() -> None:
     assert speech.not_firing("Back Door Open") == "Back Door Open isn't firing."
     assert speech.which_one(["Garage", "Back"]) == "Which one: Back or Garage?"
     assert speech.which_one(["A", "C", "B"]) == "Which one: A, B, or C?"
+    assert speech.which_one([f"Door {n}" for n in range(6)]) == (
+        "6 alerts match that, like Door 0, Door 1, Door 2, Door 3. "
+        "Say more of the name."
+    )
     assert (
-        speech.no_such_alert("the kitchen fire")
+        speech.no_such_alert("the Kitchen Fire alert")
         == "I don't know an alert called kitchen fire."
     )
 
@@ -102,6 +110,10 @@ def test_replies() -> None:
 def test_firing_alerts() -> None:
     """The query names the alerts, and how they're acknowledged."""
     assert speech.firing_alerts([]) == "No alerts are firing."
+    assert (
+        speech.firing_alerts([Firing("A", True), Firing("B", True)])
+        == "2 alerts are firing: A, acknowledged; and B, acknowledged."
+    )
     assert (
         speech.firing_alerts([Firing("Back Door Open", False)])
         == "One alert is firing: Back Door Open."

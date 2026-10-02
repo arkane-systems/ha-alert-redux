@@ -159,7 +159,7 @@ async def test_list_firing(hass: HomeAssistant, setup_alerts: SetupAlerts) -> No
     await hass.async_block_till_done()
     await _say(hass, "acknowledge garage door open")
     assert await _say(hass, "are there any alerts") == (
-        "2 alerts are firing: Back Door Open and Garage Door Open, acknowledged."
+        "2 alerts are firing: Back Door Open; and Garage Door Open, acknowledged."
     )
 
 
