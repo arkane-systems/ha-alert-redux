@@ -35,6 +35,7 @@ export class AlertReduxAdminCard extends LitElement {
     _menu: { state: true },
     _untilOpen: { state: true },
     _page: { state: true },
+    _listMin: { state: true },
     _transfer: { state: true },
     _flow: { state: true },
     _delete: { state: true },
@@ -50,6 +51,13 @@ export class AlertReduxAdminCard extends LitElement {
   declare _untilOpen: boolean;
   /** The page shown, from 0; kept within the pages there are. */
   declare _page: number;
+  /**
+   * With paging, the tallest the list has been at this page size and number of
+   * alerts. The list keeps at least this height, so a short last page doesn't
+   * shrink the card and shuffle the dashboard's other cards.
+   */
+  declare _listMin: number;
+  private _pagingKey = "";
   /** The summary, export, or import dialog that's open, if any. */
   /** The flow dialog that's open: to add (no subentry), or edit, an alert or generator. */
   declare _flow?: { type: SubentryType; entryId: string; subentryId?: string };
@@ -196,6 +204,11 @@ export class AlertReduxAdminCard extends LitElement {
         font-size: 0.8rem;
         --mdc-icon-size: 16px;
       }
+      .list-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
       .pager {
         display: flex;
         align-items: center;
@@ -212,6 +225,7 @@ export class AlertReduxAdminCard extends LitElement {
     this._busy = new Set();
     this._untilOpen = false;
     this._page = 0;
+    this._listMin = 0;
   }
 
   static getStubConfig(): Partial<AlertReduxAdminCardConfig> {
@@ -247,6 +261,21 @@ export class AlertReduxAdminCard extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.clearInterval(this._tick);
+  }
+
+  protected willUpdate(): void {
+    // A different page size, or a different number of alerts, starts the height over.
+    const key = `${this._pageSize()}:${this.hass ? collectAlerts(this.hass).length : 0}`;
+    if (key !== this._pagingKey) {
+      this._pagingKey = key;
+      this._listMin = 0;
+    }
+  }
+
+  protected updated(): void {
+    if (!this._pageSize()) return;
+    const height = this.renderRoot.querySelector<HTMLElement>(".list-inner")?.offsetHeight ?? 0;
+    if (height > this._listMin) this._listMin = height;
   }
 
   /** Skip renders for state changes that don't touch any alert. */
@@ -305,20 +334,9 @@ export class AlertReduxAdminCard extends LitElement {
                   </button>`
               : nothing}
           </div>
-          ${shown.length
-            ? PRIORITIES.map((priority) => {
-                const group = shown.filter((alert) => alert.priority === priority);
-                if (!group.length) return nothing;
-                // The heading counts the priority's alerts on every page.
-                const total = alerts.filter((alert) => alert.priority === priority).length;
-                return html`
-                  <div class="section-title p-${priority}">
-                    <span class="dot"></span>${PRIORITY_NAMES[priority]} (${total})
-                  </div>
-                  <div class="group">${group.map((alert) => this._renderRow(alert))}</div>
-                `;
-              })
-            : html`<div class="empty">No alerts are configured.</div>`}
+          <div class="list" style=${pages > 1 ? `min-height: ${this._listMin}px` : ""}>
+            <div class="list-inner">${this._renderGroups(alerts, shown)}</div>
+          </div>
           ${pages > 1 ? this._renderPager(page, pages) : nothing}
         </div>
       </ha-card>
@@ -341,6 +359,22 @@ export class AlertReduxAdminCard extends LitElement {
           ></alert-redux-transfer-dialog>`
         : nothing}
     `;
+  }
+
+  private _renderGroups(alerts: Alert[], shown: Alert[]) {
+    if (!shown.length) return html`<div class="empty">No alerts are configured.</div>`;
+    return PRIORITIES.map((priority) => {
+      const group = shown.filter((alert) => alert.priority === priority);
+      if (!group.length) return nothing;
+      // The heading counts the priority's alerts on every page.
+      const total = alerts.filter((alert) => alert.priority === priority).length;
+      return html`
+        <div class="section-title p-${priority}">
+          <span class="dot"></span>${PRIORITY_NAMES[priority]} (${total})
+        </div>
+        <div class="group">${group.map((alert) => this._renderRow(alert))}</div>
+      `;
+    });
   }
 
   private _renderPager(page: number, pages: number) {

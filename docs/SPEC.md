@@ -1625,12 +1625,13 @@ To make sure it gets fixed:
 - [Decided, F27; late phase] Export/import of alert definitions, to make up for
   losing YAML's version control and text editing. Also available as actions (§16).
   [Decided, as built] **Export** (a button for everyone; the actions are open to
-  all) shows every definition as JSON, to copy or download as
-  `alert-redux-<date>.json`; **Import** (admins only) takes pasted text or a chosen
+  all) shows every definition as **YAML**, to copy or download as
+  `alert-redux-<date>.yaml`; **Import** (admins only) takes pasted text or a chosen
   file, with a checkbox for overwrite, a **Check** button (a dry run that says what
   would be created, replaced, or left alone), and **Import**. A refusal shows the
-  action's error, which lists every problem. The format is JSON, since no YAML
-  parser ships with the card and the action takes the parsed object.
+  action's error, which lists every problem. The card's text format is YAML, which
+  is how Home Assistant shows the actions' data; import also accepts JSON, which
+  is YAML. (The card bundles js-yaml for this.)
 - [Decided, phase 11] Generated alerts are marked "generated" beside their
   kind, with the generator's name as a tooltip; they're edited through their
   generator (§12.3).
@@ -1648,6 +1649,9 @@ To make sure it gets fixed:
   are cut into pages in card order (priority, then name), a priority's heading
   counts its alerts on every page, and the card shows "Page 2 of 5" with
   previous and next buttons under the list when there's more than one page.
+  [Decided, as built] The list keeps the height of the tallest page it has shown
+  at the current page size and number of alerts, so a shorter last page doesn't
+  shrink the card and make the dashboard rearrange its other cards.
 - [Decided, as built; phase 13] On request (a click, not shown all the time), show a
   **copyable text summary** of an alert's settings. That's useful when setting up a
   matching alert. A Summary button on each row (for everyone, like export) calls
@@ -1655,7 +1659,7 @@ To make sure it gets fixed:
   turns the definition it returns into text in the card (`describe.ts`): kind and
   priority, what makes it fire, delays and messages, notifications (groups,
   reminders, throttle), buttons, supersession, voice proxies, and for a generator
-  its targets. The dialog can switch to the definition itself as JSON, and both
+  its targets. The dialog can switch to the definition itself as YAML, and both
   copy with one click. The text is made in the card, from the export, so there's one
   source of truth for what a definition holds.
 

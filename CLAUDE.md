@@ -226,7 +226,8 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
   - `src/main.ts` — the bundle's entry point, importing both cards.
   - `src/dialog.ts`, `src/transfer-dialog.ts`, `src/describe.ts` — the admin card's
     modal dialog element; its summary / export / import dialog (from the export and
-    import actions); and `describe`, the pure text summary of an exported definition.
+    import actions); and `describe`, the pure text summary of an exported definition. The only runtime
+    dependency besides Lit is js-yaml (the dialogs' YAML).
   - `src/flow-client.ts`, `src/flow-dialog.ts` — create and edit from the admin
     card: a client for HA's subentry flow REST API (and the entity registry /
     delete calls), and the dialog that renders each flow step with HA's `ha-form`,

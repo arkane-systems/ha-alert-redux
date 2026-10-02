@@ -1,3 +1,4 @@
+import { dump, load } from "js-yaml";
 import { LitElement, css, html, nothing } from "lit";
 
 import { describe, type Definition } from "./describe";
@@ -12,7 +13,7 @@ interface ExportFile {
 }
 
 type Mode = "summary" | "export" | "import";
-type View = "summary" | "json";
+type View = "summary" | "yaml";
 
 const TITLES: Record<Mode, string> = {
   summary: "Settings summary",
@@ -35,7 +36,7 @@ async function copyText(text: string, field?: HTMLTextAreaElement | null): Promi
 }
 
 function downloadText(text: string, filename: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const url = URL.createObjectURL(new Blob([text], { type: "text/yaml" }));
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
@@ -53,7 +54,7 @@ export class AlertReduxTransferDialog extends LitElement {
     hass: { attribute: false },
     mode: { type: String },
     entityId: { type: String },
-    _json: { state: true },
+    _yaml: { state: true },
     _summary: { state: true },
     _view: { state: true },
     _error: { state: true },
@@ -68,7 +69,7 @@ export class AlertReduxTransferDialog extends LitElement {
   declare mode: Mode;
   /** The alert or generator sensor to export; unset is every definition. */
   declare entityId?: string;
-  declare _json: string;
+  declare _yaml: string;
   declare _summary: string;
   declare _view: View;
   declare _error?: string;
@@ -132,9 +133,9 @@ export class AlertReduxTransferDialog extends LitElement {
   constructor() {
     super();
     this.mode = "export";
-    this._json = "";
+    this._yaml = "";
     this._summary = "";
-    this._view = "json";
+    this._view = "yaml";
     this._busy = false;
     this._input = "";
     this._overwrite = false;
@@ -143,7 +144,7 @@ export class AlertReduxTransferDialog extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     if (this.mode !== "import") {
-      this._view = this.mode === "summary" ? "summary" : "json";
+      this._view = this.mode === "summary" ? "summary" : "yaml";
       void this._load();
     }
   }
@@ -171,8 +172,8 @@ export class AlertReduxTransferDialog extends LitElement {
               <button slot="actions" ?disabled=${!this._text()} @click=${this._copy}>
                 ${this._note ?? "Copy"}
               </button>
-              ${this._view === "json"
-                ? html`<button slot="actions" class="primary" ?disabled=${!this._json} @click=${this._download}>
+              ${this._view === "yaml"
+                ? html`<button slot="actions" class="primary" ?disabled=${!this._yaml} @click=${this._download}>
                     Download
                   </button>`
                 : nothing}
@@ -185,13 +186,13 @@ export class AlertReduxTransferDialog extends LitElement {
     return html`
       ${this.mode === "summary"
         ? html`<div class="views">
-            ${(["summary", "json"] as const).map(
+            ${(["summary", "yaml"] as const).map(
               (view) => html`<button
                 class="chip-button"
                 aria-pressed=${this._view === view ? "true" : "false"}
                 @click=${() => (this._view = view)}
               >
-                ${view === "summary" ? "Summary" : "Definition (JSON)"}
+                ${view === "summary" ? "Summary" : "Definition (YAML)"}
               </button>`,
             )}
           </div>`
@@ -203,7 +204,7 @@ export class AlertReduxTransferDialog extends LitElement {
             aria-label=${TITLES[this.mode]}
             .value=${this._busy ? "Loading…" : this._text()}
           ></textarea>`}
-      ${this._view === "json"
+      ${this._view === "yaml"
         ? html`<div class="hint">
             This is what the import action takes. Notifier groups are written by name and
             aren't included.
@@ -215,19 +216,19 @@ export class AlertReduxTransferDialog extends LitElement {
   private _renderImport() {
     return html`
       <div class="hint">
-        Paste definitions exported from Alert Redux, or choose a file. Everything is
+        Paste definitions exported from Alert Redux (YAML or JSON), or choose a file. Everything is
         checked first: if anything is wrong, nothing is imported.
       </div>
       <textarea
         aria-label="Definitions to import"
-        placeholder='{"format": "alert_redux", "version": 1, "alerts": [], "generators": []}'
+        placeholder="format: alert_redux&#10;version: 1&#10;alerts: []&#10;generators: []"
         .value=${this._input}
         @input=${(event: Event) => {
           this._input = (event.target as HTMLTextAreaElement).value;
           this._result = this._error = undefined;
         }}
       ></textarea>
-      <input type="file" accept=".json,application/json" @change=${this._file} />
+      <input type="file" accept=".yaml,.yml,.json,text/yaml,application/json" @change=${this._file} />
       <label class="check">
         <input
           type="checkbox"
@@ -244,7 +245,7 @@ export class AlertReduxTransferDialog extends LitElement {
 
   /** The text shown, copied, and downloaded. */
   private _text(): string {
-    return this._view === "summary" ? this._summary : this._json;
+    return this._view === "summary" ? this._summary : this._yaml;
   }
 
   private async _load(): Promise<void> {
@@ -260,7 +261,7 @@ export class AlertReduxTransferDialog extends LitElement {
         true,
       );
       const file = (result?.response ?? {}) as ExportFile;
-      this._json = JSON.stringify(file, null, 2);
+      this._yaml = dump(file, { lineWidth: -1, noRefs: true });
       this._summary = [
         ...(file.alerts ?? []).map((definition) => describe(definition)),
         ...(file.generators ?? []).map((definition) => describe(definition, true)),
@@ -281,7 +282,7 @@ export class AlertReduxTransferDialog extends LitElement {
   private _download = (): void => {
     const day = new Date().toISOString().slice(0, 10);
     const name = this.entityId ? this.entityId.split(".").pop() : day;
-    downloadText(this._json, `alert-redux-${name}.json`);
+    downloadText(this._yaml, `alert-redux-${name}.yaml`);
   };
 
   private _file = async (event: Event): Promise<void> => {
@@ -297,9 +298,10 @@ export class AlertReduxTransferDialog extends LitElement {
     this._error = this._result = undefined;
     let definitions: unknown;
     try {
-      definitions = JSON.parse(this._input);
+      // JSON is YAML too, so either can be pasted.
+      definitions = load(this._input);
     } catch (err) {
-      this._error = `This isn't valid JSON: ${messageOf(err)}`;
+      this._error = `This isn't valid YAML or JSON: ${messageOf(err)}`;
       return;
     }
     this._busy = true;

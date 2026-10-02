@@ -116,8 +116,8 @@ priority order, headings counting the whole priority) with previous and next
 buttons.
 
 Every row has a **Summary** button (a text summary of the alert's settings, to
-copy, or its definition as JSON), and the card has **Export** (all definitions
-as JSON, to copy or download) and, for admins, **Import** (paste or choose a
+copy, or its definition as YAML), and the card has **Export** (all definitions
+as YAML, to copy or download) and, for admins, **Import** (paste YAML or JSON, or choose a
 file; **Check** is a dry run). They use the `alert_redux.export` and
 `alert_redux.import` actions (see [operating.md](operating.md#exporting-and-importing)).
 
