@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 
 import pytest
@@ -11,10 +12,12 @@ from homeassistant.components.homeassistant.exposed_entities import (
     async_expose_entity,
     async_should_expose,
 )
+from homeassistant.const import EVENT_CALL_SERVICE
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import intent
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_capture_events
 
 from custom_components.alert_redux.voice import INTENT_SNOOZE, INTENTS
 
@@ -125,9 +128,12 @@ async def test_snooze(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
     """A spoken duration, or else the alert's snooze button duration."""
     await _alerts(hass, setup_alerts)
     now = dt_util.utcnow()
+    calls = async_capture_events(hass, EVENT_CALL_SERVICE)
     assert await _say(hass, "snooze back door open for half an hour") == (
         "Snoozed Back Door Open for 30 minutes."
     )
+    # The snooze call is recorded, so its data must be JSON.
+    json.dumps([call.data for call in calls])
     until = hass.states.get(BACK).attributes["snoozed_until"]
     assert abs(until - now - timedelta(minutes=30)) < timedelta(seconds=5)
 

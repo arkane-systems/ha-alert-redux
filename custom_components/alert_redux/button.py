@@ -58,6 +58,7 @@ class ProxySnoozeButton(ProxyEntity, ButtonEntity):
         alert = self._require_alert()
         if not alert.firing:
             raise self._not_firing(alert)
+        # Seconds, not a timedelta: the action call is recorded as an event.
         await self._async_act(
-            alert, SERVICE_SNOOZE, {ATTR_DURATION: alert.button_snooze}
+            alert, SERVICE_SNOOZE, {ATTR_DURATION: alert.button_snooze.total_seconds()}
         )

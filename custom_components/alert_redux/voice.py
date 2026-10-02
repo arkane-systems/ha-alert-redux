@@ -289,7 +289,8 @@ class SnoozeIntent(_AlertIntent):
         self, entity: AlertEntity, slots: dict[str, Any]
     ) -> dict[str, Any]:
         """Return the snooze's duration."""
-        return {ATTR_DURATION: self._duration(entity, slots)}
+        # Seconds, not a timedelta: the action call is recorded as an event.
+        return {ATTR_DURATION: self._duration(entity, slots).total_seconds()}
 
     def done(self, entity: AlertEntity, name: str, slots: dict[str, Any]) -> str:
         """Return the reply."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 
 import pytest
@@ -9,6 +10,7 @@ from homeassistant.components.homeassistant.exposed_entities import (
     async_expose_entity,
     async_should_expose,
 )
+from homeassistant.const import EVENT_CALL_SERVICE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
@@ -22,6 +24,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_capture_events
 
 from .conftest import SetupAlerts, generator_subentry, state_alert
 
@@ -134,7 +137,10 @@ async def test_snooze_button(hass: HomeAssistant, setup_alerts: SetupAlerts) -> 
 
     await _door(hass, "on")
     now = dt_util.utcnow()
+    calls = async_capture_events(hass, EVENT_CALL_SERVICE)
     await _call(hass, "button", "press", BUTTON)
+    # The snooze call is recorded, so its data must be JSON.
+    json.dumps([call.data for call in calls])
     state = hass.states.get(ALERT)
     assert state.state == "ack"
     until = state.attributes["snoozed_until"]
