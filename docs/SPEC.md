@@ -859,8 +859,8 @@ For each loud group, when its quiet-hours entity turns off:
   into this summary rather than sent separately (§9.7). For an alert whose on
   notification went out before quiet hours began, the summary is where you learn
   when it ended.
-- [Deferred, R7] The summary may later be delivered through the acknowledgement
-  queue (§10) instead.
+- [Decided] The summary stays an ordinary notification. (The acknowledgement queue
+  it might once have used was replaced by latching alerts, §10.)
 
 **As built** [Decided, phase 10]
 
@@ -991,13 +991,40 @@ keyboards could be added later. Other members leave the buttons out.
   instead, so the two are told apart.
 - [Decided; phase 13] Custom buttons also show **on the main card** (§13.1).
 
-## 10. Acknowledgement queue
+## 10. Latching alerts
 
-[Deferred, R7] A late phase adds a separate "needs acknowledgement" system. When an
-alert stops firing without being acknowledged, it's handed off to this queue. Several
-unacknowledged firings produce several separate items to acknowledge. The quiet-hours
-summary (§9.9) may use the same mechanism. The details are to be designed when it's
-built.
+[Decided; planned for phase 15] Some alerts matter even if they stop before anyone
+sees them: the freezer that was warm for twelve minutes at 3 a.m., or a leak sensor
+that tripped three times overnight and is dry now. Reminders end when a firing
+ends, so today nothing says "you haven't seen this". A **latching** alert keeps
+asking until someone acknowledges it, however its firing ended.
+
+This replaces the separate "needs acknowledgement" queue first proposed in R7
+(spec notes). Walking through real uses showed a queue would be a subsystem of its
+own (items with identity, storage, a card, notifications, sensors) for what a
+setting on the alert does with the model that already exists. Nothing is lost for
+the other stories: done notifications, the Activity card, and the quiet-hours
+summary (§9.9, which stays an ordinary notification) already cover them.
+
+- **A per-alert setting**, off by default and meant for alerts that matter (a
+  critical alert, a transient fault): *keep until acknowledged*. Alerts without it
+  behave as they do now.
+- **What it does**: when a latching alert's firing ends *without having been
+  acknowledged*, the alert doesn't return to `idle`. It stays visible on the main
+  card as needing acknowledgement, and acknowledging it (the card's button, the
+  action, voice, a notification button) clears it. A firing that was acknowledged
+  before it ended ends as now.
+- **One item per alert, not one per firing.** The queue would have made a separate
+  item of each unacknowledged firing. A latching alert that fires again before
+  it's acknowledged is the same item, and the card shows how many times it has
+  fired (`fire_count`) whenever that is more than one and the card isn't already
+  showing it.
+- **To be designed in phase 15**, because it changes the alert's lifecycle (§7):
+  the state or flag that marks it; whether and how reminders continue after the
+  firing ends; the done notification; how it counts in the summary sensors (§11.2)
+  and for supersession (§8); what disabling, snoozing, and restoring after a
+  restart do to it; event alerts and manual alerts (§4.2, §4.3); the voice
+  commands and proxies (§14); and how it is exported and imported (§16).
 
 ## 11. Integration surface: attributes, sensors, events
 
@@ -2279,6 +2306,8 @@ Decisions with their reasons, in the order they were made.
 | Proxy refusals keep raising their error, though Alexa can't say so | The dashboard and automations still need to hear it; Alexa says "OK" but shows the real state, and Home Assistant logs the refusal [§14.2]. |
 | A duration that ran out while HA was down ends just after the first state is written | HA's logbook leaves out an entity's first state after a restart, so an ending before it had no row [§11.4, §15.1]. |
 | Alert Redux ships an agent skill, checked against the code by a test | Agents can drive Alert Redux through MCP, but had to dig through the forms' schemas to do it; a test keeps the skill from drifting as the code changes [§20]. |
+| Latching alerts (§10) replace the acknowledgement queue (R7), in a late phase 15 | The real need is a firing that ended before anyone saw it; a per-alert setting answers it on the existing model, where a queue would be a subsystem. One item per alert, with the fire count shown, is simpler than one per firing [§10]. |
+| The quiet-hours summary stays an ordinary notification | The queue it might have used is gone; the summary already tells you what you missed [§9.9]. |
 
 ## 20. Phase plan
 
@@ -2630,7 +2659,6 @@ platform arrived in 2026.8. Decisions from building it are recorded in §14.1,
 
 ### Phase 13 — Late features (0.13.0 onwards; may be split)
 
-- The acknowledgement queue (§10).
 - Card filters: scope by area and label in the card's configuration, and
   hide-acknowledged and per-priority controls on the card (§13.1).
 - Paging for the admin card (§13.2).
@@ -2657,6 +2685,17 @@ platform arrived in 2026.8. Decisions from building it are recorded in §14.1,
   - an `alert:` YAML section from the built-in `alert` integration;
   - Alert2 alerts.
 
+### Phase 15 — Latching alerts
+
+[Decided; provisional, until the rest of the list is done] Last, because it changes
+the alert lifecycle (§7).
+
+- Latching alerts (§10): the *keep until acknowledged* setting, the state or flag
+  for an alert whose firing ended unacknowledged, its place on the main card (with
+  the fire count shown when it's more than one), acknowledging it by every route
+  that acknowledges an alert, and what it does to reminders, notifications, the
+  summary sensors, and supersession.
+
 **1.0.0** comes after phase 11, once the core feature set is proven in daily use,
-with phases 12–14 as 1.x releases [Decided, provisionally]. It adds self-ending
+with phases 12–15 as 1.x releases [Decided, provisionally]. It adds self-ending
 manual alerts and the entity refactor to 0.11.1 (above).

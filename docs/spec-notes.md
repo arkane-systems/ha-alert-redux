@@ -295,6 +295,8 @@ decision: adopt it, adapt it, or exclude it deliberately.
   to that system. Several unacknowledged firings would then produce several separate
   items to acknowledge, which is the preferred behaviour. The details are to be worked
   out later.
+  **[Later: replaced by latching alerts, a per-alert setting (SPEC §10, phase 15),
+  one item per alert rather than per firing.]**
 - **R8 — P11 (escalation): excluded as a separate feature.** Supersession already
   covers it, as the *Back Door Open* / *Back Door Left Open* pair shows. It might also
   be worth thinking about in connection with generators.
