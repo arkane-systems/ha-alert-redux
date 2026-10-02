@@ -27,6 +27,9 @@
       },
       "disabled": {
         "default": "mdi:bell-off-outline"
+      },
+      "superseded": {
+        "default": "mdi:layers-outline"
       }
     }
   },
@@ -54,6 +57,15 @@
     },
     "suspend": {
       "service": "mdi:timer-pause-outline"
+    },
+    "export": {
+      "service": "mdi:export"
+    },
+    "import": {
+      "service": "mdi:import"
+    },
+    "press_button": {
+      "service": "mdi:gesture-tap-button"
     }
   }
 }

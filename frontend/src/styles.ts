@@ -294,6 +294,33 @@ export const cardStyles = css`
     gap: 8px;
   }
 
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .filters .chip-button[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--primary-color) 14%, transparent);
+    border-color: color-mix(in srgb, var(--primary-color) 60%, var(--divider-color));
+  }
+  .filters .chip-button[aria-pressed="false"] {
+    opacity: 0.55;
+  }
+  .filters .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--c);
+  }
+
+  .confirm {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+  }
+
   /* --- Superseded alerts, behind a disclosure under their superseder --- */
   .superseded {
     display: flex;

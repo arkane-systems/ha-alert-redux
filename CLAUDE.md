@@ -23,13 +23,14 @@ event), and phase 9 (replacing and clearing notifications, and notification
 buttons), and phase 10 (throttling and quiet hours), and phase 11 (generators,
 including generated supersession), and, for 1.0.0, manual alerts that end by
 themselves (spec §4.3), and phase 12 (voice control: Assist commands, and proxy
-switches and snooze buttons for Alexa and Google Home).
+switches and snooze buttons for Alexa and Google Home), and, so far in phase 13,
+the export and import actions.
 
 ## Specification
 
 **`docs/SPEC.md` is the authoritative design** for the integration and cards. Read it
 before implementing anything, and follow its phase plan (§20): build one phase at a
-time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
+time, each ending with tests, a run in real HA, green CI, and a release (`0.N.0` before 1.0.0; the version rule is in spec §20).
 
 - Every point is tagged **[Decided]**, **[Deferred]**, and so on. Don't reopen a
   Decided point while implementing. If building a phase shows that a decision
@@ -54,6 +55,10 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `EntityComponent.async_setup_entry`; adds one entity per alert subentry, linked
     with `config_subentry_id` so HA removes it with the subentry, then starts the
     generators, and keeps the add-entities callback for alerts added later.
+  - `placement.py` — an alert's area and labels in the entity registry (spec §11.6):
+    applied once when an alert is added, and followed (as a diff) when a generated
+    alert's placement changes. `definitions.Placement` is what a definition carries;
+    a fixed alert's transient `placement` is split out of its subentry data.
   - `definitions.py` — `AlertDefinition`, what an alert entity is built from:
     unique ID, name, data, and for a generated alert its generator, target, and
     extra template variables. Fixed alerts' come from their subentries
@@ -71,6 +76,14 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `config_subentry_id`, and kept in `DATA_ENTITIES` by unique ID like the
     fixed ones. Also `async_forget_alert`, which drops a deleted alert's record
     and announces it.
+  - `validation.py` — the checks of an alert's or generator's stored data that the
+    config flows and import share: kind checks, references and supersession
+    cycles (over `Definitions`: the alerts and generators as they are or as an
+    import leaves them).
+  - `portable.py` — export and import (spec §16): `export_definitions`, the stored-data
+    schemas per kind, `async_plan_import` (collects every problem; names to IDs,
+    create / update / unchanged), `async_apply_import`. The actions are in
+    `__init__.py`.
   - `entity.py` — `AlertEntity`, the base every kind shares and never used on its
     own (state, attributes, actions, events, persistence, and the rendered messages
     while firing; snoozing, disabling, and suspending; durations and their expiry,
@@ -110,7 +123,8 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     `async_write_ha_state`). Pre-acknowledgements are kept by the source's
     unique ID. It also reports each alert's `broken_references`.
   - `summary.py` — `summarise` (HA-free: the counts, entity-ID lists, and
-    highest priorities across all alerts) and `SummaryCoordinator` in
+    highest priorities across all alerts; a firing alert that's superseded counts
+    as firing but not as active, and is listed as superseded) and `SummaryCoordinator` in
     `hass.data`, which each alert reports to (by unique ID) from
     `async_write_ha_state` and withdraws from when removed; it recomputes once
     per burst of reports and tells the sensors.
@@ -171,7 +185,7 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     members are showing each key's notification, so clears reach exactly those,
     spec §9.10, and notifications held for quiet hours). Quiet hours (§9.9) are
     the notifier's: notifications carry an `urgency` (Alert Redux maps it from
-    the priority), loud groups hold or soften, and when their quiet-hours entity
+    the priority) and an `interruption` (the iOS level, spec §9.3; the owner chooses it), loud groups hold or soften, and when their quiet-hours entity
     turns off, the owner's `on_quiet_ended` callback says what to send. Named `notifier`, not `notify`: a `notify.py` would be loaded as
     a notify platform.
   - `buttons.py` — notification buttons (spec §9.11): building an alert's
@@ -214,6 +228,14 @@ time, each ending with tests, a run in real HA, green CI, and a `0.N.0` release.
     rendered from `assets/alert-redux-icon.svg`.
 - **`frontend/`** — card source (TypeScript + Lit), bundled with esbuild.
   - `src/main.ts` — the bundle's entry point, importing both cards.
+  - `src/dialog.ts`, `src/transfer-dialog.ts`, `src/describe.ts` — the admin card's
+    modal dialog element; its summary / export / import dialog (from the export and
+    import actions); and `describe`, the pure text summary of an exported definition. The only runtime
+    dependency besides Lit is js-yaml (the dialogs' YAML).
+  - `src/flow-client.ts`, `src/flow-dialog.ts` — create and edit from the admin
+    card: a client for HA's subentry flow REST API (and the entity registry /
+    delete calls), and the dialog that renders each flow step with HA's `ha-form`,
+    labelled from the integration's translations.
   - `src/alert-redux-card.ts` — the main card element; `src/alert-redux-admin-card.ts`
     — the admin card; `alerts.ts` (reading, sorting, and classifying alert entities),
     `format.ts`, `styles.ts` (`sharedStyles` for both cards, plus the main card's),

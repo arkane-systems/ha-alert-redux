@@ -7,14 +7,44 @@ export interface HassEntity {
   last_changed: string;
 }
 
+/** The entity registry's display entry for an entity (area and labels). */
+export interface EntityRegistryDisplay {
+  entity_id: string;
+  area_id?: string | null;
+  labels?: string[];
+}
+
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
+  /** The entity registry's display entries (HA 2023.3 on). */
+  entities?: Record<string, EntityRegistryDisplay>;
+  /**
+   * Call an action. With returnResponse, the action's response data comes back as
+   * `response`; without notifyOnError, a failure is thrown to the caller only.
+   */
   callService(
     domain: string,
     service: string,
     data?: Record<string, unknown>,
-  ): Promise<unknown>;
+    target?: Record<string, unknown>,
+    notifyOnError?: boolean,
+    returnResponse?: boolean,
+  ): Promise<{ response?: unknown } | undefined>;
   callWS<T>(message: { type: string; [key: string]: unknown }): Promise<T>;
+  /** Call Home Assistant's REST API, e.g. the config flows. */
+  callApi<T>(
+    method: "GET" | "POST" | "DELETE",
+    path: string,
+    parameters?: Record<string, unknown>,
+  ): Promise<T>;
+  /** The frontend's translation of a key, filled in with values. */
+  localize?(key: string, values?: Record<string, string | number>): string;
+  /** Load an integration's backend translations (config flow strings, say). */
+  loadBackendTranslation?(
+    category: string,
+    integration?: string | string[],
+    configFlow?: boolean,
+  ): Promise<(key: string, values?: Record<string, string | number>) => string>;
   themes?: { darkMode?: boolean };
   locale?: { language?: string };
   user?: { is_admin: boolean };
@@ -27,6 +57,8 @@ export interface HomeAssistant {
 export interface AlertReduxAdminCardConfig {
   type: string;
   title?: string;
+  /** How many alerts a page shows; unset shows them all. */
+  page_size?: number | string;
 }
 
 export interface AlertReduxCardConfig {
@@ -37,6 +69,16 @@ export interface AlertReduxCardConfig {
    * strings.
    */
   snooze_durations?: (number | string)[];
+  /**
+   * Scope (spec §13.1): the areas, and the labels, the card is for. An alert must
+   * be in one of the areas and have one of the labels, when each is set.
+   */
+  areas?: string | string[];
+  labels?: string | string[];
+  /** The view controls' starting values: hide acknowledged alerts, and show only
+   * these priorities. */
+  hide_acknowledged?: boolean;
+  priorities?: Priority | Priority[];
 }
 
 export type Priority = "emergency" | "critical" | "warning" | "notice" | "informational";
@@ -65,6 +107,10 @@ export interface Alert {
   disabledUntil: Date | null;
   /** The firing alerts that supersede this one, transitively (spec §8.1). */
   supersededBy: string[];
+  /** The labels of the alert's custom buttons (spec §9.11, §13.1). */
+  buttons: string[];
+  /** The labels of those marked "Require unlock", which the card confirms first. */
+  unlockButtons: string[];
   /** A generated alert's generator: its sensor's entity ID (spec §12.3). */
   generatedBy: string | null;
 }

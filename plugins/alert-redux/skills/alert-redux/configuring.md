@@ -4,6 +4,7 @@
 - How the flows work
 - Value formats
 - Fields every alert has
+- The `placement` section
 - The `notifications` section
 - The `supersession` section
 - The `voice` section
@@ -31,9 +32,10 @@ Alerts, generators, and notifier groups are config subentries of the one
   only if its condition changed.
 - **Delete:** delete the subentry. Its entity goes with it, and an
   `alert_redux_deleted` event fires.
-- **Sections** are nested objects in the submission: `notifications` and
-  `supersession` on every alert and generator form, `targets` on generator forms.
-  **They're required keys**: send `"supersession": {}` even with nothing in it.
+- **Sections** are nested objects in the submission: `notifications`,
+  `supersession`, `voice`, and `placement` on every alert and generator form,
+  `targets` on generator forms. **They're required keys**: send
+  `"supersession": {}` even with nothing in it.
 - A changed **name** changes the alert's name, not its entity ID.
 - Names must be unique within each subentry type (case-insensitive).
 
@@ -62,6 +64,24 @@ Templates that return a value must be **clearly** true or false: anything else
 | `acknowledgeable` | boolean, required | Default true. Off: can't be acknowledged or snoozed. |
 | `subject_entity` | entity | What the alert is about, for messages. Defaults to the watched entity. |
 
+## The `placement` section
+
+An alert's area and labels, which cards and automations use to select alerts
+(for example the card's `areas` and `labels`). Both are optional.
+
+- `area_id` (an area) and `labels` (label IDs). **The entity registry is where
+  they live**: editing an alert pre-fills them from the registry, and saving writes
+  them back (so removing a label here removes it; the Alert Redux label is one
+  like any other). Changes made on the entity's settings page show here next time.
+- For a **new** alert, the values are applied once, when its entity is first
+  added, and never forced back after that.
+- A **generator's** section also has `area_from_target` (boolean, on by default
+  for a new generator): each alert goes in the area of the entity it's about
+  (or its device's); off uses `area_id`. `labels` go on every alert. Saving a
+  generator updates the alerts it has made: the labels it adds or removes and the
+  area, not labels or areas set by hand. A generator made before this has nothing
+  set, so its alerts' areas are left alone.
+
 ## The `notifications` section
 
 | Field | Type | Notes |
@@ -76,7 +96,7 @@ Templates that return a value must be **clearly** true or false: anything else
 | `display_message` | template | A different message for the card. |
 | `reminder_message` | template | Default gives the name and how long it's been firing. |
 | `done_message` | template | Sent when it stops firing. |
-| `buttons` | list of `{label, action, require_unlock}` | Mobile notification buttons; `action` is an action sequence. Labels must be filled in. |
+| `buttons` | list of `{label, action, require_unlock}` | Mobile notification buttons; `action` is an action sequence. Labels must be filled in, and each used once (the card presses a button by its label). |
 | `button_snooze_duration` | duration | How long the Snooze Alert button snoozes. |
 
 Message templates can use `name`, `entity_id`, `priority`, `subject_entity_id`,
@@ -203,6 +223,7 @@ A generator's form is its kind's alert form (`state`, `on_off`, `threshold`,
   criterion that's set, and **any** value within each; labels and areas count
   through the entity's device. At least one criterion.
 - Templates get `target` (the entity ID) and `target_name`.
+- The `placement` section (above) gives the alerts an area and labels.
 - `supersedes` relationships can name a `generator` (that generator's subentry ID:
   each alert supersedes that generator's alert for the same target) or a fixed
   `alert`, not both.
@@ -262,7 +283,7 @@ A form that's refused comes back with an error key:
 | `supersedes_self`, `supersedes_duplicate`, `supersedes_cycle`, `relationship_target` | Fix the relationships. |
 | `propagation_unacknowledgeable` | Set propagation to `none`, or make the alert acknowledgeable. |
 | `snooze_duration_missing` | A `snooze` relationship needs `snooze_duration`. |
-| `button_incomplete`, `invalid_button_action` | Each button needs a label and a valid action. |
+| `button_incomplete`, `button_label_duplicate`, `invalid_button_action` | Each button needs a label (used once) and a valid action. |
 | `targets_required` | Generators: set at least one target criterion. |
 | `no_members`, `action_missing`, `invalid_data` | Notifier groups: add a member; set each action; `data` must be a mapping. |
 
@@ -292,7 +313,9 @@ A door left open for 10 minutes, to one group, with a Close button:
       {"action": "cover.close_cover", "target": {"entity_id": "cover.garage_door"}}
     ]}]
   },
-  "supersession": {}
+  "supersession": {},
+  "voice": {},
+  "placement": {}
 }
 ```
 
@@ -308,7 +331,9 @@ A low-battery alert for every battery sensor (a `threshold` generator):
   "hysteresis": 5,
   "notifications": {"use_default_groups": true, "use_default_reminders": true,
                     "use_default_throttle": true},
-  "supersession": {}
+  "supersession": {},
+  "voice": {},
+  "placement": {}
 }
 ```
 

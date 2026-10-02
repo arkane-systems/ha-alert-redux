@@ -23,6 +23,8 @@ class AlertReport(NamedTuple):
     state: AlertState
     priority: Priority
     missing_data: bool
+    # Firing alerts that another firing alert supersedes (spec §8.1).
+    superseded: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +34,7 @@ class Summary:
     firing: tuple[str, ...] = ()
     active: tuple[str, ...] = ()
     acknowledged: tuple[str, ...] = ()
+    superseded: tuple[str, ...] = ()
     no_data: tuple[str, ...] = ()
     disabled: tuple[str, ...] = ()
     highest_priority: Priority | None = None
@@ -43,22 +46,31 @@ class Summary:
 def summarise(alerts: Iterable[AlertReport]) -> Summary:
     """Summarise the alerts.
 
-    Firing is active or acknowledged; disabled includes suspended. An alert
+    Firing is active or acknowledged; disabled includes suspended. A firing alert
+    that a firing alert supersedes is hidden on the card and silent, so it
+    doesn't count as unacknowledged (active, and the highest unacknowledged
+    priority), though it counts as firing, and is listed as superseded. An alert
     missing data counts as no data whatever its state, so a firing alert in its
     grace period counts both as firing and as no data (fail loud).
     """
     firing: list[AlertReport] = []
     active: list[AlertReport] = []
     acknowledged: list[str] = []
+    superseded: list[str] = []
     no_data: list[str] = []
     disabled: list[str] = []
     for alert in alerts:
         if alert.state is AlertState.ACTIVE:
             firing.append(alert)
-            active.append(alert)
+            if alert.superseded:
+                superseded.append(alert.entity_id)
+            else:
+                active.append(alert)
         elif alert.state is AlertState.ACK:
             firing.append(alert)
             acknowledged.append(alert.entity_id)
+            if alert.superseded:
+                superseded.append(alert.entity_id)
         elif alert.state is AlertState.DISABLED:
             disabled.append(alert.entity_id)
         if alert.missing_data or alert.state is AlertState.NO_DATA:
@@ -67,6 +79,7 @@ def summarise(alerts: Iterable[AlertReport]) -> Summary:
         firing=_ids(alert.entity_id for alert in firing),
         active=_ids(alert.entity_id for alert in active),
         acknowledged=_ids(acknowledged),
+        superseded=_ids(superseded),
         no_data=_ids(no_data),
         disabled=_ids(disabled),
         highest_priority=_highest(firing),

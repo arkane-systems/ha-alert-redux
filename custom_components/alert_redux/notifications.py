@@ -178,13 +178,16 @@ def build_notification(
     message: str | None = None,
     final: bool | None = None,
     urgency: int = 0,
+    interruption: str | None = None,
 ) -> Notification:
     """Render one of an alert's notifications.
 
     A final notification (by default, the done notification) carries no
     buttons (spec §9.11). A message given ready-made isn't rendered; a prefix
     goes in front of the message. The urgency is the alert's priority's, for
-    quiet hours (§9.9).
+    quiet hours (§9.9). The interruption level is the alert's priority's, and goes
+    only with the notifications that demand attention: the on and reminder ones
+    (§9.3).
     """
     reason = variables["reason"]
     if final is None:
@@ -207,6 +210,7 @@ def build_notification(
         buttons=() if final else buttons,
         final=final,
         urgency=urgency,
+        interruption=interruption if reason in (REASON_ON, REASON_REMINDER) else None,
     )
 
 

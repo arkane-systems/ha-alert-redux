@@ -28,6 +28,7 @@ from .const import (
     ATTR_ATTRIBUTE,
     ATTR_BROKEN_REFERENCES,
     ATTR_BUTTONS,
+    ATTR_BUTTONS_REQUIRE_UNLOCK,
     ATTR_CONDITION,
     ATTR_DELAY_OFF,
     ATTR_DELAY_OFF_UNTIL,
@@ -98,6 +99,9 @@ from .const import (
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
     CONF_ACTION,
+    CONF_AREA_ID,
+    CONF_LABELS,
+    CONF_REQUIRE_UNLOCK,
     CONF_ALERT,
     CONF_ALERT_STATES,
     CONF_ATTRIBUTE,
@@ -138,6 +142,7 @@ from .const import (
     CONF_USER_DISMISSABLE,
     CONF_VALUE_TEMPLATE,
     DATA_LABEL,
+    INTERRUPTION_LEVELS,
     DATA_PROXIES,
     DATA_STARTUP_UNTIL,
     DATA_SUMMARY,
@@ -166,6 +171,7 @@ from .const import (
 from .definitions import AlertDefinition, RelationshipResolver, generator_unique_id
 from .exposure import ASSIST, async_set_exposure
 from .labels import async_apply_label
+from .placement import async_apply_placement, async_follow_placement
 from .messages import Messages, MessageTracker, message_context
 from .buttons import BUTTON_ACK, BUTTON_SNOOZE, alert_buttons, custom_button_key
 from .model import (
@@ -307,6 +313,9 @@ class AlertEntity(Entity):
         self._message_key: tuple[Any, ...] | None = None
         # Whether this alert has been given the alerts label (spec §11.5).
         self._labelled = False
+        self._placed = False
+        # The placement last given to the registry, so a change can be followed.
+        self._applied_placement = definition.placement
         # Whether it's been exposed to Assist, and which proxies have been
         # exposed to Alexa and Google, once each (spec §14.1, §14.2).
         self._assist_exposed = False
@@ -557,6 +566,11 @@ class AlertEntity(Entity):
             ATTR_PRE_SNOOZED_UNTIL: runtime.pre_ack_deadline(now),
             ATTR_BROKEN_REFERENCES: self._broken_references,
             ATTR_BUTTONS: [button[CONF_LABEL] for button in self._custom_buttons],
+            ATTR_BUTTONS_REQUIRE_UNLOCK: [
+                button[CONF_LABEL]
+                for button in self._custom_buttons
+                if button.get(CONF_REQUIRE_UNLOCK)
+            ],
             ATTR_GENERATED_BY: self._generated_by(),
         }
         if (duration := self._duration) is not None:
@@ -577,12 +591,18 @@ class AlertEntity(Entity):
         if record is not None:
             self._runtime = AlertRuntime.from_dict(record["runtime"])
             self._labelled = record.get("labelled", False)
+            self._placed = record.get("placed", False)
             self._assist_exposed = record.get("assist_exposed", False)
             self.proxies_exposed = set(record.get("proxies_exposed", ()))
         if not self._labelled:
             self._labelled = True
             if (label_id := self.hass.data[DOMAIN].get(DATA_LABEL)) is not None:
                 async_apply_label(self.hass, self.entity_id, label_id)
+        if not self._placed:
+            # Once: the area and labels its configuration names (spec §11.6).
+            self._placed = True
+            if (placement := self._definition.placement) is not None:
+                async_apply_placement(self.hass, self.entity_id, placement)
         if not self._assist_exposed:
             self._assist_exposed = async_set_exposure(
                 self.hass, self.entity_id, {ASSIST: True}
@@ -645,6 +665,7 @@ class AlertEntity(Entity):
                 self._runtime.state,
                 self._priority,
                 self._runtime.no_data_since is not None,
+                bool(self._superseded_by),
             ),
         )
         firing = self._runtime.firing
@@ -887,6 +908,7 @@ class AlertEntity(Entity):
                 snooze=self.button_snooze,
             ),
             "urgency": self._priority.urgency,
+            "interruption": INTERRUPTION_LEVELS.get(self._priority),
         }
 
     def quiet_hours_reminder(self) -> Notification | None:
@@ -1237,6 +1259,20 @@ class AlertEntity(Entity):
         pending expiry is cleared, or it would still end the firing unannounced.
         """
         self._configure(definition)
+        # Only a generated alert follows a change: a fixed alert's registry values
+        # are edited in place by its form, and the stored ones were applied once.
+        if (
+            self.hass is not None
+            and definition.generator is not None
+            and self._applied_placement != definition.placement
+        ):
+            async_follow_placement(
+                self.hass,
+                self.entity_id,
+                self._applied_placement,
+                definition.placement,
+            )
+        self._applied_placement = definition.placement
         if not self._has_duration:
             self._runtime.event_expires = None
         self._async_replan_reminder()
@@ -1366,6 +1402,31 @@ class AlertEntity(Entity):
                 "%s: tapped a notification button it no longer has", self.entity_id
             )
             return
+        await self._async_run_button(button, context)
+
+    async def async_press_button(self, label: str) -> None:
+        """Press one of the alert's custom buttons by its label, as the main card
+        does (spec §13.1, §16): only that button's configured action runs, as the
+        user who pressed it (the action call's context), whatever the alert's
+        state."""
+        button = next(
+            (b for b in self._custom_buttons if b[CONF_LABEL] == label), None
+        )
+        if button is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_such_button",
+                translation_placeholders={
+                    "entity_id": self.entity_id,
+                    "label": label,
+                },
+            )
+        await self._async_run_button(button, self._context or Context())
+
+    async def _async_run_button(
+        self, button: dict[str, Any], context: Context
+    ) -> None:
+        """Run a custom button's action sequence as the user in context."""
         label = button[CONF_LABEL]
         try:
             sequence = await async_validate_actions_config(
@@ -1476,6 +1537,17 @@ class AlertEntity(Entity):
                 ATTR_PRIORITY: self._priority,
                 "runtime": self._runtime.to_dict(),
                 "labelled": self._labelled,
+                "placed": self._placed,
+                # A generated alert's, so that the registry isn't touched again at
+                # startup, when its definition is rebuilt from what was stored.
+                "placement": (
+                    {
+                        CONF_AREA_ID: placement.area_id,
+                        CONF_LABELS: sorted(placement.labels),
+                    }
+                    if (placement := self._definition.placement) is not None
+                    else None
+                ),
                 "assist_exposed": self._assist_exposed,
                 "proxies_exposed": sorted(self.proxies_exposed),
                 # A generated alert's generator and target (spec §12.3).

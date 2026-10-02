@@ -33,6 +33,7 @@ from .conftest import (
     state_alert,
 )
 
+
 def _suggested(schema: dict) -> dict[str, Any]:
     """Return the suggested values of a form's fields."""
     return {
@@ -70,6 +71,7 @@ FORM = {
     "supersession": {},
     "notifications": {},
     "voice": {},
+    "placement": {},
 }
 
 
@@ -268,6 +270,7 @@ async def test_create_state_alert(
             "supersession": {},
             "notifications": {},
             "voice": {},
+            "placement": {},
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -305,6 +308,7 @@ async def test_create_template_alert(
         "supersession": {},
         "notifications": {},
         "voice": {},
+        "placement": {},
     }
 
     # The template selector refuses templates that don't parse.
@@ -369,6 +373,7 @@ async def test_reconfigure_state_alert(
             "supersession": {},
             "notifications": {},
             "voice": {},
+            "placement": {},
         },
     )
     assert result["reason"] == "reconfigure_successful"
@@ -382,9 +387,7 @@ async def test_reconfigure_state_alert(
 
 async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
     hass.states.async_set("binary_sensor.back_door", "on")
-    entry = await setup_alerts(
-        state_alert("Back Door Open", "binary_sensor.back_door")
-    )
+    entry = await setup_alerts(state_alert("Back Door Open", "binary_sensor.back_door"))
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.FORM
     schema = result["data_schema"].schema
@@ -412,17 +415,15 @@ async def test_options_flow(hass: HomeAssistant, setup_alerts: SetupAlerts) -> N
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
-    assert hass.states.get("alert_redux.back_door_open").attributes[
-        "no_data_grace"
-    ] == 60
+    assert (
+        hass.states.get("alert_redux.back_door_open").attributes["no_data_grace"] == 60
+    )
     assert entry.options["snooze_reminder_window"] == {
         "hours": 0,
         "minutes": 2,
         "seconds": 0,
     }
-    assert hass.data["alert_redux"]["settings"].generator_grace == timedelta(
-        minutes=10
-    )
+    assert hass.data["alert_redux"]["settings"].generator_grace == timedelta(minutes=10)
 
 
 async def test_messages_saved_and_prefilled(
@@ -562,6 +563,20 @@ async def test_invalid_buttons(
     assert result["errors"] == {"base": error}
 
 
+async def test_duplicate_button_labels(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A button is pressed by its label, so each label is used once."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    button = {"label": "Close", "action": [{"action": "test.x"}]}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {**FORM, "supersession": {}, "notifications": {"buttons": [button, button]}},
+    )
+    assert result["errors"] == {"base": "button_label_duplicate"}
+
+
 async def _start_group(
     hass: HomeAssistant, entry: MockConfigEntry, subentry_id: str | None = None
 ) -> dict[str, Any]:
@@ -611,7 +626,9 @@ async def test_group_quiet_hours_settings(
         context={"source": SOURCE_RECONFIGURE, "subentry_id": subentry.subentry_id},
     )
     schema = result["data_schema"].schema
-    defaults = {str(key): key.default() for key in schema if key.default is not vol.UNDEFINED}
+    defaults = {
+        str(key): key.default() for key in schema if key.default is not vol.UNDEFINED
+    }
     assert defaults["quiet_threshold"] == "critical"
     assert defaults["quiet_behaviour"] == "soften"
     assert _suggested(schema)["quiet_entity"] == "input_boolean.bedroom"
@@ -997,6 +1014,7 @@ EVENT_FORM = {
     "supersession": {},
     "notifications": {},
     "voice": {},
+    "placement": {},
 }
 
 
@@ -1123,6 +1141,7 @@ CONDITION_FORM = {
     "supersession": {},
     "notifications": {},
     "voice": {},
+    "placement": {},
 }
 
 
@@ -1266,6 +1285,7 @@ async def test_create_alert_state_alert(
         "supersession": {},
         "notifications": {},
         "voice": {},
+        "placement": {},
     }
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"], {**form, "alert_states": []}
@@ -1524,6 +1544,7 @@ GENERATOR_FORM = {
     "notifications": {},
     "supersession": {},
     "voice": {},
+    "placement": {},
 }
 
 
@@ -1572,6 +1593,8 @@ async def test_create_generator(hass: HomeAssistant, setup_alerts: SetupAlerts) 
         "target_state": "unlocked",
         "name_template": "{{ target_name }} is unlocked",
         "targets": {"domains": ["lock"], "pattern": "lock.*_door"},
+        # The default: each alert goes in its target's area (spec §11.6).
+        "placement": {"area_from_target": True},
     }
     assert hass.states.get("alert_redux.front_door_unlocked").state == "active"
 
@@ -1650,6 +1673,7 @@ async def test_threshold_generator_value(
         "targets": {"device_classes": ["battery"]},
         "notifications": {},
         "voice": {},
+        "placement": {},
         "supersession": {},
     }
     result = await _start_generator(hass, entry, "threshold")

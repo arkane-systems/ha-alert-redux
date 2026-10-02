@@ -5,8 +5,10 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import Context, HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from pytest_homeassistant_custom_component.common import (
     MockUser,
     async_mock_service,
@@ -280,3 +282,55 @@ async def test_tap_on_unacknowledgeable_ignored(
     await _call(hass, "fire")
     await _tap(hass, f"ALERT_REDUX_{UID}_ACK", hass_admin_user)
     assert hass.states.get(DOOR).state == "active"
+
+
+async def test_press_button_by_label(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, hass_admin_user: MockUser
+) -> None:
+    """The main card presses a button by its label: only its action runs, as the
+    caller, whatever state the alert is in (spec §13.1, §16)."""
+    closes = async_mock_service(hass, "test", "close_door")
+    others = async_mock_service(hass, "test", "other")
+    await setup_alerts(
+        _garage(
+            buttons=[
+                CLOSE,
+                {
+                    "label": "Lock up",
+                    "action": [{"action": "test.other"}],
+                    "require_unlock": True,
+                },
+            ]
+        )
+    )
+    state = hass.states.get(DOOR)
+    assert state.state == "idle"
+    assert state.attributes["buttons"] == ["Close door", "Lock up"]
+    assert state.attributes["buttons_require_unlock"] == ["Lock up"]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "press_button",
+        {"entity_id": DOOR, "label": "Close door"},
+        blocking=True,
+        context=Context(user_id=hass_admin_user.id),
+    )
+    assert len(closes) == 1
+    assert others == []
+    assert closes[0].context.user_id == hass_admin_user.id
+
+
+async def test_press_unknown_button(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A label the alert doesn't have is an error, and runs nothing."""
+    closes = async_mock_service(hass, "test", "close_door")
+    await setup_alerts(_garage(buttons=[CLOSE]))
+    with pytest.raises(ServiceValidationError, match="Close the door"):
+        await hass.services.async_call(
+            DOMAIN,
+            "press_button",
+            {"entity_id": DOOR, "label": "Close the door"},
+            blocking=True,
+        )
+    assert closes == []

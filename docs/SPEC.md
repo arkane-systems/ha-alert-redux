@@ -67,7 +67,7 @@ changes. It can't be fired or dismissed manually [Decided, R3].
 
 | Kind | Configuration |
 |---|---|
-| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. [Deferred, phase 13, N38] A target state typed as its displayed name, e.g. "open" for a door binary sensor whose state is `on`, never matches. Recognising displayed names and storing the real state is to be considered in phase 13. |
+| **State** | One entity plus a target state, e.g. `binary_sensor.leak` is `on`. The simple case, equivalent to the built-in `alert`. [Decided, phase 2] A target state of `unavailable` or `unknown` counts as a match, not as missing data, so "lock unavailable for 10 minutes" is a state alert with a `delay_on`. Only a missing entity is no data for such an alert. [Decided, phase 13, N38] A target state is the entity's real state, e.g. `on` for a door binary sensor: typing its displayed name, "open", never matches. Recognising displayed names was considered and dropped: translations, device classes, and entities' own state names make it a lot of added complexity for marginal gain. It may be revisited if Home Assistant's state selector becomes usable for this. |
 | **On/off** | Separate *on* and *off* criteria, each a condition and/or trigger. Turns on when the on criterion becomes true, and off when the off criterion becomes true (edge-triggered, as in Alert2). [Decided, phase 5] Each side is a template, triggers, or both. A template-only side counts on its false-to-true change; a side with triggers counts when one fires while its template (if any) is true. The off side is edge-triggered too: an off criterion already true when the alert fires has to go false and true again. An unknown previous value counts as false, so an on criterion already true when a new alert is first evaluated fires it. The edge state is persisted, so a restart or a data dropout doesn't create a false edge. Only the side that can change the state counts for missing data (the on side while idle, the off side while firing). |
 | **Threshold** | A numeric value (from an entity, attribute, or template) with a minimum and/or maximum, and hysteresis. The limits can themselves come from entities or templates [P18]. [Decided, phase 5] The limits are templates, where a plain number works as-is. It fires when the value is strictly above the maximum or below the minimum, and a firing ends once the value is back inside by the hysteresis (an absolute amount, default 0). A value, or a configured limit, that isn't a number means no data. |
 | **Template** | A template that evaluates to true or false. The fully general option. [Decided, phase 2] Only a clearly true or false result counts (`true`/`on`/`yes`/`1`, `false`/`off`/`no`/`0`, or a real boolean or number). An error, an undefined variable, or a result of `none`, `unknown`, `unavailable`, or anything else means no data (§4.4). A template binary sensor would read those as false, but for an alert that silently hides a broken template. |
@@ -378,7 +378,11 @@ notifications; see below).
   firing [Decided, R15].
 - [Decided, F7] Supersession affects notifications only. A superseded alert keeps
   its own state, in line with N1, and its attributes include `superseded_by`. It can
-  stop firing before the alert that supersedes it; that's fine.
+  stop firing before the alert that supersedes it; that's fine. [Decided; phase 13]
+  Notifications aren't all it affects: the card hides a superseded alert, so the
+  summary sensors' *unacknowledged* figures leave it out too (§11.2), or a signal
+  light would ask for an acknowledgement of something the user can't see. Its
+  state, and so the alert itself, are unchanged.
 - [Decided] While the superseding alert is firing, the superseded alert sends no on
   or reminder notifications. Its **done** notification follows §9.7: it's dropped
   only if both alerts stop firing together.
@@ -607,10 +611,35 @@ A group has:
 
   A group holding both kinds of destination should be split into two groups, and an
   alert can use both.
-- [Deferred, phase 13] Mobile members send higher-priority alerts with iOS
-  **interruption levels** matching their priority: `critical` for Emergency and
-  `time-sensitive` for Critical (proposed mapping), so they get through Focus and
-  silent modes.
+- [Decided; phase 13] Mobile members send higher-priority alerts with iOS
+  **interruption levels** matching their priority, so they get through Focus and
+  silent modes: `critical` for Emergency and `time-sensitive` for Critical, sent as
+  the mobile app's `push: {interruption-level: …}`. There's no setting for it; if
+  there's demand for time-sensitive lower-priority alerts, it can be added then.
+  - Only the **on** and **reminder** notifications carry a level, since the alert is
+    asking for attention. Done notifications and the summaries (throttling, quiet
+    hours) don't.
+  - Only **mobile-app members** get it (`notify.mobile_app_*`, or a member whose
+    mobile setting says to treat it as one; the same test as for replacing and
+    buttons), since other notify actions may reject an unknown key.
+  - **The member's own data wins**: if its `data` sets `push.interruption-level`,
+    that is kept, and its other `push` keys are merged with it. That pins a phone to
+    a level, whatever the priority.
+  - A **softened** quiet-hours delivery (§9.9) never gets it.
+  - The level travels with the notification (`Notification.interruption`), so a
+    retried or held notification keeps it; the notifier module doesn't know about
+    priorities, the owner chooses the level.
+  - Android ignores `push`, so nothing changes there.
+  - Critical notifications bypass Do Not Disturb and silent mode, and need Critical
+    Alerts allowed for the app in iOS settings. Time-sensitive notifications are, by
+    default, read aloud by Siri (on AirPods, say), which iOS settings can turn off.
+  - [Checked on an iPhone, phase 13] An Emergency (`critical`) alert came through
+    Do Not Disturb with sound, despite the silent switch. A Critical
+    (`time-sensitive`) one came through a Sleep Focus but **not** through Do Not
+    Disturb, which lets through only what you allow: so a Critical alert reaches a
+    phone in Do Not Disturb only if Home Assistant is allowed there. A message sent
+    straight to the app with the same level behaved the same, so this is how iOS
+    treats the level, not something Alert Redux does.
 - [Decided] Groups are **not** exposed for use outside Alert Redux. General-purpose
   notification belongs in the possible future notifier integration (§9.1), not
   halfway here.
@@ -855,8 +884,8 @@ For each loud group, when its quiet-hours entity turns off:
   into this summary rather than sent separately (§9.7). For an alert whose on
   notification went out before quiet hours began, the summary is where you learn
   when it ended.
-- [Deferred, R7] The summary may later be delivered through the acknowledgement
-  queue (§10) instead.
+- [Decided] The summary stays an ordinary notification. (The acknowledgement queue
+  it might once have used was replaced by latching alerts, §10.)
 
 **As built** [Decided, phase 10]
 
@@ -987,13 +1016,40 @@ keyboards could be added later. Other members leave the buttons out.
   instead, so the two are told apart.
 - [Decided; phase 13] Custom buttons also show **on the main card** (§13.1).
 
-## 10. Acknowledgement queue
+## 10. Latching alerts
 
-[Deferred, R7] A late phase adds a separate "needs acknowledgement" system. When an
-alert stops firing without being acknowledged, it's handed off to this queue. Several
-unacknowledged firings produce several separate items to acknowledge. The quiet-hours
-summary (§9.9) may use the same mechanism. The details are to be designed when it's
-built.
+[Decided; planned for phase 15] Some alerts matter even if they stop before anyone
+sees them: the freezer that was warm for twelve minutes at 3 a.m., or a leak sensor
+that tripped three times overnight and is dry now. Reminders end when a firing
+ends, so today nothing says "you haven't seen this". A **latching** alert keeps
+asking until someone acknowledges it, however its firing ended.
+
+This replaces the separate "needs acknowledgement" queue first proposed in R7
+(spec notes). Walking through real uses showed a queue would be a subsystem of its
+own (items with identity, storage, a card, notifications, sensors) for what a
+setting on the alert does with the model that already exists. Nothing is lost for
+the other stories: done notifications, the Activity card, and the quiet-hours
+summary (§9.9, which stays an ordinary notification) already cover them.
+
+- **A per-alert setting**, off by default and meant for alerts that matter (a
+  critical alert, a transient fault): *keep until acknowledged*. Alerts without it
+  behave as they do now.
+- **What it does**: when a latching alert's firing ends *without having been
+  acknowledged*, the alert doesn't return to `idle`. It stays visible on the main
+  card as needing acknowledgement, and acknowledging it (the card's button, the
+  action, voice, a notification button) clears it. A firing that was acknowledged
+  before it ended ends as now.
+- **One item per alert, not one per firing.** The queue would have made a separate
+  item of each unacknowledged firing. A latching alert that fires again before
+  it's acknowledged is the same item, and the card shows how many times it has
+  fired (`fire_count`) whenever that is more than one and the card isn't already
+  showing it.
+- **To be designed in phase 15**, because it changes the alert's lifecycle (§7):
+  the state or flag that marks it; whether and how reminders continue after the
+  firing ends; the done notification; how it counts in the summary sensors (§11.2)
+  and for supersession (§8); what disabling, snoozing, and restoring after a
+  restart do to it; event alerts and manual alerts (§4.2, §4.3); the voice
+  commands and proxies (§14); and how it is exported and imported (§16).
 
 ## 11. Integration surface: attributes, sensors, events
 
@@ -1038,6 +1094,8 @@ built.
   [Decided, phase 7] Also `pre_acked_by` and `pre_snoozed_until` (§8.3), and
   `broken_references` (§12.4), a list of entity IDs.
   [Decided, phase 9] `buttons` lists the labels of the alert's custom buttons.
+  [Decided, phase 13] `buttons_require_unlock` lists the labels of those marked
+  **Require unlock**, which the main card asks to confirm (§13.1).
   [Decided, phase 10] `throttle` is the effective throttle, `[count, minutes]`,
   or null; `throttled_since` is when throttling started, or null (§9.8).
 - **Generator provenance:** `generated_by` (§12.3). [Decided, phase 11] The
@@ -1071,6 +1129,20 @@ recorder with `_unrecorded_attributes`.
   also carry a count per priority. The count sensors have a state class
   (`measurement`), which gives them statistics and keeps them out of the logbook.
   The sensors have no device, and don't get the alerts label (§11.5).
+- [Decided; phase 13] **Superseded alerts aren't unacknowledged.** A firing alert
+  that a firing alert supersedes (§8.1) is hidden on the card and silent, so it
+  is left out of the unacknowledged figures: `highest_unacked_priority`, and the
+  `active` count, its `entity_ids`, and its per-priority counts. Acknowledging
+  the visible alert therefore quiets the signal. The factual figures still count
+  it: `firing`, `highest_priority`, and `acknowledged` (when it is). So `active`
+  plus `acknowledged` is no longer `firing`; the difference is the **superseded
+  alerts that are `active`**.
+- [Decided; phase 13] `sensor.alert_redux_superseded` counts the firing alerts
+  that are currently superseded, `active` or `ack`, and lists them in
+  `entity_ids`, so what is left out of `active` can be seen. An alert that
+  isn't firing isn't counted, whatever its `superseded_by` says. When the
+  superseding alert stops firing, its alerts count as unacknowledged again, as
+  they would on their own (§12.4).
 - [Decided, phase 8] The **no data** count counts every alert missing data,
   whatever its state: `no_data` alerts, and firing alerts in their grace period
   (§4.4), which count as firing too. Something's input being broken shows at
@@ -1284,6 +1356,29 @@ card filters (§13.1) and anything else that selects entities by area or label.
 - **Voice proxies** (§14.2) copy their alert's area and labels, and follow
   changes to them however they're made, except for the alerts label, which
   proxies don't get (§11.5).
+- [Decided, as built] **The form.** A collapsed **Area and labels** section
+  (`placement`) on every alert and generator form: an area and labels. Editing a
+  fixed alert pre-fills it from the registry and writes it back on saving (a label
+  left out is removed, the alerts label too); the subentry keeps nothing, so
+  there's nothing stale. A new alert's values are stored in the subentry as
+  `placement`, kept apart from the alert's configuration (`AlertDefinition.placement`,
+  not `data`), and applied once, when the entity is first added; a `placed` flag in
+  the stored record stops them being applied again.
+- [Decided, as built] **Generators.** The section also has *Use the target's area*
+  (on for a new generator; a generator made before this has none of it, so its
+  alerts' areas are left alone). The stored `placement` is
+  `{area_from_target | area_id, labels}`. Each generated alert is given the
+  target's area (the entity's, else its device's) or the fixed area, and the labels,
+  when it's added. A change then **follows**: saving the generator, or the target
+  moving to another area, adds the labels the generator now names, removes those it
+  no longer names, and sets the new area, leaving everything else on the alert alone
+  (labels added by hand, the alerts label). The placement an alert was built with is
+  kept in its stored record, so setting up again after a restart changes nothing.
+- [Decided, as built] **Export and import** (§16). An alert's placement was applied
+  once and now lives in the registry, so it isn't exported, and doesn't stop an
+  import finding the alert unchanged. A generator's placement is part of its
+  definition and is exported; its area and label IDs are the registry's and aren't
+  checked, as for its targets.
 
 ## 12. Configuration
 
@@ -1309,8 +1404,12 @@ card filters (§13.1) and anything else that selects entities by area or label.
   UI (and, later, from the admin card, §13.2).
 - Each **generator** is also a subentry (§12.3).
 - Each **notifier group** is also a subentry (§9.3).
-- [Deferred, phase 13] Review the layout and grouping of the configuration forms
-  for each kind of alert.
+- [Decided, phase 13] The layout and grouping of the alert and generator forms were
+  reviewed, and found sound. The one change: the collapsed **Area and labels**
+  section (§11.6) sits right after the name, priority, and icon, where you think
+  about where an alert is. The other three collapsed sections follow the kind's
+  fields, in alphabetical order: **Notifications and messages**, **Supersession**,
+  **Voice assistants**.
 - The forms use HA's own selectors: entity, template, trigger, duration, and so on.
   The form fields shown depend on the kind of alert.
 
@@ -1516,10 +1615,15 @@ To make sure it gets fixed:
     pressed it, through a new `alert_redux.press_button` action (§16), keeping
     to the rule that anything the card does is also an action (§14).
   - The card doesn't have the phones' limit of three buttons.
-  - Settled when it's built: the layout; whether a button can be limited to the
-    card or to notifications; and what a **Require unlock** button (§9.11), which
-    only means something on iOS, does on a dashboard anyone can reach: ask for
-    confirmation, or not appear on the card at all.
+  - [Decided, as built] The buttons sit in the alert's controls row, before Dismiss,
+    Snooze, and Acknowledge, and wrap on a narrow card. Labels are unique within
+    an alert, which the forms and import enforce (`button_label_duplicate`), because
+    the label is how a button is pressed. A button can't be limited to the card or
+    to notifications: one definition, both places.
+  - [Decided, as built] A **Require unlock** button (§9.11), which only means
+    something on iOS, asks for confirmation on the card ("Run 'Lock up'?
+    Confirm / Cancel", in place), since a dashboard has no unlocked phone to rely
+    on. The alert's `buttons_require_unlock` attribute tells the card which.
 - **Filters** [Decided, R22; phase 13]. There are two sorts, set in different
   places:
   - **Scope, set once in the card's configuration** (and its visual editor):
@@ -1529,13 +1633,23 @@ To make sure it gets fixed:
     *Network*. As for generator targets (§12.3), an alert must match each of
     the two that's set, and any one value within each. Alerts outside the scope
     are left out of the whole card, including the no-data section and the
-    disabled count. How scope and supersession interact (a superseded alert in
-    scope under a root that isn't, or the other way round) is settled when it's
-    built.
+    disabled count. [Decided, as built] Scope applies **first**, then
+    supersession grouping: an in-scope alert whose superseder is out of scope
+    shows as a top-level alert, and an in-scope superseder just has nothing
+    folded under it, so the card never hides something in scope behind
+    something that isn't. The options are `areas` and `labels`, and the area
+    is the entity registry's own (alerts have no device).
   - **View, changed on the card itself**: hide acknowledged alerts, and show
     only some priorities. These are for changing while looking at the card, so
     they're controls on the card; the card's configuration only sets their
-    starting values.
+    starting values. [Decided, as built] The options are `hide_acknowledged` and
+    `priorities`. The controls are a **Hide acknowledged** button and a button per
+    priority present, in a row under the title (not shown when they'd have
+    nothing to do); the state lives in the card, so a reload returns to the
+    configured start. They are judged by the alert at the root of a supersession
+    group, which takes its superseded alerts with it, as they do for the summary
+    sensors (§11.2). The card says "N alerts hidden by the filters" so nothing
+    disappears silently; the no-data section and disabled count follow scope only.
 - Styling follows [weather_alerts_card](https://github.com/seevee/weather_alerts_card)
   [Decided, N31].
 - **Priority colours** [Decided]. Used for the sub-cards, the admin card, and the
@@ -1588,10 +1702,32 @@ To make sure it gets fixed:
   read-only list. Suspend offers 1 hour, 4 hours, 8 hours, 1 day, 1 week, or
   **Until…** a date and time. It ships in the same bundle as the main card, so
   there's no second resource.
-- Later phase: create and edit alerts and generators from the card, making it a
-  friendlier front end to the subentry flows.
+- [Decided, phase 13] **Create, edit, and delete from the card** (admins only),
+  as a front end to the same subentry flows the integration page uses, so there's
+  one validation path. "Add alert" and "Add generator" in the card's toolbar, and
+  Edit and Delete buttons on each row (a generated alert edits and deletes its
+  generator, and the confirmation says so). The card drives the flow over Home
+  Assistant's REST API (`config/config_entries/subentries/flow`) and shows each
+  step in a dialog: menus as buttons, forms with Home Assistant's own form
+  element, labelled from the integration's translations, with the flow's errors
+  and its description placeholders (the "referrers" text) as the integration
+  page shows them. Home Assistant's own flow dialog can't be opened by a custom
+  card, which is why the card has a renderer. If the form element can't be
+  loaded in the browser, the dialog says so and links to the integration's
+  settings page. Deleting asks first, naming the alerts that supersede the one
+  deleted (they keep working and get a Repairs issue, §12.4), and calls
+  `config_entries/subentries/delete`. Notifier groups are still edited in Home
+  Assistant's own pages.
 - [Decided, F27; late phase] Export/import of alert definitions, to make up for
   losing YAML's version control and text editing. Also available as actions (§16).
+  [Decided, as built] **Export** (a button for everyone; the actions are open to
+  all) shows every definition as **YAML**, to copy or download as
+  `alert-redux-<date>.yaml`; **Import** (admins only) takes pasted text or a chosen
+  file, with a checkbox for overwrite, a **Check** button (a dry run that says what
+  would be created, replaced, or left alone), and **Import**. A refusal shows the
+  action's error, which lists every problem. The card's text format is YAML, which
+  is how Home Assistant shows the actions' data; import also accepts JSON, which
+  is YAML. (The card bundles js-yaml for this.)
 - [Decided, phase 11] Generated alerts are marked "generated" beside their
   kind, with the generator's name as a tooltip; they're edited through their
   generator (§12.3).
@@ -1605,10 +1741,23 @@ To make sure it gets fixed:
   many alerts a page shows, with controls to move between pages; unset, it
   shows them all, as now. Pages keep the grouping by priority. The main card
   isn't paged: it shows only firing alerts, and hiding one on another page
-  would defeat it.
-- [Deferred, phase 13] On request (a click, not shown all the time), show a
+  would defeat it. [Decided, as built] The option is `page_size`; the alerts
+  are cut into pages in card order (priority, then name), a priority's heading
+  counts its alerts on every page, and the card shows "Page 2 of 5" with
+  previous and next buttons under the list when there's more than one page.
+  [Decided, as built] The list keeps the height of the tallest page it has shown
+  at the current page size and number of alerts, so a shorter last page doesn't
+  shrink the card and make the dashboard rearrange its other cards.
+- [Decided, as built; phase 13] On request (a click, not shown all the time), show a
   **copyable text summary** of an alert's settings. That's useful when setting up a
-  matching alert.
+  matching alert. A Summary button on each row (for everyone, like export) calls
+  the export action for that alert (a generated alert shows its generator) and
+  turns the definition it returns into text in the card (`describe.ts`): kind and
+  priority, what makes it fire, delays and messages, notifications (groups,
+  reminders, throttle), buttons, supersession, voice proxies, and for a generator
+  its targets. The dialog can switch to the definition itself as YAML, and both
+  copy with one click. The text is made in the card, from the export, so there's one
+  source of truth for what a definition holds.
 
 ## 14. Voice control
 
@@ -1927,9 +2076,9 @@ area, label, …):
 | `alert_redux.disable` / `alert_redux.enable` | Disable or enable. Admin only (phase 6). |
 | `alert_redux.suspend` | Suspend for a `duration`, or `until` a time. Admin only (phase 6). |
 | `alert_redux.fire` / `alert_redux.dismiss` | Fire or dismiss a manual alert; `fire` can take `data`. |
-| `alert_redux.press_button` | Run one of an alert's custom buttons (§9.11), as the main card does (§13.1). Takes the button's `label`. [Decided; phase 13] Labels are unique within an alert, so the label is enough. |
+| `alert_redux.press_button` | Run one of an alert's custom buttons (§9.11), as the main card does (§13.1). Takes the button's `label`. [Decided; phase 13] Labels are unique within an alert, so the label is enough. A label the alert doesn't have is the error `no_such_button`. It isn't admin-only: it runs only that button's action, as the caller. |
 | `alert_redux.refresh_generator` | Re-evaluate a generator's targets now (debugging; §12.3). [Decided, phase 11] Takes the generators' sensors as `entity_id`. |
-| `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off). |
+| `alert_redux.export` / `alert_redux.import` | Export or import alert and generator definitions; `import` takes `overwrite` (default off) and `dry_run` (default off). Not entity actions: `export` takes an optional `entity_id` list (alerts, or generators' sensors; default all). |
 
 **Managing alert definitions by action** [Decided, Q10]. There are **no** separate
 create or edit actions. Instead:
@@ -1950,6 +2099,35 @@ create or edit actions. Instead:
   - [Decided] "Existing" is decided by each definition's **stable ID**, which export
     includes. A new definition whose entity ID would clash with a different existing
     alert is also a conflict.
+- [Decided; phase 13] **The file.** `{format: alert_redux, version: 1, alerts: [...],
+  generators: [...]}`. Each definition is `id` (the subentry ID), `name` (the
+  title), and the subentry's stored data, flattened as stored (no form sections;
+  settings that use the default are absent), with `kind` as text. Instance-specific
+  references are **names**: `notifier_groups` lists the groups' names, and a
+  generator relationship's `generator` is the other generator's name. Import maps
+  them back, ignoring case, and an unknown name is a problem. Groups, global
+  options, runtime state, and the registry's area and labels are not exported.
+  Alert references stay entity IDs; dangling ones are allowed, as in the forms
+  (§12.4). Export/import of notifier groups, as a whole, to rebuild an instance,
+  is a possible later feature.
+- [Decided; phase 13] **Matching.** Import creates a new definition with the `id`
+  it was exported with, so importing a file again, on this or another instance,
+  finds the same definitions. A definition without an `id` (hand-written, or from a
+  converter) matches the existing one of its type with the same name, ignoring
+  case, else is new. A new definition (or a rename) with another's name is a
+  conflict (`name_exists`), as is an `id` belonging to a subentry of another type.
+- [Decided; phase 13] A definition identical to the existing one is `unchanged`,
+  not a conflict, so repeating an import is harmless. A different one needs
+  `overwrite`. An existing definition's **kind can't change** by import (the
+  entities are made per kind, and the forms can't change it either).
+- [Decided; phase 13] Import checks with the forms' own checks
+  (`validation.py`), run over the definitions as the import would leave them, so
+  supersession cycles across the file are caught. Leftovers a form would fill in
+  are filled in: priority `warning`, acknowledgeable, and the kind's other
+  defaults; durations may be seconds or `HH:MM:SS`.
+- [Decided; phase 13] `dry_run` checks and reports without changing anything. The
+  response lists `created`, `updated`, and `unchanged` definitions; a refusal is
+  one `import_refused` error listing every problem.
 - [Decided] Import is an **admin-only** action, since it changes configuration.
   Export is available to everyone, like reading any other entity data.
 - There's no `alert_redux.delete` action for now. It can be added later if a use
@@ -2029,6 +2207,8 @@ Decisions with their reasons, in the order they were made.
 | Snooze-end reminder rule: remind now unless a scheduled reminder is under 5 min away | The alert speaks up when the snooze ends, without a double reminder; reminders show the real firing duration [§6.2, §8.3]. |
 | `subject_entity_name` (subject entity) in message templates | Generated alerts can share one message template without deriving names from the alert name [§9.5]. |
 | Export/import actions instead of create/edit actions; import won't overwrite without a flag | One validation path; protects existing definitions from accidental replacement [Q10]. |
+| Export files name notifier groups and generators, and keep subentry IDs | A file moves between instances, and re-imports find the same definitions [phase 13]. |
+| Import checks with the forms' own checks, over the whole file, all or nothing | One validation path; a cycle between two imported alerts is caught [phase 13]. |
 | All three notifier kinds supported | The entity model can't carry `data`, and mobile features still need the legacy actions [S1–S4]. |
 | Alert Redux's own notifier groups, flagged loud or quiet | Integrations can't say whether they're noisy; only you know [N34, N35]. |
 | Notifier layer as a self-contained module, not a separate integration (yet) | Avoids a two-step install and two-repo churn while the design settles; extract it later [N36, R24]. |
@@ -2043,6 +2223,7 @@ Decisions with their reasons, in the order they were made.
 | Separate events per change, with a common prefix | Easy to filter; list-based event triggers cover listening for several [§11.3]. |
 | Paired events when one change implies another | Snooze and ack don't always move together, so firing both gives the most information [§11.3]. |
 | Per-priority counts as attributes, not sensors | Avoids multiplying entities [§11.2]. |
+| A superseded alert is left out of the summary's unacknowledged figures, and counted by a `superseded` sensor | The card hides it and it sends nothing, so a signal light shouldn't ask for its acknowledgement; the firing figures stay factual, and nothing is hidden without a count [§11.2]. |
 | Generators are entities, with a refresh action | Somewhere to show what they generated; refreshing helps debugging [§12.3]. |
 | Supersession can be generated per target | Matches the main pattern (each door's *Left Open* over its *Open*) [§12.3]. |
 | Dangling references fail towards more noise; flagged as Repairs issues | Losing a partner must never silence a working alert; Repairs is HA's standard place for configuration problems [§12.4]. |
@@ -2136,6 +2317,7 @@ Decisions with their reasons, in the order they were made.
 | 1.0.0 is 0.11.1 plus self-ending manual alerts and an entity refactor, after a shorter soak of its own | The 0.11.1 soak found only trivia, and a 1.0.0 identical to it would add nothing; the refactor keeps manual-only code out of the base class every kind shares [§20]. |
 | An alert's area and labels live in the entity registry; the form edits them there | One place for the values, so edits on the entity's settings page aren't overwritten, and proxies can follow the alert whichever way it was edited [§11.6]. |
 | Generated alerts default to their target's area (provisionally) | The alerts a generator makes are usually about entities in different areas, e.g. each door's *Left Open* alert [§11.6]. |
+| A generator's area and labels follow changes, as a diff | Editing a generator should reach the alerts it has made, without undoing what a user set by hand or the alerts label [§11.6]. |
 | Card filters are either scope, in the card's configuration (area, label), or view, on the card (hide acknowledged, priorities) | Scope is set once per placement, e.g. a card per room page; the view is what you change while looking at the card [§13.1]. |
 | The admin card can be paged; the main card isn't | The admin card lists every alert and gets long; the main card shows only firing alerts, which must never be hidden on another page [§13.2]. |
 | Custom buttons show on the main card too, from the same definitions | A *Close door* button is as useful on the dashboard as on the phone, and one definition can't drift apart from another [§13.1]. |
@@ -2153,6 +2335,12 @@ Decisions with their reasons, in the order they were made.
 | Proxy refusals keep raising their error, though Alexa can't say so | The dashboard and automations still need to hear it; Alexa says "OK" but shows the real state, and Home Assistant logs the refusal [§14.2]. |
 | A duration that ran out while HA was down ends just after the first state is written | HA's logbook leaves out an entity's first state after a restart, so an ending before it had no row [§11.4, §15.1]. |
 | Alert Redux ships an agent skill, checked against the code by a test | Agents can drive Alert Redux through MCP, but had to dig through the forms' schemas to do it; a test keeps the skill from drifting as the code changes [§20]. |
+| Latching alerts (§10) replace the acknowledgement queue (R7), in a late phase 15 | The real need is a firing that ended before anyone saw it; a per-alert setting answers it on the existing model, where a queue would be a subsystem. One item per alert, with the fire count shown, is simpler than one per firing [§10]. |
+| iOS interruption levels follow priority (Emergency critical, Critical time-sensitive), without a setting | Apple's levels match our top two priorities; a member's own `push` data is the escape hatch, and a setting waits for demand [§9.3]. |
+| Form layout unchanged, except Area and labels moves up beside the name, priority, and icon | A review found nothing else worth regrouping; the sections left at the bottom are alphabetical [§12.1]. |
+| The quiet-hours summary stays an ordinary notification | The queue it might have used is gone; the summary already tells you what you missed [§9.9]. |
+| Displayed state names in a state alert are dropped (N38) | Translations, device classes, and entities' own state names make recognising them a lot of complexity for marginal gain; a state alert's target stays the real state. Revisit if HA's state selector becomes usable for it [§4.1]. |
+| Phase 13 is 1.2.0, phase 14 1.2.1, phase 15 1.3.0 | Integration feature phases are minor releases; phase 14 ships tools, not integration features, so it takes a patch version [§20]. |
 
 ## 20. Phase plan
 
@@ -2167,7 +2355,7 @@ one starts, and each ends with a usable release.
   restart don't get restarts of their own. They're set up at the end of a run and
   checked after the next install restart, through the ledger in
   `docs/restart-checks.md`;
-- CI green, and a `0.N.0` release (manifest version bumped, card rebuilt), so HACS
+- CI green, and a release (manifest version bumped, card rebuilt; `0.N.0` before 1.0.0, then see below), so HACS
   can install it;
 - the spec updated if building the phase changed any decisions.
 
@@ -2502,35 +2690,58 @@ against older HA raised the minimum to 2026.6 (Q14), and found the `llm`
 platform arrived in 2026.8. Decisions from building it are recorded in §14.1,
 §14.2, §18, and §19.
 
-### Phase 13 — Late features (0.13.0 onwards; may be split)
+### Phase 13 — Late features (1.2.0)
 
-- The acknowledgement queue (§10).
 - Card filters: scope by area and label in the card's configuration, and
   hide-acknowledged and per-priority controls on the card (§13.1).
 - Paging for the admin card (§13.2).
 - Custom notification buttons on the main card, and the `alert_redux.press_button`
   action (§13.1, §16).
 - Creating and editing alerts from the admin card (§13.2).
-- The export and import actions and admin-card controls (§13.2, §16).
+- The export and import actions (§16; implemented) and their admin-card controls (§13.2).
 - The admin card shows a copyable summary of an alert's settings on request
   (§13.2).
 - iOS interruption levels for Emergency and Critical alerts (§9.3).
-- Review the layout and grouping of the configuration forms for each kind of
-  alert (§12.1).
-- Consider recognising displayed state names in a state alert's target state,
-  e.g. "open" for a door binary sensor's `on`, and storing the real state
-  (§4.1; assessment in `docs/spec-notes.md`, N38).
 - Setting an alert's area and labels in its configuration form, when it's created
   or edited, with the registry as where they live; and for generators, labels and
   a fixed area or the target's area (§11.6).
 
-### Phase 14 — Converter utilities
+[Phase 13 as built] Built feature by feature, and released together as 1.2.0. The
+export and import actions are `portable.py`, over the checks the forms share in
+`validation.py`; the admin card gained paging, summary, export and import (YAML),
+and add, edit, and delete through the subentry flows (`flow-client.ts`,
+`flow-dialog.ts`); the main card gained custom buttons and filters; area and labels
+are `placement.py`. Off the plan: the summary sensors leave superseded alerts out of
+the unacknowledged figures and gain `sensor.alert_redux_superseded` (§11.2). Dropped
+or moved: the acknowledgement queue became latching alerts, phase 15 (§10), and
+displayed state names in state alerts (N38) were dropped (§4.1). Decisions from
+building it are recorded in §4.1, §8.1, §9.3, §9.11, §11.2, §11.6, §12.1, §13.1, §13.2,
+and §16.
+
+### Phase 14 — Converter utilities (1.2.1)
 
 - Standalone tools in this repository, not shipped in the integration, that
   convert into an import file (§17):
   - an `alert:` YAML section from the built-in `alert` integration;
   - Alert2 alerts.
 
+### Phase 15 — Latching alerts (1.3.0)
+
+[Decided; provisional, until the rest of the list is done] Last, because it changes
+the alert lifecycle (§7).
+
+- Latching alerts (§10): the *keep until acknowledged* setting, the state or flag
+  for an alert whose firing ended unacknowledged, its place on the main card (with
+  the fire count shown when it's more than one), acknowledging it by every route
+  that acknowledges an alert, and what it does to reminders, notifications, the
+  summary sensors, and supersession.
+
+**Versions from 1.0.0** [Decided]: a phase that adds integration features is a minor
+release, so phase 12 is 1.1.0, phase 13 1.2.0, and phase 15 1.3.0. Phase 14 ships
+tools that aren't part of the integration, so it doesn't bump the minor version: the
+release cut after it is 1.2.1. (Phases 13 and 14 are done in order, so 1.2.1 follows
+1.2.0; phase 15 follows as 1.3.0.)
+
 **1.0.0** comes after phase 11, once the core feature set is proven in daily use,
-with phases 12–14 as 1.x releases [Decided, provisionally]. It adds self-ending
+with phases 12–15 as 1.x releases [Decided, provisionally]. It adds self-ending
 manual alerts and the entity refactor to 0.11.1 (above).

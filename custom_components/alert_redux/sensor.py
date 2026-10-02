@@ -94,6 +94,7 @@ SENSORS: tuple[SummarySensorDescription, ...] = (
     _count_sensor("firing", lambda s: s.firing, lambda s: s.firing_by_priority),
     _count_sensor("active", lambda s: s.active, lambda s: s.active_by_priority),
     _count_sensor("acknowledged", lambda s: s.acknowledged),
+    _count_sensor("superseded", lambda s: s.superseded),
     _count_sensor("no_data", lambda s: s.no_data),
     _count_sensor(
         "disabled", lambda s: s.disabled, entity_category=EntityCategory.DIAGNOSTIC

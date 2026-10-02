@@ -13,6 +13,28 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigSubentry
 
+from .const import CONF_AREA_ID, CONF_LABELS, CONF_PLACEMENT
+
+
+@dataclass(frozen=True, slots=True)
+class Placement:
+    """Where an alert is in the entity registry: its area, and the labels it was
+    given by its configuration (spec §11.6). An area of None leaves it alone."""
+
+    area_id: str | None = None
+    labels: frozenset[str] = frozenset()
+
+    @classmethod
+    def from_stored(cls, stored: Mapping[str, Any] | None) -> Placement | None:
+        """Return a fixed alert's placement from its subentry, or None."""
+        if not stored:
+            return None
+        placement = cls(
+            area_id=stored.get(CONF_AREA_ID) or None,
+            labels=frozenset(stored.get(CONF_LABELS) or ()),
+        )
+        return placement if placement.area_id or placement.labels else None
+
 
 @dataclass(frozen=True, kw_only=True)
 class AlertDefinition:
@@ -28,6 +50,10 @@ class AlertDefinition:
     target: str | None = None
     # Extra template variables, available to every template the alert renders.
     variables: Mapping[str, Any] = field(default_factory=dict)
+    # Applied to the alert's registry entry once, when it is added; a change to a
+    # generated alert's is followed (spec §11.6). It is not part of the alert's
+    # configuration, so a change doesn't restart a condition's delays.
+    placement: Placement | None = None
 
     @property
     def target_key(self) -> str | None:
@@ -40,8 +66,12 @@ class AlertDefinition:
     @classmethod
     def from_subentry(cls, subentry: ConfigSubentry) -> AlertDefinition:
         """Return a fixed alert's definition."""
+        data = {k: v for k, v in subentry.data.items() if k != CONF_PLACEMENT}
         return cls(
-            unique_id=subentry.subentry_id, name=subentry.title, data=subentry.data
+            unique_id=subentry.subentry_id,
+            name=subentry.title,
+            data=data,
+            placement=Placement.from_stored(subentry.data.get(CONF_PLACEMENT)),
         )
 
 

@@ -295,6 +295,8 @@ decision: adopt it, adapt it, or exclude it deliberately.
   to that system. Several unacknowledged firings would then produce several separate
   items to acknowledge, which is the preferred behaviour. The details are to be worked
   out later.
+  **[Later: replaced by latching alerts, a per-alert setting (SPEC §10, phase 15),
+  one item per alert rather than per firing.]**
 - **R8 — P11 (escalation): excluded as a separate feature.** Supersession already
   covers it, as the *Back Door Open* / *Back Door Left Open* pair shows. It might also
   be worth thinking about in connection with generators.
@@ -475,6 +477,7 @@ notification.
 
 Points to raise once the capture phase is over. These are not objections yet.
 
+  **[Later: dropped. The complexity wasn't worth the gain; see SPEC §4.1 and the decision log.]**
 - **F1 (N8, N7):** `unavailable` is a reserved state in Home Assistant. The frontend,
   history, and templates treat it as "the entity itself isn't working", and
   `available = False` makes attributes disappear. That seems to clash with N1

@@ -68,6 +68,13 @@ class Priority(StrEnum):
         return len(Priority) - 1 - self.rank
 
 
+# The iOS interruption level that mobile notifications of the higher priorities
+# are sent with, so they get through Focus and silent modes (spec §9.3).
+INTERRUPTION_LEVELS: dict[Priority, str] = {
+    Priority.EMERGENCY: "critical",
+    Priority.CRITICAL: "time-sensitive",
+}
+
 DEFAULT_PRIORITY_ICONS: dict[Priority, str] = {
     Priority.EMERGENCY: "mdi:alarm-light",
     Priority.CRITICAL: "mdi:alert-octagon",
@@ -202,6 +209,7 @@ CONF_THROTTLE_MINUTES = "throttle_minutes"
 SECTION_NOTIFICATIONS = "notifications"
 SECTION_SUPERSESSION = "supersession"
 SECTION_VOICE = "voice"
+SECTION_PLACEMENT = "placement"
 
 # Voice proxies for Alexa and Google (spec §14.2): a switch, and a snooze button,
 # each opted into per alert.
@@ -213,6 +221,9 @@ CONF_PROXY_SNOOZE_BUTTON = "proxy_snooze_button"
 CONF_NAME_TEMPLATE = "name_template"
 CONF_TARGETS = "targets"
 CONF_LABELS = "labels"
+CONF_PLACEMENT = "placement"
+CONF_AREA_ID = "area_id"
+CONF_AREA_FROM_TARGET = "area_from_target"
 CONF_AREAS = "areas"
 CONF_DOMAINS = "domains"
 CONF_DEVICE_CLASSES = "device_classes"
@@ -337,9 +348,15 @@ SERVICE_DISABLE = "disable"
 SERVICE_ENABLE = "enable"
 SERVICE_SUSPEND = "suspend"
 SERVICE_REFRESH_GENERATOR = "refresh_generator"
+SERVICE_PRESS_BUTTON = "press_button"
+SERVICE_EXPORT = "export"
+SERVICE_IMPORT = "import"
 
 ATTR_DATA = "data"
 ATTR_UNTIL = "until"
+ATTR_DEFINITIONS = "definitions"
+ATTR_OVERWRITE = "overwrite"
+ATTR_DRY_RUN = "dry_run"
 
 # Events (spec §11.3).
 EVENT_FIRED = f"{DOMAIN}_fired"
@@ -445,6 +462,8 @@ ATTR_SUPERSEDED_BY = "superseded_by"
 ATTR_PRE_ACKED_BY = "pre_acked_by"
 ATTR_PRE_SNOOZED_UNTIL = "pre_snoozed_until"
 ATTR_BUTTONS = "buttons"
+ATTR_BUTTONS_REQUIRE_UNLOCK = "buttons_require_unlock"
+ATTR_LABEL = "label"
 ATTR_BROKEN_REFERENCES = "broken_references"
 ATTR_GENERATED_BY = "generated_by"
 # The generator sensor's attributes (spec §12.3).
