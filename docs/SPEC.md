@@ -2746,10 +2746,22 @@ approximated, and the notifier groups to create). Decided in building:
   a manual alert that ends by itself. Priorities low, medium, high are notice,
   warning, critical (Alert2's default is low). Alert2's template variables
   `on_time_str` and `on_secs` become `duration` and `duration_seconds`.
-- **Not converted**, and reported: Alert2 generators (ours choose entities by
-  criteria, §12.3), `skip_first`, titles, notifier `data` and `target`,
-  `ack_required`, `done_notifier: false`, `early_start`, and the other options with
-  no equivalent. `--strict` makes any of them an error.
+- **Naming** [Decided with the user]. An Alert2 alert is named by a plain
+  `friendly_name`, else by its `domain` and `name` together ("House Door open"):
+  `name` alone is cryptic and clashes across domains. Shared friendly names get
+  the domain in front.
+- **`skip_first`** [Decided with the user]. The built-in `alert`'s has no exact
+  equivalent. `--skip-first-as-delay` turns it into a `delay_on` of the first
+  `repeat` interval, which is what people moving to Alert2 usually do though the
+  behaviour differs; without the option it's a warning.
+- **Generators** [Decided with the user]. Not converted, but the report gives the
+  settings of an Alert Redux generator that match the body (kind, messages,
+  priority, delays, reminders, groups; `genElem` becomes `target`), with a
+  `targets` placeholder and Alert2's list or template quoted, as a head start.
+- **Not converted**, and reported: `skip_first` (without the option), titles,
+  notifier `data` and `target`, `ack_required` (see phase 15), `done_notifier:
+  false`, `early_start`, and the other options with no equivalent. `--strict` makes
+  any of them an error.
 - A test runs each fixture's output through the import action's `dry_run`.
 
 ### Phase 15 — Latching alerts (1.3.0)
@@ -2762,6 +2774,10 @@ the alert lifecycle (§7).
   the fire count shown when it's more than one), acknowledging it by every route
   that acknowledges an alert, and what it does to reminders, notifications, the
   summary sensors, and supersession.
+- [Decided; with phase 14] Go back to the Alert2 converter (`tools/convert_alert2.py`)
+  and convert `ack_required` (and `ack_reminders_only`) to the latching setting,
+  which is its equivalent, instead of dropping it with a warning; update
+  `tools/README.md` and the converter's tests with it.
 
 **Versions from 1.0.0** [Decided]: a phase that adds integration features is a minor
 release, so phase 12 is 1.1.0, phase 13 1.2.0, and phase 15 1.3.0. Phase 14 ships

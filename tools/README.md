@@ -20,6 +20,8 @@ Both take `-` for standard input, and these options:
 | `--format json` | Write JSON instead of YAML. |
 | `--strict` | Write nothing and exit 1 if anything wasn't converted exactly. |
 
+`convert_alert.py` also takes `--skip-first-as-delay` (below).
+
 A report goes to standard error: what was converted, what wasn't, and the notifier
 groups the file needs. Exit status is 2 if the input can't be read.
 
@@ -43,8 +45,29 @@ Input: the `alert:` section, with or without its `alert:` line, or a whole
 `configuration.yaml`. (An `!include` can't be followed: convert the included file.)
 Every alert becomes a state alert: `entity_id` and `state`, `repeat` as the
 reminder schedule, `can_acknowledge`, `message`, `done_message`, and `notifiers`.
-Not converted, with a warning: `skip_first`, `title` (notifications are titled with
-the alert's name), and `data` (set it on the group's members).
+Not converted, with a warning: `title` (notifications are titled with the alert's
+name), `data` (set it on the group's members), and `skip_first`. The built-in
+`skip_first` has no exact equivalent, but people moving to Alert2 usually use a delay
+before the alert fires. With `--skip-first-as-delay`, an alert with `skip_first`
+gets a `delay_on` of its first `repeat` interval. That isn't the same behaviour: the
+alert notifies as soon as its condition has held that long, rather than being seen
+at once and notified later, and a shorter blip is never seen at all. The report says
+which alerts it applied to.
+
+### Generators
+
+Alert2 generators make alerts from a list or template; Alert Redux generators
+choose entities by criteria (label, area, domain, device class, entity ID
+pattern), so they can't be converted. The report instead gives, under "Suggested
+settings", the settings of an Alert Redux generator that match the generator's
+body: its kind, messages, priority, delays, reminders, and notifier groups, with
+`genElem` rewritten to `target`. The `targets` are left for you to choose, and
+the report quotes Alert2's list or template to help. Create the generator from
+those settings in the integration's forms. Only condition kinds (state, threshold,
+template, on/off) can be generated; supersession in a generator isn't carried over.
+
+After converting, check the file with `alert_redux.import` and `dry_run: true`,
+then import it. Re-importing is harmless: alerts match by name.
 
 ## Alert2
 
@@ -65,13 +88,15 @@ YAML**, as the Alert Manager card shows it, or a list of alerts.
 | `notifier` | notifier groups |
 | `supersedes` | supersedes (by the converted alerts' entity IDs) |
 
-Alerts are named by `friendly_name`, else `name`, with underscores as spaces (with
-the domain in front where two would clash). A reference to an alert that isn't in
+Alerts are named by a plain `friendly_name`; otherwise by both `domain` and `name`,
+with underscores as spaces (`house` and `door_open` give "House Door open"), since a
+name alone is often cryptic and clashes across domains. A `friendly_name` shared by
+two alerts gets the domain in front. A reference to an alert that isn't in
 the input is kept as a dangling reference, which import allows.
 
-Not converted, with a warning or in the report: generators (recreate them as
-Alert Redux generators, which choose entities by criteria), `ack_required` and
-`ack_reminders_only`, `done_notifier: false`, and `early_start`, `manual_on`,
+Not converted, with a warning or in the report: generators, `ack_required` and
+`ack_reminders_only` (Alert Redux's equivalent, latching alerts, is a later feature,
+after which the converter will handle them), `done_notifier: false`, and `early_start`, `manual_on`,
 `manual_off`, `actions_on`, `title`, `target`, `data`, and a few other options with
 no equivalent.
 

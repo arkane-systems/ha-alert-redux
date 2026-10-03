@@ -57,8 +57,7 @@ Assistant works (an MCP server, the websocket API, or the UI).
   options: [configuring.md](configuring.md). Every form's fields, their types, the
   validation errors, and worked examples.
 - **Using** alerts (actions, states, attributes, events, supersession, snoozing,
-  notifications, voice control, exporting and importing definitions, and
-  converting from the built-in `alert` or Alert2):
+  notifications, voice control, exporting and importing definitions):
   [operating.md](operating.md).
 - **Building on top** (automations, scripts, dashboards and the cards, summary
   sensors, the logbook): [building-on.md](building-on.md).

@@ -23,6 +23,7 @@ from _convert_common import (  # noqa: E402
     is_template,
     main,
     reminder_schedule,
+    seconds_duration,
 )
 
 
@@ -40,10 +41,22 @@ def _section(data: Any, report: Report) -> dict[str, Any]:
     return data
 
 
+OPTIONS = {
+    "--skip-first-as-delay": {
+        "action": "store_true",
+        "help": "turn skip_first into a delay_on of the first repeat interval",
+    }
+}
+
+
 def convert(
-    data: Any, groups: GroupMap
+    data: Any, groups: GroupMap, skip_first_as_delay: bool = False
 ) -> tuple[list[dict[str, Any]], Report]:
-    """Return the import definitions for an `alert:` section, and the report."""
+    """Return the import definitions for an `alert:` section, and the report.
+
+    With skip_first_as_delay, an alert with skip_first gets a delay_on of its
+    first repeat interval, as people moving to Alert2 usually do.
+    """
     report = Report()
     alerts: list[dict[str, Any]] = []
     for object_id, config in _section(data, report).items():
@@ -73,11 +86,21 @@ def convert(
                 as_list(config["notifiers"]), report, label
             )
         if config.get("skip_first"):
-            report.warn(
-                label,
-                "skip_first has no equivalent; the first notification is sent at once"
-                " (use a delay_on, or put the alert in a supersession, instead)",
-            )
+            schedule = definition.get("reminder_schedule")
+            if skip_first_as_delay and schedule:
+                definition["delay_on"] = seconds_duration(schedule[0] * 60)
+                report.warn(
+                    label,
+                    f"skip_first became a delay_on of {schedule[0]} minutes: the "
+                    "alert fires, and notifies, once its condition has held that "
+                    "long, so a shorter blip is never seen at all",
+                )
+            else:
+                report.warn(
+                    label,
+                    "skip_first has no equivalent; the first notification is sent "
+                    "at once (--skip-first-as-delay gives a delay_on instead)",
+                )
         if config.get("title"):
             report.warn(
                 label,
@@ -100,4 +123,4 @@ def convert(
 
 
 if __name__ == "__main__":
-    sys.exit(main(None, __doc__.splitlines()[0], convert))
+    sys.exit(main(None, __doc__.splitlines()[0], convert, OPTIONS))

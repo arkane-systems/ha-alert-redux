@@ -73,6 +73,7 @@ class Report:
     skipped: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
     groups: set[str] = field(default_factory=set)
 
     def warn(self, alert: str, text: str) -> None:
@@ -83,6 +84,12 @@ class Report:
         """Record an alert that wasn't converted."""
         self.skipped.append(f"{alert}: {text}")
 
+    def suggest(self, alert: str, intro: str, settings: Mapping[str, Any]) -> None:
+        """Record settings the user can recreate something with by hand."""
+        body = yaml.safe_dump(dict(settings), sort_keys=False, allow_unicode=True)
+        indented = "".join(f"      {line}\n" for line in body.splitlines())
+        self.suggestions.append(f"{alert}: {intro}\n{indented.rstrip()}")
+
     def format(self) -> str:
         """Return the report as text."""
         lines = [f"Converted {len(self.converted)} alert(s)."]
@@ -90,6 +97,7 @@ class Report:
             ("Not converted", self.skipped),
             ("Warnings", self.warnings),
             ("Notes", self.notes),
+            ("Suggested settings", self.suggestions),
         ):
             if items:
                 lines.append(f"{title}:")
@@ -175,10 +183,15 @@ def envelope(alerts: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-Converter = Callable[[Any, GroupMap], "tuple[list[dict[str, Any]], Report]"]
+Converter = Callable[..., "tuple[list[dict[str, Any]], Report]"]
 
 
-def main(argv: list[str] | None, description: str, convert: Converter) -> int:
+def main(
+    argv: list[str] | None,
+    description: str,
+    convert: Converter,
+    options: Mapping[str, Mapping[str, Any]] | None = None,
+) -> int:
     """Run a converter as a command: read YAML, write an import file, report."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("input", help="YAML file to convert, or - for standard input")
@@ -191,7 +204,15 @@ def main(argv: list[str] | None, description: str, convert: Converter) -> int:
     parser.add_argument(
         "--strict", action="store_true", help="fail, writing nothing, on any warning"
     )
+    for flag, kwargs in (options or {}).items():
+        parser.add_argument(flag, **kwargs)
     args = parser.parse_args(argv)
+    extra = {
+        flag.lstrip("-").replace("-", "_"): getattr(
+            args, flag.lstrip("-").replace("-", "_")
+        )
+        for flag in (options or {})
+    }
 
     try:
         text = sys.stdin.read() if args.input == "-" else open(args.input).read()  # noqa: SIM115
@@ -202,7 +223,7 @@ def main(argv: list[str] | None, description: str, convert: Converter) -> int:
                 mapping = load_yaml(handle.read())
             if mapping is not None and not isinstance(mapping, dict):
                 raise ValueError("the group map must be a mapping")
-        alerts, report = convert(data, GroupMap(mapping))
+        alerts, report = convert(data, GroupMap(mapping), **extra)
     except (OSError, yaml.YAMLError, ValueError) as err:
         print(f"error: {err}", file=sys.stderr)
         return 2

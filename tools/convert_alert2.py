@@ -87,24 +87,32 @@ def _rewrite(text: Any) -> Any:
 
 
 def _humanise(name: str) -> str:
-    return (name.replace("_", " ")[:1].upper() + name.replace("_", " ")[1:]).strip()
+    text = name.replace("_", " ").strip()
+    return text[:1].upper() + text[1:]
+
+
+def _display_name(domain: Any, name: Any) -> str:
+    """Return an alert's name from its domain and name, which together are what
+    identify it in Alert2 (its entity ID is alert2.<domain>_<name>)."""
+    return f"{_humanise(str(domain))} {_humanise(str(name))}"
 
 
 def _names(alerts: list[dict[str, Any]], report: Report) -> dict[int, str]:
-    """Return a name for each alert (by position): its friendly name, else its
-    name; prefixed by its domain where two would be the same."""
+    """Return a name for each alert (by position): its friendly name where it has
+    a plain one, else its domain and name. Friendly names that clash are
+    prefixed with the domain."""
     names: dict[int, str] = {}
     for index, alert in enumerate(alerts):
         friendly = alert.get("friendly_name")
         if friendly and not is_template(friendly):
             names[index] = str(friendly)
-        else:
-            if friendly:
-                report.warn(
-                    f"{alert['domain']}_{alert['name']}",
-                    "friendly_name is a template; using the name",
-                )
-            names[index] = _humanise(str(alert["name"]))
+            continue
+        if friendly:
+            report.warn(
+                f"alert2.{alert['domain']}_{alert['name']}",
+                "friendly_name is a template; named from the domain and name",
+            )
+        names[index] = _display_name(alert["domain"], alert["name"])
     counts: dict[str, int] = {}
     for name in names.values():
         counts[name.lower()] = counts.get(name.lower(), 0) + 1
@@ -183,10 +191,71 @@ def _supersedes(
             )
             # Where it would be, had it been converted: by its name.
             new = "alert_redux." + slugify(
-                _humanise(str(item["name"]) if isinstance(item, dict) else old.split(".", 1)[1])
+                _display_name(item["domain"], item["name"])
+                if isinstance(item, dict)
+                else old.split(".", 1)[1]
             )
         result.append({"alert": new})
     return result
+
+
+GENERATED_KINDS = {"state", "threshold", "template", "on_off"}
+
+
+def _generator_text(value: Any) -> Any:
+    """Return generator-body text with Alert2's genElem as the target."""
+    if isinstance(value, str):
+        return re.sub(r"\bgenElem\b", "target", value)
+    if isinstance(value, list):
+        return [_generator_text(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _generator_text(item) for key, item in value.items()}
+    return value
+
+
+def _suggest_generator(
+    config: dict[str, Any], body: dict[str, Any], label: str, report: Report
+) -> None:
+    """Report a generator alert as not converted, with the settings of an Alert
+    Redux generator that would match its body (spec §12.3)."""
+    report.skip(
+        label,
+        "generator alerts aren't converted: Alert Redux's generators choose "
+        "targets by criteria (see the suggested settings below)",
+    )
+    settings = _generator_text(
+        {k: v for k, v in body.items() if k not in ("name", "entity_id", "supersedes")}
+    )
+    if settings["kind"] not in GENERATED_KINDS:
+        report.warn(
+            label,
+            f"a {settings['kind']} alert can't be generated in Alert Redux; "
+            "make fixed alerts instead",
+        )
+        return
+    if "supersedes" in body:
+        report.warn(label, "supersession in a generator isn't carried over")
+    name = config.get("generator_name") or config["name"]
+    generator = {
+        "name": body["name"] if not config.get("generator_name") else _humanise(str(name)),
+        **settings,
+        "targets": {"labels": ["<choose the entities this generator covers>"]},
+    }
+    elements = config.get("generator")
+    where = (
+        "Alert2 generated it for these values of genElem, which are now the "
+        f"target entity (`target`, `target_name`): {elements!r}"
+        if isinstance(elements, list)
+        else f"Alert2 generated it from the template {elements!r}, whose results are "
+        "now the targets Alert Redux chooses by criteria"
+    )
+    report.suggest(
+        label,
+        f"as a generator (kind {settings['kind']}). {where}. Choose targets by "
+        "label, area, domain, device class, or entity ID pattern; for a fixed list, "
+        "give those entities a label and use it:",
+        generator,
+    )
 
 
 def convert(
@@ -210,16 +279,11 @@ def convert(
     for index, alert in enumerate(config_alerts):
         label = f"alert2.{alert['domain']}_{alert['name']}"
         config = {**BUILT_IN_DEFAULTS, **defaults, **alert}
-        if "generator" in config or "generator_name" in config:
-            report.skip(
-                label,
-                "generator alerts aren't converted (Alert Redux's generators "
-                "choose entities by criteria; recreate it with a generator, spec §12.3)",
-            )
-            continue
-        if ids[label] in seen_ids:
-            report.warn(label, f"its entity ID {ids[label]} clashes with another's")
-        seen_ids.add(ids[label])
+        is_generator = "generator" in config or "generator_name" in config
+        if not is_generator:
+            if ids[label] in seen_ids:
+                report.warn(label, f"its entity ID {ids[label]} clashes with another's")
+            seen_ids.add(ids[label])
 
         definition: dict[str, Any] = {"name": names[index]}
         definition.update(_condition(config, label, report))
@@ -253,8 +317,8 @@ def convert(
         if config.get("ack_required") or config.get("ack_reminders_only"):
             report.warn(
                 label,
-                "ack_required / ack_reminders_only dropped: Alert Redux reminds "
-                "until acknowledged anyway; latching is a later feature (spec §10)",
+                "ack_required / ack_reminders_only dropped: Alert Redux's "
+                "equivalent, latching alerts (spec §10), isn't built yet",
             )
         if relationships := _supersedes(config, label, report, ids):
             definition["supersedes"] = relationships
@@ -263,6 +327,9 @@ def convert(
                 report.warn(label, f"{key} dropped: {advice}")
         for key in config.keys() - KNOWN:
             report.warn(label, f"unknown option {key!r} ignored")
+        if is_generator:
+            _suggest_generator(config, definition, label, report)
+            continue
         report.converted.append(label)
         out.append(definition)
     report.notes.append(
