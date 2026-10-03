@@ -78,23 +78,6 @@ alert notifies as soon as its condition has held that long, rather than being se
 at once and notified later, and a shorter blip is never seen at all. The report says
 which alerts it applied to.
 
-### Generators
-
-Alert2 generators make alerts from a list or template; Alert Redux generators
-choose entities by criteria (label, area, domain, device class, entity ID
-pattern), so they can't be converted. The report instead gives, under "Suggested
-settings", the settings of an Alert Redux generator that match the generator's
-body: its kind, messages, priority, delays, reminders, and notifier groups, with
-`genElem` and `genEntityId` rewritten to `target`. For a generator that selects
-entities from `states.<domain>` with a pattern (`'match'`, or `entity_regex`),
-the targets are the domain and the pattern as an entity ID glob, to check; for a
-list, they're a label to put on those entities, or, if the list's values aren't
-entities (limits, say), fixed alerts are suggested instead. A templated name isn't
-carried over (Alert Redux names alerts after their target), and the report quotes
-it. Create the generator from
-those settings in the integration's forms. Only condition kinds (state, threshold,
-template, on/off) can be generated; supersession in a generator isn't carried over.
-
 After converting, check the file with `alert_redux.import` and `dry_run: true`,
 then import it. Re-importing is harmless: alerts match by name.
 
@@ -133,7 +116,7 @@ name alone is often cryptic and clashes across domains. A `friendly_name` shared
 two alerts gets the domain in front. A reference to an alert that isn't in
 the input is kept as a dangling reference, which import allows.
 
-Not converted, with a warning or in the report: generators, `ack_required` and
+Not converted, with a warning or in the report: generators (see below), `ack_required` and
 `ack_reminders_only` (Alert Redux's equivalent, latching alerts, is a later feature,
 after which the converter will handle them), `done_notifier: false`, and `early_start`, `manual_on`,
 `manual_off`, `actions_on`, `title`, `target`, `data`, and a few other options with
@@ -141,3 +124,20 @@ no equivalent.
 
 After converting, check the file with `alert_redux.import` and `dry_run: true`,
 then import it. Re-importing is harmless: alerts match by name.
+
+### Generators
+
+Alert2 generators make alerts from a list or template; Alert Redux generators
+choose entities by criteria (label, area, domain, device class, entity ID
+pattern), so they can't be converted. The report instead gives, under "Suggested
+settings", the settings of an Alert Redux generator that match the generator's
+body: its kind, messages, priority, delays, reminders, and notifier groups, with
+`genElem` and `genEntityId` rewritten to `target`. For a generator that selects
+entities from `states.<domain>` with a pattern (`'match'`, or `entity_regex`),
+the targets are the domain and the pattern as an entity ID glob, to check; for a
+list, they're a label to put on those entities, or, if the list's values aren't
+entities (limits, say), fixed alerts are suggested instead. A templated name isn't
+carried over (Alert Redux names alerts after their target), and the report quotes
+it. Create the generator from
+those settings in the integration's forms. Only condition kinds (state, threshold,
+template, on/off) can be generated; supersession in a generator isn't carried over.
