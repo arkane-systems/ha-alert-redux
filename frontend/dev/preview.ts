@@ -172,10 +172,10 @@ const ALERTS: HassEntity[] = [
     snoozed_until: ago(-23),
   }),
   // Latched (spec §10): fired three times overnight, unacknowledged.
-  alert("leak_sink", "Leak Under Sink", "critical", "latched", {
-    icon: "mdi:water-alert",
+  alert("leak_sink", "Leak Under Sink", "emergency", "latched", {
+    icon: "mdi:pipe-leak",
     latching: true,
-    message: "The sink leak sensor is wet.",
+    message: "Water detected under the kitchen sink.",
     fire_count: 3,
     last_fired: ago(70),
     last_ended: ago(45),
