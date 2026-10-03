@@ -1,0 +1,22 @@
+alert:
+  garage_door:
+    name: Garage door left open
+    entity_id: binary_sensor.garage_door
+    state: "on"
+    repeat: [15, 30, 60]
+    can_acknowledge: true
+    skip_first: true
+    message: "The garage door has been open"
+    done_message: "The garage door is closed"
+    notifiers:
+      - mobile_app_pixel
+      - notify.family
+    title: Garage
+    data:
+      tag: garage
+  freezer:
+    name: Freezer warm
+    entity_id: sensor.freezer_state
+    state: warm
+    repeat: 30
+    can_acknowledge: false

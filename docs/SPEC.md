@@ -2161,7 +2161,8 @@ all" action.
 - Migration code for the built-in `alert` inside the integration [F28]. Instead, a
   separate converter utility in this repository (not shipped in the integration)
   reads an `alert:` YAML section and writes a file for `alert_redux.import`. A
-  similar standalone converter does the same for Alert2 alerts (phase 14).
+  similar standalone converter does the same for Alert2 alerts (phase 14). Both are
+  in `tools/`, built.
 
 ## 18. Open questions
 
@@ -2341,6 +2342,7 @@ Decisions with their reasons, in the order they were made.
 | The quiet-hours summary stays an ordinary notification | The queue it might have used is gone; the summary already tells you what you missed [§9.9]. |
 | Displayed state names in a state alert are dropped (N38) | Translations, device classes, and entities' own state names make recognising them a lot of complexity for marginal gain; a state alert's target stays the real state. Revisit if HA's state selector becomes usable for it [§4.1]. |
 | Phase 13 is 1.2.0, phase 14 1.2.1, phase 15 1.3.0 | Integration feature phases are minor releases; phase 14 ships tools, not integration features, so it takes a patch version [§20]. |
+| Converters take only the shapes users have to hand, and drop what has no equivalent with a warning | A single alert's YAML (as the Alert Manager card shows it) is the commonest conversion request; generators and a few options can't be translated faithfully, so the report names them rather than guessing [§20]. |
 
 ## 20. Phase plan
 
@@ -2725,6 +2727,61 @@ and §16.
   - an `alert:` YAML section from the built-in `alert` integration;
   - Alert2 alerts.
 
+[Phase 14 as built] Two scripts in `tools/`, `convert_alert.py` and
+`convert_alert2.py`, over `_convert_common.py` (stdlib and PyYAML; Home Assistant
+isn't needed). They write the §16 file without `id`s, so a converted file matches
+existing alerts by name, and print a report (what was converted, skipped, or
+approximated, and the notifier groups to create). Decided in building:
+
+- **Input shapes.** The built-in tool takes the `alert:` section or a whole
+  configuration; the Alert2 tool takes an `alert2:` block (with `defaults:`), a
+  single alert's YAML as the Alert Manager card shows it, or a list of alerts.
+- **Notifiers** become groups of the same name, or as a `--group-map` file says
+  (a value may be a name, a list, or empty to drop); groups can't be in an import
+  file, so the report lists those to create.
+- **Kinds.** Built-in alerts are all state alerts. Alert2's `condition` is a
+  state alert (an entity) or a template alert; `condition_on`/`_off` and
+  `trigger_on`/`_off` are on/off alerts; `trigger` a trigger alert; `threshold` a
+  threshold alert; an event alert with none of them (reported with `alert2.report`)
+  a manual alert that ends by itself. Priorities low, medium, high are notice,
+  warning, critical (Alert2's default is low). Alert2's template variables
+  `on_time_str` and `on_secs` become `duration` and `duration_seconds`.
+- **Naming** [Decided with the user]. An Alert2 alert is named by a plain
+  `friendly_name`, else by its `domain` and `name` together ("House Door open"):
+  `name` alone is cryptic and clashes across domains. Shared friendly names get
+  the domain in front.
+- **`skip_first`** [Decided with the user]. The built-in `alert`'s has no exact
+  equivalent. `--skip-first-as-delay` turns it into a `delay_on` of the first
+  `repeat` interval, which is what people moving to Alert2 usually do though the
+  behaviour differs; without the option it's a warning.
+- **Generators** [Decided with the user]. Not converted, but the report gives the
+  settings of an Alert Redux generator that match the body (kind, messages,
+  priority, delays, reminders, groups; `genElem` becomes `target`), with a
+  `targets` placeholder and Alert2's list or template quoted, as a head start.
+- **Checked on a live instance** (a dry-run import of the Alert2 documentation's
+  alerts, with notifiers mapped onto the instance's existing groups): all accepted,
+  nothing created. Without the map the same file was refused for its unknown
+  groups, which is why the migration guide (`tools/README.md`) has the user map or
+  create groups first, and dry-run before importing.
+- **Template conditions that only compare one entity's state** (`{{ states('x') ==
+  'v' }}`, `{{ is_state('x', 'v') }}`) become state alerts, which report missing
+  data precisely (§4.1); Alert2's own migration example is one. Any other
+  template stays a template alert.
+- **Tested on the documentation's own examples** (the built-in `alert` page, and
+  Alert2's README and Recipes), kept as fixtures. They showed what the forms of
+  real configurations need: a `clear_notification` done message isn't text;
+  notifiers can be templates or entities (dropped, leaving the default groups,
+  never "nobody"); `condition: true` is a YAML boolean; on/off alerts need both
+  sides, so Alert2's on-only alerts (`manual_off`) become template alerts;
+  domains and names can hold spaces and capitals (entity IDs are slugged for
+  supersession); and generators' selections can often be read for their domain and
+  an entity ID glob.
+- **Not converted**, and reported: `skip_first` (without the option), titles,
+  notifier `data` and `target`, `ack_required` (see phase 15), `done_notifier:
+  false`, `early_start`, and the other options with no equivalent. `--strict` makes
+  any of them an error.
+- A test runs each fixture's output through the import action's `dry_run`.
+
 ### Phase 15 — Latching alerts (1.3.0)
 
 [Decided; provisional, until the rest of the list is done] Last, because it changes
@@ -2735,6 +2792,10 @@ the alert lifecycle (§7).
   the fire count shown when it's more than one), acknowledging it by every route
   that acknowledges an alert, and what it does to reminders, notifications, the
   summary sensors, and supersession.
+- [Decided; with phase 14] Go back to the Alert2 converter (`tools/convert_alert2.py`)
+  and convert `ack_required` (and `ack_reminders_only`) to the latching setting,
+  which is its equivalent, instead of dropping it with a warning; update
+  `tools/README.md` and the converter's tests with it.
 
 **Versions from 1.0.0** [Decided]: a phase that adds integration features is a minor
 release, so phase 12 is 1.1.0, phase 13 1.2.0, and phase 15 1.3.0. Phase 14 ships

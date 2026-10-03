@@ -1,0 +1,7 @@
+domain: house
+name: door_open
+condition: binary_sensor.front_door
+ack_required: true
+supersedes:
+  - domain: house
+    name: elsewhere
