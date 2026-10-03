@@ -24,7 +24,8 @@ buttons), and phase 10 (throttling and quiet hours), and phase 11 (generators,
 including generated supersession), and, for 1.0.0, manual alerts that end by
 themselves (spec §4.3), and phase 12 (voice control: Assist commands, and proxy
 switches and snooze buttons for Alexa and Google Home), and phase 13 (late features, including the export and import actions), and phase 14
-(the converter tools).
+(the converter tools), and phase 15 (latching alerts: kept until acknowledged,
+spec §10), which completes the spec's phase plan.
 
 ## Specification
 
@@ -105,7 +106,8 @@ time, each ending with tests, a run in real HA, green CI, and a release (`0.N.0`
     snooze, suspension, event expiry, throttling's end). Kinds detach and re-attach their inputs on
     disable and enable through `_async_inputs_stopped` / `_async_inputs_started`.
   - `model.py` — `AlertRuntime`, the HA-free state machine (including condition
-    evaluation, `evaluate()`, event durations, and on/off edges), its
+    evaluation, `evaluate()`, event durations, on/off edges, and latching:
+    `latched` and the item's `latch_anchor`), its
     serialization, the threshold rule (`threshold_holds`), the throttle rule
     (`Throttle`, `AlertRuntime.throttle_note` / `throttle_expire`), and the
     global `Settings`.

@@ -25,7 +25,9 @@ Assistant works (an MCP server, the websocket API, or the UI).
 - The entry's **options** hold the global defaults (default groups, reminder
   schedule, durations, quiet hours, and so on).
 - **States:** `idle`, `active` (firing, unacknowledged), `ack` (firing,
-  acknowledged), `no_data` (inputs missing), `disabled` (disabled or suspended).
+  acknowledged), `latched` (stopped firing unacknowledged, on an alert kept
+  until acknowledged), `no_data` (inputs missing), `disabled` (disabled or
+  suspended).
 - **Priorities**, highest first: `emergency`, `critical`, `warning`, `notice`,
   `informational`.
 - An alert's entity ID comes from its name when it's created
