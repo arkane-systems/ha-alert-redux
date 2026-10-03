@@ -305,6 +305,14 @@ generators: []
   alert's kind can't be changed by an import.
 - An alert's area and labels live in the entity registry and aren't exported.
 
+#### Converting from the built-in `alert` or Alert2
+
+[`tools/`](tools/README.md) has two scripts, `convert_alert.py` and `convert_alert2.py`,
+that turn an `alert:` section, or Alert2 alerts (an `alert2:` block, or one alert's
+YAML as the Alert Manager card shows it), into a file for `alert_redux.import`. They
+report what has no equivalent. They aren't part of the integration: run them from a
+checkout of this repository.
+
 ### Events
 
 Every change fires an event. Each carries `entity_id`, `name`, `priority`, `kind`,

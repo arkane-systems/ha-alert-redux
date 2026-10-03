@@ -1,0 +1,79 @@
+# Converter tools
+
+Standalone scripts that turn another alerting setup into a file for
+`alert_redux.import` (see [Exporting and importing](../README.md#exporting-and-importing)).
+They aren't part of the integration and aren't installed by HACS: run them from a
+checkout of this repository, anywhere with Python 3.10+ and PyYAML
+(`pip install pyyaml`). Home Assistant isn't needed.
+
+```sh
+python3 tools/convert_alert.py  alert.yaml  -o alert-redux.yaml   # built-in `alert:`
+python3 tools/convert_alert2.py alert2.yaml -o alert-redux.yaml   # Alert2
+```
+
+Both take `-` for standard input, and these options:
+
+| Option | Meaning |
+|---|---|
+| `-o FILE` | Write the import file there instead of to standard output. |
+| `--group-map FILE` | YAML mapping old notifiers to notifier group names (below). |
+| `--format json` | Write JSON instead of YAML. |
+| `--strict` | Write nothing and exit 1 if anything wasn't converted exactly. |
+
+A report goes to standard error: what was converted, what wasn't, and the notifier
+groups the file needs. Exit status is 2 if the input can't be read.
+
+## Notifier groups
+
+Alert Redux alerts name notifier **groups**, which an import file can't create. Each
+old notifier (a `notify.` service name) becomes a group of the same name, without
+`notify.`. Create those groups (Settings → Devices & services → Alert Redux), or
+rename and merge them with a map before importing:
+
+```yaml
+# group-map.yaml: old notifier -> group name, or a list of names; empty drops it
+mobile_app_pixel: Phones
+mobile_app_ipad: Phones
+persistent_notification: []
+```
+
+## The built-in `alert` integration
+
+Input: the `alert:` section, with or without its `alert:` line, or a whole
+`configuration.yaml`. (An `!include` can't be followed: convert the included file.)
+Every alert becomes a state alert: `entity_id` and `state`, `repeat` as the
+reminder schedule, `can_acknowledge`, `message`, `done_message`, and `notifiers`.
+Not converted, with a warning: `skip_first`, `title` (notifications are titled with
+the alert's name), and `data` (set it on the group's members).
+
+## Alert2
+
+Input: an `alert2:` block (`defaults:` apply to its `alerts:`), a **single alert's
+YAML**, as the Alert Manager card shows it, or a list of alerts.
+
+| Alert2 | Alert Redux |
+|---|---|
+| `condition`: an entity | state alert, target state `on` |
+| `condition`: a template | template alert |
+| `condition_on` / `condition_off`, `trigger_on` / `trigger_off` | on/off alert |
+| `trigger` (and `condition`) | trigger alert |
+| `threshold` | threshold alert |
+| neither (reported with `alert2.report`) | manual alert that ends by itself |
+| `priority` low / medium / high | notice / warning / critical |
+| `delay_on_secs`, `reminder_frequency_mins`, `throttle_fires_per_mins` | `delay_on`, `reminder_schedule`, `throttle` |
+| `message`, `done_message`, `reminder_message`, `display_msg`, `icon` | the same; `on_time_str` and `on_secs` become `duration` and `duration_seconds` |
+| `notifier` | notifier groups |
+| `supersedes` | supersedes (by the converted alerts' entity IDs) |
+
+Alerts are named by `friendly_name`, else `name`, with underscores as spaces (with
+the domain in front where two would clash). A reference to an alert that isn't in
+the input is kept as a dangling reference, which import allows.
+
+Not converted, with a warning or in the report: generators (recreate them as
+Alert Redux generators, which choose entities by criteria), `ack_required` and
+`ack_reminders_only`, `done_notifier: false`, and `early_start`, `manual_on`,
+`manual_off`, `actions_on`, `title`, `target`, `data`, and a few other options with
+no equivalent.
+
+After converting, check the file with `alert_redux.import` and `dry_run: true`,
+then import it. Re-importing is harmless: alerts match by name.

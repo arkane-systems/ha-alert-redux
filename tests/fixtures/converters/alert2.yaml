@@ -1,0 +1,44 @@
+alert2:
+  defaults:
+    reminder_frequency_mins: [10, 60]
+    notifier: mobile_app_pixel
+    priority: medium
+  alerts:
+    - domain: house
+      name: door_open
+      condition: binary_sensor.front_door
+      delay_on_secs: 120
+      message: "Open for {{ on_time_str }}"
+    - domain: house
+      name: leak
+      friendly_name: Water leak
+      condition: "{{ states('sensor.leak') | float > 3 }}"
+      priority: high
+      supersedes:
+        - domain: house
+          name: door_open
+      throttle_fires_per_mins: [5, 30]
+    - domain: house
+      name: temp_high
+      threshold:
+        value: sensor.temp
+        maximum: 30
+        hysteresis: 2
+    - domain: house
+      name: doorbell
+      trigger:
+        platform: state
+        entity_id: binary_sensor.bell
+        to: "on"
+      early_start: true
+    - domain: sys
+      name: cycle
+      condition_on: "{{ is_state('a.b','on') }}"
+      condition_off: "{{ is_state('a.b','off') }}"
+    - domain: house
+      name: reported
+    - domain: house
+      name: per_door
+      generator_name: doors
+      generator: "{{ ['a','b'] }}"
+      condition: "{{ true }}"

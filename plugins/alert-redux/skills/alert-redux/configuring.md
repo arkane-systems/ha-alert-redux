@@ -287,6 +287,22 @@ A form that's refused comes back with an error key:
 | `targets_required` | Generators: set at least one target criterion. |
 | `no_members`, `action_missing`, `invalid_data` | Notifier groups: add a member; set each action; `data` must be a mapping. |
 
+## Converting from the built-in `alert` or Alert2
+
+The repository's `tools/convert_alert.py` (an `alert:` section) and
+`tools/convert_alert2.py` (an `alert2:` block, one alert's YAML, or a list of them)
+write a file for `alert_redux.import`; see `tools/README.md` there. Run them from a
+checkout, as `convert_alert2.py in.yaml -o out.yaml [--group-map map.yaml]`; they
+aren't part of the installed integration.
+
+- Old notifiers become notifier **groups** of the same name (or as `--group-map`
+  says); the report lists the groups to create. Create them before importing, or the
+  import is refused with `unknown_group`.
+- Alert2 generators aren't converted, and options with no equivalent (`skip_first`,
+  `title`, `data`, `early_start`, `ack_required`, …) are warned about in the
+  report. Read the warnings before importing, then run the import with
+  `dry_run: true`.
+
 ## Examples
 
 A door left open for 10 minutes, to one group, with a Close button:

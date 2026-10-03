@@ -23,8 +23,8 @@ event), and phase 9 (replacing and clearing notifications, and notification
 buttons), and phase 10 (throttling and quiet hours), and phase 11 (generators,
 including generated supersession), and, for 1.0.0, manual alerts that end by
 themselves (spec §4.3), and phase 12 (voice control: Assist commands, and proxy
-switches and snooze buttons for Alexa and Google Home), and, so far in phase 13,
-the export and import actions.
+switches and snooze buttons for Alexa and Google Home), and phase 13 (late features, including the export and import actions), and phase 14
+(the converter tools).
 
 ## Specification
 
@@ -247,6 +247,14 @@ time, each ending with tests, a run in real HA, green CI, and a release (`0.N.0`
     admin card and `?user` shows it as a non-admin; `?menu=<object ID>` opens that
     alert's snooze or suspend menu, and `?until` its date and time field). Not
     shipped.
+- **`tools/`** — the **converters** (spec §17, phase 14), standalone and not shipped
+  in the integration: `convert_alert.py` (built-in `alert:`) and `convert_alert2.py`
+  (Alert2: an `alert2:` block, a single alert's YAML, or a list) write a file for
+  `alert_redux.import`; `_convert_common.py` is the shared YAML loading (HA tags kept
+  as text), notifier-to-group mapping, report, and command line. HA-free, stdlib and
+  PyYAML only. `tests/test_converters.py` runs their output through the import
+  action's `dry_run`, so they can't drift from the file format; fixtures are in
+  `tests/fixtures/converters/`.
 - **`assets/`** — the icon's SVG master, the 32 px README header icon, and
   `screenshots/`, the README's pictures of the cards: the dev preview's theme
   columns (without its toolbar), at 1.5× scale, quantized to 256 colours.
