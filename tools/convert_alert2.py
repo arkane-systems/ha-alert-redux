@@ -457,12 +457,11 @@ def convert(
             report.warn(label, "done_notifier groups have no equivalent; dropped")
         if throttle := config.get("throttle_fires_per_mins"):
             definition["throttle"] = list(throttle)
-        if config.get("ack_required") or config.get("ack_reminders_only"):
-            report.warn(
-                label,
-                "ack_required / ack_reminders_only dropped: Alert Redux's "
-                "equivalent, latching alerts (spec §10), isn't built yet",
-            )
+        # Reminders until acknowledged, even once it has stopped firing, is a
+        # latching alert (spec §10). ack_reminders_only (an acknowledged alert
+        # still sends its done message) is what Alert Redux always does (§9.7).
+        if config.get("ack_required"):
+            definition["latching"] = True
         if relationships := _supersedes(config, label, report, ids):
             definition["supersedes"] = relationships
         for key, advice in UNSUPPORTED.items():

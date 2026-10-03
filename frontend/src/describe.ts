@@ -209,6 +209,7 @@ export function describe(d: Definition, generator = false): string {
   lines.push(
     `Priority: ${priority}, ${d.acknowledgeable === false ? "can't be acknowledged" : "acknowledgeable"}`,
   );
+  if (d.latching) lines.push("Kept until acknowledged, even once it stops firing");
   if (generator) {
     if (d.name_template) lines.push(`Alert names: ${oneLine(d.name_template)}`);
     lines.push(`Targets: ${targetsText(d.targets).join("; ") || "none"}`);

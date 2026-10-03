@@ -31,6 +31,12 @@ const DEFAULT_ICONS: Record<Priority, string> = {
 export const isFiring = (alert: Alert): boolean =>
   alert.state === "active" || alert.state === "ack";
 
+/** Latched: stopped firing without being acknowledged, kept until it is (spec §10). */
+export const isLatched = (alert: Alert): boolean => alert.state === "latched";
+
+/** The alerts in the card's main list: firing, or latched. */
+export const isListed = (alert: Alert): boolean => isFiring(alert) || isLatched(alert);
+
 export const isAlertEntity = (entityId: string): boolean =>
   entityId.startsWith(`${DOMAIN}.`);
 
@@ -59,11 +65,14 @@ export function toAlert(entity: HassEntity): Alert {
     priority,
     kind: toText(attributes.kind) ?? "",
     acknowledgeable: attributes.acknowledgeable !== false,
+    latching: attributes.latching === true,
     userDismissable: attributes.user_dismissable === true,
     message: toText(attributes.message),
     displayMessage: toText(attributes.display_message),
     firingSince: toDate(attributes.firing_since),
     lastFired: toDate(attributes.last_fired),
+    lastEnded: toDate(attributes.last_ended),
+    fireCount: typeof attributes.fire_count === "number" ? attributes.fire_count : 0,
     eventExpires: toDate(attributes.event_expires),
     noDataSince: toDate(attributes.no_data_since),
     missingInputs: Array.isArray(attributes.missing_inputs)
@@ -86,20 +95,24 @@ export const collectAlerts = (hass: HomeAssistant): Alert[] =>
 
 const time = (date: Date | null): number => date?.getTime() ?? 0;
 
+/** Within a priority: active, then latched, then acknowledged. */
+const STATE_ORDER: Record<string, number> = { active: 0, latched: 1, ack: 2 };
+
 /**
- * Card order (spec §13.1): by priority, then unacknowledged before acknowledged,
- * then the most recent firing first.
+ * Card order (spec §13.1, §10): by priority, then active, latched, and
+ * acknowledged, then the most recent first (firing, or for a latched alert,
+ * ending).
  */
 export function compareFiring(a: Alert, b: Alert): number {
   return (
     PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority) ||
-    Number(a.state === "ack") - Number(b.state === "ack") ||
-    time(b.firingSince) - time(a.firingSince) ||
+    (STATE_ORDER[a.state] ?? 0) - (STATE_ORDER[b.state] ?? 0) ||
+    time(b.firingSince ?? b.lastEnded) - time(a.firingSince ?? a.lastEnded) ||
     a.name.localeCompare(b.name)
   );
 }
 
-/** A firing alert shown on the card, with the firing alerts it supersedes. */
+/** A listed alert shown on the card, with the listed alerts it supersedes. */
 export interface AlertGroup {
   alert: Alert;
   superseded: Alert[];
@@ -146,6 +159,7 @@ export const STATE_NAMES: Record<string, string> = {
   idle: "Idle",
   active: "Active",
   ack: "Acknowledged",
+  latched: "Latched",
   no_data: "No data",
   disabled: "Disabled",
 };

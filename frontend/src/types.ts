@@ -92,11 +92,16 @@ export interface Alert {
   priority: Priority;
   kind: string;
   acknowledgeable: boolean;
+  /** Kept until acknowledged (spec §10). */
+  latching: boolean;
   userDismissable: boolean;
   message: string | null;
   displayMessage: string | null;
   firingSince: Date | null;
   lastFired: Date | null;
+  lastEnded: Date | null;
+  /** How many times the current firing, or the latched item, has fired. */
+  fireCount: number;
   /** Event alerts: when the current firing's duration runs out (spec §4.2). */
   eventExpires: Date | null;
   noDataSince: Date | null;

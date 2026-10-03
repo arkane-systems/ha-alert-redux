@@ -156,6 +156,10 @@ def test_alert2_docs_examples() -> None:
         {"alert": "alert_redux.test_foo"}
     ]
     assert len(alerts["Test Supersedes both"]["supersedes"]) == 2
+    # ack_required is a latching alert (spec §10), and isn't warned about.
+    assert alerts["Test Leak valve"]["latching"] is True
+    assert "latching" not in alerts["Test Foo"]
+    assert not any("ack_required" in w for w in report.warnings)
     # Notifiers: the notify. prefix goes; templates and entities drop to the
     # default groups, not to nobody.
     assert alerts["Cam basement Motion while away"]["notifier_groups"] == [
@@ -186,6 +190,7 @@ def test_alert2_single_alert_and_list() -> None:
     """A single alert, as the Alert Manager card shows it, converts, as does a list."""
     alerts, report = _convert(convert_alert2, "alert2_single.yaml")
     assert alerts["House Door open"]["priority"] == "notice"  # Alert2's default, low
+    assert alerts["House Door open"]["latching"] is True  # ack_required
     assert alerts["House Door open"]["supersedes"] == [
         {"alert": "alert_redux.house_elsewhere"}
     ]

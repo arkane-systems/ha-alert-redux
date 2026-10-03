@@ -171,6 +171,15 @@ const ALERTS: HassEntity[] = [
     firing_since: ago(300),
     snoozed_until: ago(-23),
   }),
+  // Latched (spec §10): fired three times overnight, unacknowledged.
+  alert("leak_sink", "Leak Under Sink", "critical", "latched", {
+    icon: "mdi:water-alert",
+    latching: true,
+    message: "The sink leak sensor is wet.",
+    fire_count: 3,
+    last_fired: ago(70),
+    last_ended: ago(45),
+  }),
   alert("back_door_open", "Back Door Open", "warning", "active", {
     icon: "mdi:door-open",
     display_message: "The back door is open.",
@@ -453,7 +462,10 @@ function hassFor(dark: boolean): HomeAssistant {
       const attributes = (snoozed_until: string | null) => ({
         attributes: { ...states[entityId].attributes, snoozed_until },
       });
-      if (service === "ack") update(entityId, { state: "ack", ...attributes(null) });
+      if (service === "ack") {
+        const latched = states[entityId].state === "latched";
+        update(entityId, { state: latched ? "idle" : "ack", ...attributes(null) });
+      }
       if (service === "unack") update(entityId, { state: "active", ...attributes(null) });
       if (service === "disable" || service === "suspend") {
         const until = data?.until
@@ -479,7 +491,8 @@ function hassFor(dark: boolean): HomeAssistant {
       }
       if (service === "snooze") {
         const minutes = Number((data?.duration as { minutes: number }).minutes);
-        update(entityId, { state: "ack", ...attributes(ago(-minutes)) });
+        const latched = states[entityId].state === "latched";
+        update(entityId, { state: latched ? "latched" : "ack", ...attributes(ago(-minutes)) });
       }
       if (service === "dismiss") update(entityId, { state: "idle" });
       if (service === "press_button") console.log("press_button", entityId, data?.label);

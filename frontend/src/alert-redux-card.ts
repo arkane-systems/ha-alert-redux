@@ -14,7 +14,8 @@ import {
   groupSuperseded,
   isAlertEntity,
   remainingFraction,
-  isFiring,
+  isLatched,
+  isListed,
   snoozeDurations,
   type AlertGroup,
 } from "./alerts";
@@ -146,7 +147,7 @@ export class AlertReduxCard extends LitElement {
   getCardSize(): number {
     if (!this.hass) return 2;
     const alerts = this._scoped();
-    const groups = this._visible(groupSuperseded(alerts.filter(isFiring).sort(compareFiring)));
+    const groups = this._visible(groupSuperseded(alerts.filter(isListed).sort(compareFiring)));
     const shown = groups.reduce(
       (size, group) =>
         size +
@@ -229,7 +230,7 @@ export class AlertReduxCard extends LitElement {
     this._hasProgress = false;
     if (!this.hass || !this._config) return nothing;
     const alerts = this._scoped();
-    const firing = alerts.filter(isFiring).sort(compareFiring);
+    const firing = alerts.filter(isListed).sort(compareFiring);
     const allGroups = groupSuperseded(firing);
     const groups = this._visible(allGroups);
     const hidden = allGroups.reduce((n, g) => n + 1 + g.superseded.length, 0) -
@@ -357,6 +358,7 @@ export class AlertReduxCard extends LitElement {
     const message = cardMessage(alert);
     const language = this.hass?.locale?.language;
     const since = alert.firingSince;
+    const latched = isLatched(alert);
     return html`
       <div class="alert p-${alert.priority} ${alert.state}">
         <div class="head">
@@ -372,6 +374,23 @@ export class AlertReduxCard extends LitElement {
                     <span title=${since.toLocaleString(language)}
                       >firing for ${elapsed(since)} (since ${clockTime(since, language)})</span
                     >`
+                : nothing}
+              ${latched && alert.lastEnded
+                ? html`<span>·</span>
+                    <span title=${alert.lastEnded.toLocaleString(language)}
+                      >stopped ${elapsed(alert.lastEnded)} ago (at
+                      ${clockTime(alert.lastEnded, language)})</span
+                    >`
+                : nothing}
+              ${alert.fireCount > 1
+                ? html`<span>·</span><span>fired ${alert.fireCount}×</span>`
+                : nothing}
+              ${latched
+                ? html`<span
+                    class="badge latched"
+                    title="Stopped firing without being acknowledged; kept until it is"
+                    ><ha-icon icon="mdi:pin-outline"></ha-icon>Unacknowledged</span
+                  >`
                 : nothing}
               ${alert.noDataSince
                 ? html`<span
@@ -407,9 +426,11 @@ export class AlertReduxCard extends LitElement {
 
   private _renderControls(alert: Alert) {
     const busy = this._busy.has(alert.entityId);
-    const dismiss = alert.kind === "manual" && alert.userDismissable;
+    const latched = isLatched(alert);
+    const dismiss = alert.kind === "manual" && alert.userDismissable && !latched;
     if (!alert.acknowledgeable && !dismiss && !alert.buttons.length) return nothing;
-    const snoozed = alert.state === "ack" && alert.snoozedUntil;
+    // A snoozed latched alert isn't acknowledged: it still offers Acknowledge.
+    const snoozed = (alert.state === "ack" || latched) && alert.snoozedUntil;
     const menuOpen = this._snoozeMenu === alert.entityId;
     return html`
       <div class="controls">
@@ -438,7 +459,7 @@ export class AlertReduxCard extends LitElement {
                 icon=${menuOpen ? "mdi:menu-up" : "mdi:menu-down"}
               ></ha-icon>
             </button>`}
-        ${!alert.acknowledgeable || snoozed
+        ${!alert.acknowledgeable || (snoozed && !latched)
           ? nothing
           : alert.state === "ack"
             ? html`<button
@@ -500,9 +521,10 @@ export class AlertReduxCard extends LitElement {
    */
   private _renderSnoozeMenu(alert: Alert, busy: boolean) {
     const snoozed = alert.state === "ack" && alert.snoozedUntil;
+    const latchedSnoozed = isLatched(alert) && alert.snoozedUntil;
     return html`
       <div class="choices" role="group" aria-label="Snooze for">
-        <span class="label">${snoozed ? "Snooze again for" : "Snooze for"}</span>
+        <span class="label">${snoozed || latchedSnoozed ? "Snooze again for" : "Snooze for"}</span>
         ${snoozeDurations(this._config?.snooze_durations).map(
           (minutes) => html`<button
             class="chip-button"

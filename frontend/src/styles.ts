@@ -195,6 +195,18 @@ export const cardStyles = css`
     opacity: 0.7;
   }
 
+  /* Latched: stopped firing, but kept until acknowledged (spec §10). A dashed
+     border in the priority colour, without the glow: it still wants
+     attention, though nothing is happening now. */
+  .alert.latched {
+    border-style: dashed;
+    border-color: var(--c);
+    box-shadow: none;
+  }
+  .badge.latched {
+    background: color-mix(in srgb, var(--c) 18%, transparent);
+  }
+
   /* Event alerts: the time left, as a bar along the foot of the box that drains
      as the duration runs out. It moves a step per render, smoothed by the
      transition. */
