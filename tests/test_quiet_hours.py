@@ -317,3 +317,25 @@ async def test_throttling_summary_during_quiet_hours(
         ]
     else:
         assert messages == ["Back Door Open is still firing (5 minutes)."]
+
+
+async def test_latched_alert_reminded(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """A latched alert gets the reminder when quiet hours end, as an active
+    one does (spec §10), as well as its line in the summary."""
+    speaker = async_mock_service(hass, "notify", "speaker")
+    async_mock_service(hass, "notify", "mobile_app_phone")
+    await _quiet(hass, "on")
+    await setup_alerts(
+        _alert("Leak", "leak", latching=True), PHONES, SPEAKER, options=OPTIONS
+    )
+    await _call(hass, "fire", "Leak")
+    await _tick(hass, freezer, 5)
+    await _call(hass, "dismiss", "Leak")
+    await _tick(hass, freezer, 10)
+    await _quiet(hass, "off")
+    messages = _messages(speaker)
+    assert "Leak stopped firing 10 minutes ago and hasn't been acknowledged." in (
+        messages
+    )

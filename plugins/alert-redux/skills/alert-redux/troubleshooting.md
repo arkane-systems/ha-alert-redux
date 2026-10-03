@@ -42,13 +42,20 @@ or won't parse. A firing alert rides out missing data for its grace period
 (`no_data_grace_until`), then ends with reason `no_data`. After a restart,
 condition alerts show `no_data` until their inputs report.
 
+## It stopped firing but is still on the card
+
+It's `latched`: the alert has `latching` on (Keep until acknowledged), and the
+firing ended before anyone acknowledged it. Acknowledge it to clear it; it
+keeps reminding until then. Turn `latching` off if that isn't wanted.
+
 ## It fires but nobody is told
 
 Check in this order:
 
 1. `notifier_groups` is empty: the alert notifies nobody (deliberately, or the
    default groups aren't set; then there's a Repairs issue).
-2. It's `ack`: acknowledged or snoozed alerts send no reminders.
+2. It's `ack`: acknowledged or snoozed alerts send no reminders (nor does a
+   snoozed `latched` alert, until its snooze runs out).
 3. `superseded_by` isn't empty: a superseding alert is firing.
 4. `throttled_since` is set: notifications are held until the rate drops.
 5. Quiet hours: a loud group holds lower priorities while its quiet-hours entity

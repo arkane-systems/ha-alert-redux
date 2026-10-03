@@ -116,9 +116,12 @@ name alone is often cryptic and clashes across domains. A `friendly_name` shared
 two alerts gets the domain in front. A reference to an alert that isn't in
 the input is kept as a dangling reference, which import allows.
 
-Not converted, with a warning or in the report: generators (see below), `ack_required` and
-`ack_reminders_only` (Alert Redux's equivalent, latching alerts, is a later feature,
-after which the converter will handle them), `done_notifier: false`, and `early_start`, `manual_on`,
+`ack_required` becomes **Keep until acknowledged** (`latching`): the alert stays
+latched, and keeps reminding, until someone acknowledges it, even once it has
+stopped firing. `ack_reminders_only` needs nothing: an acknowledged alert always
+sends its done message in Alert Redux.
+
+Not converted, with a warning or in the report: generators (see below), `done_notifier: false`, and `early_start`, `manual_on`,
 `manual_off`, `actions_on`, `title`, `target`, `data`, and a few other options with
 no equivalent.
 

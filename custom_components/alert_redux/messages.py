@@ -51,6 +51,7 @@ def message_context(
     trigger: Mapping[str, Any] | None = None,
     started: datetime | None = None,
     ended: datetime | None = None,
+    latched: bool = False,
     extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the variables available to an alert's message templates.
@@ -58,7 +59,9 @@ def message_context(
     reason is why the notification is sent (on, reminder, or done); end_reason is
     why the firing ended, for the done message, and started and ended when the
     firing started and ended (as ISO 8601 text). trigger is an event alert's
-    trigger variables, as in automations; other kinds have none. extra adds
+    trigger variables, as in automations; other kinds have none. latched says
+    a reminder is of a latched alert (duration is then how long ago it ended),
+    or a done notification is of a firing that latched (spec §10). extra adds
     variables of the alert's own, such as a generated alert's target.
     """
     subject_name = name
@@ -79,6 +82,7 @@ def message_context(
         "duration_seconds": duration_seconds,
         "started": started.isoformat() if started else None,
         "ended": ended.isoformat() if ended else None,
+        "latched": latched,
     }
     if trigger is not None:
         variables["trigger"] = dict(trigger)

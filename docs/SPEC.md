@@ -235,6 +235,8 @@ precedence rules would get complicated for little gain; revisit if that proves w
   described in §8.3 [Decided, F13].
 - The done notification is still sent when an acknowledged alert stops firing
   [Decided, R10].
+- [Decided, phase 15] A **latched** alert (§10) is acknowledged too: that
+  releases it to `idle`. It can't be unacknowledged, since it isn't.
 - [Decided, phase 6] Acknowledging a **snoozed** alert makes it a plain
   acknowledgement: the snooze is cleared, and the alert stays acknowledged until it
   stops firing. `_acked` fires, with `ack` as both the old and new state.
@@ -265,6 +267,9 @@ pre-snoozes (§8.3). When a snooze runs out and the alert is still firing:
 (`snooze_reminder_window`). An alert with no reminders (an empty schedule,
 including short event alerts, §9.6) sends nothing when its snooze runs out: it
 becomes `active`, and that's all.
+
+[Decided, phase 15] Snoozing a **latched** alert (§10) puts its reminders off
+without acknowledging it: it stays `latched`, with `snoozed_until`.
 
 [Decided, phase 6] Snoozing takes a duration. Re-snoozing an acknowledged alert,
 snoozed or not, replaces the deadline with *now + duration*, even if that's sooner.
@@ -331,6 +336,7 @@ isn't in the future is an error.
 | `idle` | Enabled and has data, but not firing. |
 | `active` | Firing and not acknowledged. |
 | `ack` | Firing and acknowledged (or snoozed; see `snoozed_until`). |
+| `latched` | [Decided, phase 15] Stopped firing without being acknowledged, on an alert kept until acknowledged (§10). |
 | `no_data` | The alert can't evaluate its inputs because they're unavailable, unknown, or won't parse. |
 | `disabled` | Disabled (or suspended; see `disabled_until`). |
 
@@ -353,6 +359,8 @@ such as a configuration error.
    fires        = condition met (after delay_on) · event received · manual fire
    stops firing = condition ends (after delay_off) · duration elapsed · manual dismiss
 
+   latching alert, active ── stops firing ──▶ latched ── fires ──▶ active
+                                              └── ack ──▶ idle  (§10)
    idle ── inputs missing ──▶ no_data ── inputs return ──▶ re-evaluate
    active/ack ── inputs missing ──▶ (stays active/ack) ── grace ends ──▶ no_data
                                                   └── inputs return ──▶ re-evaluate
@@ -766,6 +774,8 @@ doesn't repeat it automatically. It can include the name deliberately through th
   phase 5] This compares the alert's configured (or default) duration with its
   schedule's first interval; the `reminder_schedule` attribute then shows the
   effective, empty, schedule.
+- [Decided, phase 15] A **latched** alert (§10) keeps reminding, on the schedule
+  counted from when it first fired, whatever its duration.
 
 ### 9.7 The done notification
 
@@ -794,6 +804,9 @@ doesn't repeat it automatically. It can include the name deliberately through th
   details anyway; revisit if it proves a problem.
 - [Decided] **Done notifications during quiet hours** for affected alerts on loud
   groups are held and folded into the end-of-quiet-hours summary (§9.9).
+- [Decided, phase 15] The done notification of a firing that **latched** (§10)
+  isn't final: it keeps its buttons and stays clearable, since the alert still
+  wants acknowledging.
 
 ### 9.8 Throttling
 
@@ -1018,7 +1031,7 @@ keyboards could be added later. Other members leave the buttons out.
 
 ## 10. Latching alerts
 
-[Decided; planned for phase 15] Some alerts matter even if they stop before anyone
+[Decided; phase 15] Some alerts matter even if they stop before anyone
 sees them: the freezer that was warm for twelve minutes at 3 a.m., or a leak sensor
 that tripped three times overnight and is dry now. Reminders end when a firing
 ends, so today nothing says "you haven't seen this". A **latching** alert keeps
@@ -1044,12 +1057,82 @@ summary (§9.9, which stays an ordinary notification) already cover them.
   it's acknowledged is the same item, and the card shows how many times it has
   fired (`fire_count`) whenever that is more than one and the card isn't already
   showing it.
-- **To be designed in phase 15**, because it changes the alert's lifecycle (§7):
-  the state or flag that marks it; whether and how reminders continue after the
-  firing ends; the done notification; how it counts in the summary sensors (§11.2)
-  and for supersession (§8); what disabling, snoozing, and restoring after a
-  restart do to it; event alerts and manual alerts (§4.2, §4.3); the voice
-  commands and proxies (§14); and how it is exported and imported (§16).
+- [Decided; phase 15] **Design.** As built in phase 15 (with the user's choices
+  marked):
+  - **A state of its own, `latched`** [with the user], not `idle` with an
+    attribute: automations, history, the logbook, and the alert state kind see
+    it directly. It ranks below firing and above `no_data`: a latched condition
+    alert that loses its data stays `latched`, with `no_data_since`, and counts
+    as no data, as a firing alert does in its grace period (§4.4).
+  - **What latches.** A firing that ends while `active`, for any reason but
+    being disabled: resolved, a duration running out, the no-data grace running
+    out, and a dismissal. **A dismissal latches only when no user is behind it**
+    [with the user]: a person dismissing the alert (the card's button, or a
+    script they ran) has seen it; an automation hasn't. An end while `ack`
+    (snoozed and pre-acknowledged included) goes to `idle` as before.
+  - **One item.** A latched alert that fires again becomes `active`, sends its
+    on notification as a new firing does, and keeps counting `fire_count`;
+    `fire_data` and the messages are kept while latched. Acknowledging it
+    during that firing closes the item, so it ends as `idle`.
+  - **Acknowledging** releases it to `idle`, by every route (the action, the
+    card, voice, notification buttons, the proxy switch), clears its
+    notifications (§9.10), and fires `_acked` with `old_state` `latched`.
+    `unack` does nothing: it isn't acknowledged.
+  - **Snoozing** a latched alert puts its reminders off [with the user]: it
+    stays `latched` with `snoozed_until`, `_snoozed` fires without `_acked`, and
+    when the snooze runs out, `_snooze_expired` without `_unacked`, and the
+    snooze-end reminder rule (§6.2) applies.
+  - **Reminders** carry on while latched (not while snoozed), on the schedule
+    counted from when the item first fired; the runtime keeps that start
+    (`latch_anchor`), since `firing_since` clears at the end. A latching event
+    or self-ending manual alert reminds whatever its duration (§9.6). A
+    reminder's `duration` is then how long ago the alert stopped, and `latched`
+    is true; the default text is "{{ name }} stopped firing {{ duration }} ago
+    and hasn't been acknowledged" (with the fire count when it's more than
+    one). The alert's own reminder message is used if it has one.
+  - **The done notification** is sent as always (§9.7). For a firing that
+    latched it isn't final: it keeps the Acknowledge and Snooze buttons and
+    stays clearable, `latched` is true, and the default adds "It's kept until
+    acknowledged."
+  - **Summary sensors** [with the user]: a latched alert counts as
+    unacknowledged, in `active` and `highest_unacked_priority` (a signal light
+    stays on until it's acknowledged), but not as firing. A new
+    `sensor.alert_redux_latched` lists them. A superseded latched alert is left
+    out of `active` and counted in `superseded`, as a firing one is (§11.2).
+  - **Supersession.** A latched alert isn't firing, so it supersedes nothing;
+    one that a firing alert supersedes is hidden, silent, and skips its
+    reminders, as a firing one does. Propagation (§8.2) acts at once on a
+    superseding alert that is `latched`, as on one that is `active`:
+    *Acknowledge* releases it, *Snooze* snoozes it. Acknowledging a latched
+    alert pre-acknowledges nothing (it isn't firing), but it propagates the
+    same way to directly superseding alerts that are latched too, so *Door
+    Open* and *Door Left Open* that both latched overnight are cleared
+    together.
+  - **Disabling** clears the latch (and fires no `_ended`: nothing was
+    firing); enabling starts from scratch (§6.3). **Turning the setting off**
+    releases a latched alert to `idle` without recording an acknowledgement.
+  - **Restarts** keep the latch and its anchor; a reminder that fell due while
+    Home Assistant was down is sent once (§15.1).
+  - **Validation.** Latching needs the alert to be acknowledgeable, or nothing
+    could clear it: the forms and import refuse it
+    (`latching_unacknowledgeable`).
+  - **Events.** None new: `_ended` with `new_state` `latched`, and `_acked`
+    with `old_state` `latched`, tell the story. The alert state kind can watch
+    for `latched`, which gives escalation of an alert left unacknowledged.
+  - **Quiet hours.** When they end, a latched alert gets the one reminder, as
+    an `active` one does (§9.9).
+  - **Voice and proxies** (§14). Acknowledge and snooze accept latched alerts;
+    "which alerts are firing" lists them after the firing ones ("… stopped
+    firing but hasn't been acknowledged"). The proxy switch is on while the
+    alert is `active` or `latched`; turning it off acknowledges, and turning it
+    on while latched is refused (`not_firing`). The snooze button snoozes it.
+  - **Configuration.** The setting is `latching` ("Keep until acknowledged"),
+    beside `acknowledgeable` in every kind's form and generators', stored only
+    when on (so no schema version change), and exported and imported as an
+    ordinary field (§16). The attribute `latching` shows it.
+  - **The card** lists latched alerts with the firing ones: within a priority,
+    after `active` and before `ack`, with a dashed border, when it stopped, the
+    fire count, Acknowledge, and Snooze, but no dismiss (§13.1).
 
 ## 11. Integration surface: attributes, sensors, events
 
@@ -1098,6 +1181,8 @@ summary (§9.9, which stays an ordinary notification) already cover them.
   **Require unlock**, which the main card asks to confirm (§13.1).
   [Decided, phase 10] `throttle` is the effective throttle, `[count, minutes]`,
   or null; `throttled_since` is when throttling started, or null (§9.8).
+  [Decided, phase 15] `latching` (§10). A latched alert keeps `fire_count`,
+  `fire_data`, and its rendered messages until it's acknowledged.
 - **Generator provenance:** `generated_by` (§12.3). [Decided, phase 11] The
   generator's sensor's entity ID, or null for a fixed alert.
 
@@ -1143,6 +1228,10 @@ recorder with `_unrecorded_attributes`.
   isn't firing isn't counted, whatever its `superseded_by` says. When the
   superseding alert stops firing, its alerts count as unacknowledged again, as
   they would on their own (§12.4).
+- [Decided; phase 15] **Latched alerts are unacknowledged** (§10): they count in
+  `active` and `highest_unacked_priority` (not in `firing` or
+  `highest_priority`), unless superseded, when they count in `superseded`
+  instead. `sensor.alert_redux_latched` counts and lists them.
 - [Decided, phase 8] The **no data** count counts every alert missing data,
   whatever its state: `no_data` alerts, and firing alerts in their grace period
   (§4.4), which count as firing too. Something's input being broken shows at
@@ -1228,6 +1317,11 @@ common data above:
 | `_superseded` | `superseded_by` |
 | `_created` | — (`old_state` is null) |
 | `_deleted` | — (`new_state` is null; the rest comes from the stored record) |
+
+[Decided, phase 15] Latching (§10) adds no event. A firing that latches fires
+`_ended` with `new_state` `latched`; acknowledging a latched alert fires `_acked`
+with `old_state` `latched`; snoozing one fires `_snoozed` alone, and its snooze
+running out `_snooze_expired` alone.
 
 The review kept `_superseded` without a counterpart: an alert ceasing to be
 superseded shows in `superseded_by`, and the change that caused it (the
@@ -1592,6 +1686,11 @@ To make sure it gets fixed:
   superseded. The disclosure ("› 2 superseded alerts") sits under the root's box,
   and opens to show the superseded alerts in card order, slightly indented, with
   all their controls.
+- [Decided, phase 15] **Latched alerts** (§10) are listed with the firing ones,
+  after the `active` and before the `ack` alerts of their priority, with a
+  dashed border in the priority colour and no glow. They say when they stopped
+  and show an "Unacknowledged" badge, and offer Acknowledge and Snooze, not
+  dismiss. Any alert shows "fired N×" when its `fire_count` is more than one.
 - A **no-data section** at the bottom lists alerts that currently lack data.
 - **Empty state:** the card always shows, with a small grey "No alerts are firing"
   when there's nothing to show.
@@ -1787,6 +1886,9 @@ To make sure it gets fixed:
 [Decided, phase 12 design] Researched against HA 2026.9. It needs no new
 entities and no files in the user's configuration directory.
 
+[Decided, phase 15] Acknowledge and snooze accept **latched** alerts (§10), and
+the list adds them after the firing ones.
+
 **One implementation, several ways in.** Four intents carry the behaviour:
 `AlertReduxAcknowledge`, `AlertReduxUnacknowledge`, `AlertReduxSnooze`, and
 `AlertReduxListFiring`. They're registered (`intent.async_register`) when the
@@ -1926,6 +2028,7 @@ entity, which Alexa could already handle:
 | Alert state | Switch | Turning it off | Turning it on |
 |---|---|---|---|
 | `active` | on | acknowledges the alert | nothing changes |
+| `latched` [phase 15] | on | acknowledges (releases) it | refused with an error |
 | `ack`, including snoozed | off | nothing changes | removes the acknowledgement, and any snooze |
 | `idle`, `no_data`, `disabled` | off | nothing changes | refused with an error |
 
@@ -2022,6 +2125,8 @@ After a restart:
 - A snooze or suspension that ran out during the restart ends as soon as HA is back.
 - [Decided, phase 4] A reminder that fell due during the restart is sent as soon as
   HA is back. It isn't an on notification, so it doesn't break "resumes quietly".
+- [Decided, phase 15] A **latched** alert (§10) stays latched, with its fire count
+  and reminder schedule.
 
 ### 15.2 Notifier retry queue
 
@@ -2343,6 +2448,8 @@ Decisions with their reasons, in the order they were made.
 | Displayed state names in a state alert are dropped (N38) | Translations, device classes, and entities' own state names make recognising them a lot of complexity for marginal gain; a state alert's target stays the real state. Revisit if HA's state selector becomes usable for it [§4.1]. |
 | Phase 13 is 1.2.0, phase 14 1.2.1, phase 15 1.3.0 | Integration feature phases are minor releases; phase 14 ships tools, not integration features, so it takes a patch version [§20]. |
 | Converters take only the shapes users have to hand, and drop what has no equivalent with a warning | A single alert's YAML (as the Alert Manager card shows it) is the commonest conversion request; generators and a few options can't be translated faithfully, so the report names them rather than guessing [§20]. |
+| Latching alerts are a state, `latched`, with user choices on the details (phase 15) | A state shows in automations, history, and the alert state kind; latched alerts count as unacknowledged so signal lights stay on; snoozing one puts its reminders off; a dismissal latches only without a user, since a person dismissing it has seen it [§10]. |
+| `ack_reminders_only` needs no conversion (phase 15) | In Alert2 it only keeps the done notification of an acknowledged alert, which Alert Redux always sends (§9.7); the phase plan had grouped it with `ack_required` [§20]. |
 
 ## 20. Phase plan
 
@@ -2777,7 +2884,7 @@ approximated, and the notifier groups to create). Decided in building:
   supersession); and generators' selections can often be read for their domain and
   an entity ID glob.
 - **Not converted**, and reported: `skip_first` (without the option), titles,
-  notifier `data` and `target`, `ack_required` (see phase 15), `done_notifier:
+  notifier `data` and `target`, `ack_required` (converted since phase 15), `done_notifier:
   false`, `early_start`, and the other options with no equivalent. `--strict` makes
   any of them an error.
 - A test runs each fixture's output through the import action's `dry_run`.
@@ -2796,6 +2903,17 @@ the alert lifecycle (§7).
   and convert `ack_required` (and `ack_reminders_only`) to the latching setting,
   which is its equivalent, instead of dropping it with a warning; update
   `tools/README.md` and the converter's tests with it.
+
+[Phase 15 as built] The design is recorded in §10, with the user's choices
+marked: a `latched` state; latched alerts count as unacknowledged; snoozing one
+puts its reminders off; a dismissal latches only without a user. The runtime
+(`model.py`) keeps the latch and the item's start (`latch_anchor`), and its
+`end`, `ack`, `snooze`, and `plan_reminder` handle it; `supersession.py` passes
+an acknowledgement on between latched alerts; the card lists latched alerts with
+the firing ones. The converter turns `ack_required` into `latching`. Correcting
+the item above: `ack_reminders_only` isn't latching. In Alert2 it only keeps an
+acknowledged alert's done notification, which Alert Redux always sends (§9.7),
+so it needs nothing.
 
 **Versions from 1.0.0** [Decided]: a phase that adds integration features is a minor
 release, so phase 12 is 1.1.0, phase 13 1.2.0, and phase 15 1.3.0. Phase 14 ships

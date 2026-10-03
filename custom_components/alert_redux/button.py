@@ -54,9 +54,10 @@ class ProxySnoozeButton(ProxyEntity, ButtonEntity):
         return attributes
 
     async def async_press(self) -> None:
-        """Snooze the alert; refused if it isn't firing, or can't be snoozed."""
+        """Snooze the alert; refused if it isn't firing or latched, or can't be
+        snoozed."""
         alert = self._require_alert()
-        if not alert.firing:
+        if not alert.firing and not alert.latched:
             raise self._not_firing(alert)
         # Seconds, not a timedelta: the action call is recorded as an event.
         await self._async_act(

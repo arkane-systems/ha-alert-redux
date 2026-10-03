@@ -258,3 +258,22 @@ async def test_generated_alerts(hass: HomeAssistant, setup_alerts: SetupAlerts) 
     assert hass.config_entries.async_remove_subentry(entry, "gen")
     await hass.async_block_till_done()
     assert er.async_get(hass).async_get("switch.front_door_unlocked") is None
+
+
+async def test_switch_latched(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
+    """A latched alert wants acknowledging, so the switch is on (spec §10);
+    off acknowledges it, and on refuses, as it isn't firing."""
+    await _setup(hass, setup_alerts, latching=True)
+    await _door(hass, "on")
+    await _door(hass, "off")
+    assert hass.states.get(ALERT).state == "latched"
+    assert hass.states.get(SWITCH).state == "on"
+    with pytest.raises(ServiceValidationError) as err:
+        await _call(hass, "switch", "turn_on", SWITCH)
+    assert err.value.translation_key == "not_firing"
+    await _call(hass, "button", "press", BUTTON)
+    assert hass.states.get(ALERT).attributes["snoozed_until"] is not None
+    assert hass.states.get(ALERT).state == "latched"
+    await _call(hass, "switch", "turn_off", SWITCH)
+    assert hass.states.get(ALERT).state == "idle"
+    assert hass.states.get(SWITCH).state == "off"

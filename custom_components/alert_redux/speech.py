@@ -253,8 +253,25 @@ class Firing:
     snoozed_for: timedelta | None = None
 
 
-def firing_alerts(alerts: Sequence[Firing]) -> str:
-    """Reply to "what alerts are firing?", given them highest priority first."""
+def firing_alerts(alerts: Sequence[Firing], latched: Sequence[str] = ()) -> str:
+    """Reply to "what alerts are firing?", given them highest priority first.
+
+    latched names the alerts that stopped firing unacknowledged (spec §10),
+    highest priority first; they follow.
+    """
+    reply = _firing(alerts)
+    if latched:
+        names = list(latched[:QUERY_LIMIT])
+        if (more := len(latched) - QUERY_LIMIT) > 0:
+            names.append(f"{more} more")
+        verb = "hasn't" if len(latched) == 1 else "haven't"
+        reply += (
+            f" {_join(names, 'and')} stopped firing but {verb} been acknowledged."
+        )
+    return reply
+
+
+def _firing(alerts: Sequence[Firing]) -> str:
     if not alerts:
         return "No alerts are firing."
     parts = [_describe(alert) for alert in alerts[:QUERY_LIMIT]]

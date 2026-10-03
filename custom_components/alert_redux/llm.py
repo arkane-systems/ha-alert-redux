@@ -20,7 +20,8 @@ PROMPT = (
     "Alert Redux alerts (the alert_redux entities) are acknowledged, "
     "unacknowledged, and snoozed with the AlertReduxAcknowledge, "
     "AlertReduxUnacknowledge, and AlertReduxSnooze tools, never by turning them "
-    "on or off. AlertReduxListFiring says which alerts are firing."
+    "on or off. AlertReduxListFiring says which alerts are firing, and which are "
+    "latched (stopped firing, but kept until acknowledged)."
 )
 
 

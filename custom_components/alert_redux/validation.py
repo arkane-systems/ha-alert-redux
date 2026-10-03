@@ -24,6 +24,7 @@ from homeassistant.helpers.script import async_validate_actions_config
 
 from .const import (
     CONF_ACKNOWLEDGEABLE,
+    CONF_LATCHING,
     CONF_ACTION,
     CONF_ALERT,
     CONF_ALERT_STATES,
@@ -192,6 +193,9 @@ async def async_check_alert(
     """Return an error key for a kind's own fields, if they don't make sense."""
     if error := await async_check_buttons(hass, data.get(CONF_BUTTONS, [])):
         return error
+    if data.get(CONF_LATCHING) and not data.get(CONF_ACKNOWLEDGEABLE, True):
+        # It could never be released (spec §10).
+        return "latching_unacknowledgeable"
     if kind is AlertKind.EVENT:
         if not data[CONF_EVENT_TYPE]:
             return "event_type_missing"

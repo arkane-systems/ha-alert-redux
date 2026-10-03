@@ -398,6 +398,11 @@ class AlertRuntime:
     no_data_announced: bool = False
     delay_on_until: datetime | None = None
     delay_off_until: datetime | None = None
+    # A latching alert that stopped firing unacknowledged (spec §10), and while
+    # its item is open (latched, or firing again from the latch), when the
+    # item's first firing started: its reminders are counted from then.
+    latched: bool = False
+    latch_anchor: datetime | None = None
     # When the next reminder is due, while firing and unacknowledged (spec §9.6).
     next_reminder: datetime | None = None
     # When the current firing's duration runs out, for event alerts and for manual
@@ -432,27 +437,42 @@ class AlertRuntime:
         """Return the alert's current state.
 
         A firing alert that has lost its data keeps its firing state during the
-        grace period (spec §4.4); only a non-firing alert shows no_data.
+        grace period (spec §4.4); only a non-firing alert shows no_data. A
+        latched alert stays latched while it has no data (spec §10).
         """
         if self.disabled:
             return AlertState.DISABLED
         if self.firing:
             return AlertState.ACK if self.acked else AlertState.ACTIVE
+        if self.latched:
+            return AlertState.LATCHED
         if self.no_data_since is not None:
             return AlertState.NO_DATA
         return AlertState.IDLE
 
+    @property
+    def reminder_anchor(self) -> datetime | None:
+        """Return when reminder slots are counted from: the firing's start, or
+        while latched, the start of the item's first firing (spec §10)."""
+        if self.firing:
+            return self.firing_since
+        return self.latch_anchor if self.latched else None
+
     def fire(self, now: datetime, data: dict[str, Any] | None = None) -> Transition:
         """Start firing, or record another fire of a firing alert (spec §4.3).
 
-        Firing again keeps the acknowledgement: it's the same firing.
+        Firing again keeps the acknowledgement: it's the same firing. A latched
+        alert firing again is the same item, so its fire count carries on.
         """
         old = self.state
         if not self.firing:
             self.firing = True
             self.acked = False
             self.firing_since = now
-            self.fire_count = 0
+            if self.latch_anchor is None:
+                self.fire_count = 0
+            self.latched = False
+            self.snoozed_until = None
         self.fire_count += 1
         self.last_fired = now
         self.fire_data = data
@@ -471,11 +491,21 @@ class AlertRuntime:
         self.event_expires = now + duration
         return transition
 
-    def end(self, now: datetime, reason: EndReason) -> Transition | None:
-        """Stop firing; the acknowledgement clears with it (spec §6.1)."""
+    def end(
+        self, now: datetime, reason: EndReason, *, latching: bool = False
+    ) -> Transition | None:
+        """Stop firing; the acknowledgement clears with it (spec §6.1).
+
+        A latching alert that ends unacknowledged, other than by being
+        disabled, latches instead of going idle (spec §10), keeping its fire
+        count and fire data.
+        """
         if not self.firing:
             return None
         old = self.state
+        latch = (
+            latching and old is AlertState.ACTIVE and reason is not EndReason.DISABLED
+        )
         fire_count = self.fire_count
         fire_data = self.fire_data
         started = self.firing_since
@@ -486,8 +516,13 @@ class AlertRuntime:
         self.acked = False
         self.snoozed_until = None
         self.firing_since = None
-        self.fire_count = 0
-        self.fire_data = None
+        if latch:
+            self.latched = True
+            self.latch_anchor = self.latch_anchor or started
+        else:
+            self.latch_anchor = None
+            self.fire_count = 0
+            self.fire_data = None
         self.next_reminder = None
         self.event_expires = None
         self.last_ended = now
@@ -498,9 +533,16 @@ class AlertRuntime:
     def ack(self, now: datetime, user_id: str | None) -> Transition | None:
         """Acknowledge an active alert, or make a snoozed alert's ack permanent.
 
-        A snoozed alert then stays acknowledged until the firing ends.
+        A snoozed alert then stays acknowledged until the firing ends. A latched
+        alert is released (spec §10).
         """
         old = self.state
+        if old is AlertState.LATCHED:
+            fire_count = self.fire_count
+            self.release_latch()
+            self.last_acked = now
+            self.last_acked_by = user_id
+            return Transition(old, self.state, fire_count)
         if old is not AlertState.ACTIVE and not (
             old is AlertState.ACK and self.snoozed_until is not None
         ):
@@ -528,14 +570,18 @@ class AlertRuntime:
         """Acknowledge a firing alert until a deadline (spec §6.2).
 
         An active alert is acknowledged as well; an acknowledged one, snoozed or
-        not, just gets the new deadline, even if it's sooner.
+        not, just gets the new deadline, even if it's sooner. A latched alert
+        stays latched, with its reminders put off until then (spec §10).
         """
         old = self.state
-        if old not in (AlertState.ACTIVE, AlertState.ACK):
+        if old not in (AlertState.ACTIVE, AlertState.ACK, AlertState.LATCHED):
             return []
         self.snoozed_until = until
         self.last_snoozed = now
         self.last_snoozed_by = user_id
+        if old is AlertState.LATCHED:
+            self.next_reminder = None
+            return [(Change.SNOOZED, Transition(old, old, self.fire_count))]
         if old is AlertState.ACK:
             return [(Change.SNOOZED, Transition(old, old, self.fire_count))]
         self.acked = True
@@ -548,14 +594,19 @@ class AlertRuntime:
     def snooze_expire(self, now: datetime) -> list[tuple[Change, Transition]]:
         """End a snooze whose deadline has passed: the alert is active again.
 
-        The caller plans the reminders by the snooze-end rule.
+        The caller plans the reminders by the snooze-end rule. A latched alert
+        was never acknowledged, so it only stops being snoozed.
         """
         if (
-            self.state is not AlertState.ACK
+            self.state not in (AlertState.ACK, AlertState.LATCHED)
             or self.snoozed_until is None
             or now < self.snoozed_until
         ):
             return []
+        if self.state is AlertState.LATCHED:
+            self.snoozed_until = None
+            transition = Transition(AlertState.LATCHED, self.state, self.fire_count)
+            return [(Change.SNOOZE_EXPIRED, transition)]
         self.acked = False
         self.snoozed_until = None
         self.last_unacked = now
@@ -579,6 +630,7 @@ class AlertRuntime:
         changes: list[tuple[Change, Transition]] = []
         if (ended := self.end(now, EndReason.DISABLED)) is not None:
             changes.append((Change.ENDED, ended))
+        self.release_latch()
         self.disabled = True
         self.disabled_until = until
         self.last_disabled = now
@@ -593,6 +645,22 @@ class AlertRuntime:
         self.awaiting_data = False
         changes.append((Change.DISABLED, Transition(old, self.state, 0)))
         return changes
+
+    def release_latch(self) -> bool:
+        """Clear the latch and the open item; return whether it was latched.
+
+        Used by acknowledging and disabling, and when an alert stops latching.
+        """
+        latched = self.latched
+        self.latch_anchor = None
+        if not latched:
+            return False
+        self.latched = False
+        self.snoozed_until = None
+        self.next_reminder = None
+        self.fire_count = 0
+        self.fire_data = None
+        return True
 
     def enable(
         self, now: datetime, user_id: str | None, *, awaits_data: bool
@@ -756,13 +824,18 @@ class AlertRuntime:
     def plan_reminder(self, schedule: Sequence[float], now: datetime) -> None:
         """Set the next reminder: the next slot after now (spec §6.2).
 
-        Slots are counted from when the firing started. There's none unless the
-        alert is firing and unacknowledged.
+        Slots are counted from when the firing started, or for a latched alert,
+        its item's first firing (spec §10). There's none unless the alert is
+        firing and unacknowledged, or latched and not snoozed.
         """
-        if self.state is not AlertState.ACTIVE or self.firing_since is None:
+        anchor = self.reminder_anchor
+        if anchor is None or not (
+            self.state is AlertState.ACTIVE
+            or (self.state is AlertState.LATCHED and self.snoozed_until is None)
+        ):
             self.next_reminder = None
         else:
-            self.next_reminder = next_reminder_slot(self.firing_since, schedule, now)
+            self.next_reminder = next_reminder_slot(anchor, schedule, now)
 
     def await_data(self, now: datetime) -> None:
         """Wait for the first data after a restart or re-subscription (spec §15.3).
@@ -780,16 +853,19 @@ class AlertRuntime:
         missing_inputs: list[str],
         now: datetime,
         timing: Timing,
+        *,
+        latching: bool = False,
     ) -> list[tuple[Change, Transition]]:
         """Apply a condition result (None meaning no data), or a timer running out.
 
         Deadlines are kept in the runtime; the caller schedules a call at
-        next_deadline() and evaluates the latest result again then.
+        next_deadline() and evaluates the latest result again then. A latching
+        alert's firing that ends unacknowledged latches (spec §10).
         """
         if self.disabled:
             return []
         if condition is None:
-            return self._evaluate_no_data(missing_inputs, now, timing)
+            return self._evaluate_no_data(missing_inputs, now, timing, latching)
 
         changes: list[tuple[Change, Transition]] = []
         old = self.state
@@ -817,13 +893,17 @@ class AlertRuntime:
                     self.delay_off_until = now + timing.delay_off
                 if now >= self.delay_off_until:
                     self.delay_off_until = None
-                    transition = self.end(now, EndReason.RESOLVED)
+                    transition = self.end(now, EndReason.RESOLVED, latching=latching)
                     assert transition is not None
                     changes.append((Change.ENDED, transition))
         return changes
 
     def _evaluate_no_data(
-        self, missing_inputs: list[str], now: datetime, timing: Timing
+        self,
+        missing_inputs: list[str],
+        now: datetime,
+        timing: Timing,
+        latching: bool,
     ) -> list[tuple[Change, Transition]]:
         changes: list[tuple[Change, Transition]] = []
         if not self.awaiting_data:
@@ -840,7 +920,7 @@ class AlertRuntime:
                 (Change.NO_DATA, Transition(old, self.state, self.fire_count))
             )
         if (grace_until := self.no_data_grace_until(timing)) and now >= grace_until:
-            transition = self.end(now, EndReason.NO_DATA)
+            transition = self.end(now, EndReason.NO_DATA, latching=latching)
             assert transition is not None
             changes.append((Change.ENDED, transition))
         return changes
@@ -975,6 +1055,7 @@ _DATETIME_FIELDS = frozenset(
         "delay_off_until",
         "next_reminder",
         "event_expires",
+        "latch_anchor",
         "throttled_since",
         "throttle_last_held",
         "throttle_ended",

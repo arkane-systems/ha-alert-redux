@@ -25,6 +25,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_ACKNOWLEDGEABLE,
+    ATTR_LATCHING,
     ATTR_ATTRIBUTE,
     ATTR_BROKEN_REFERENCES,
     ATTR_BUTTONS,
@@ -98,6 +99,7 @@ from .const import (
     ATTR_VALUE_TEMPLATE,
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_LATCHING,
     CONF_ACTION,
     CONF_AREA_ID,
     CONF_LABELS,
@@ -346,6 +348,7 @@ class AlertEntity(Entity):
         # before the first.
         self._was_firing: bool | None = None
         self._was_acked: bool | None = None
+        self._was_latched: bool | None = None
         self._attr_unique_id = definition.unique_id
         # Set by the generator that made the alert (spec §12.3).
         self.relationship_resolver: RelationshipResolver | None = None
@@ -357,6 +360,8 @@ class AlertEntity(Entity):
         data = definition.data
         self._priority = Priority(data[CONF_PRIORITY])
         self._acknowledgeable: bool = data[CONF_ACKNOWLEDGEABLE]
+        # Kept until acknowledged (spec §10); only an acknowledgeable alert can be.
+        self._latching: bool = self._acknowledgeable and data.get(CONF_LATCHING, False)
         # The alert's own duration, if it has one and it's set (§4.2, §4.3).
         self._own_duration = to_timedelta(data.get(CONF_DURATION))
         self._explicit_subject: str | None = data.get(CONF_SUBJECT_ENTITY) or None
@@ -414,6 +419,12 @@ class AlertEntity(Entity):
     def firing(self) -> bool:
         """Return whether the alert is firing (spec §3)."""
         return self._runtime.firing
+
+    @property
+    def latched(self) -> bool:
+        """Return whether the alert is latched: it stopped firing without being
+        acknowledged, and is kept until it is (spec §10)."""
+        return self._runtime.state is AlertState.LATCHED
 
     @property
     def acknowledgeable(self) -> bool:
@@ -489,7 +500,8 @@ class AlertEntity(Entity):
         """Return the reminder schedule: the alert's own, or else the default.
 
         An alert with a duration that doesn't outlast the first interval sends no
-        reminders: it just fires and expires (spec §9.6).
+        reminders: it just fires and expires (spec §9.6). A latching one does:
+        its reminders carry on once it has ended (§10).
         """
         if self._own_schedule is not None:
             schedule = tuple(self._own_schedule)
@@ -497,6 +509,7 @@ class AlertEntity(Entity):
             schedule = self._settings.reminder_schedule
         if (
             self._has_duration
+            and not self._latching
             and schedule
             and self._duration <= timedelta(minutes=schedule[0])
         ):
@@ -530,6 +543,7 @@ class AlertEntity(Entity):
             ATTR_KIND: self._kind,
             ATTR_PRIORITY: self._priority,
             ATTR_ACKNOWLEDGEABLE: self._acknowledgeable,
+            ATTR_LATCHING: self._latching,
             ATTR_SUBJECT_ENTITY: self.subject_entity,
             ATTR_FIRING_SINCE: runtime.firing_since,
             ATTR_LAST_FIRED: runtime.last_fired,
@@ -608,7 +622,10 @@ class AlertEntity(Entity):
                 self.hass, self.entity_id, {ASSIST: True}
             )
         self._async_restored()
-        if self._runtime.state is AlertState.ACTIVE and not self._runtime.next_reminder:
+        if (
+            self._runtime.state in (AlertState.ACTIVE, AlertState.LATCHED)
+            and not self._runtime.next_reminder
+        ):
             # E.g. an alert that was firing before reminders existed.
             self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
         expired = False
@@ -682,6 +699,13 @@ class AlertEntity(Entity):
                 if acked:
                     async_notifications_acknowledged(self.hass, self.entity_id)
                 supersession.async_ack_changed(self, acked=acked)
+        # A latched alert that's acknowledged, released, or disabled clears its
+        # notifications as acknowledging does; firing again doesn't (spec §10).
+        latched = self._runtime.state is AlertState.LATCHED
+        if latched != self._was_latched:
+            was_latched, self._was_latched = self._was_latched, latched
+            if was_latched and not firing:
+                async_notifications_acknowledged(self.hass, self.entity_id)
         # The voice proxies follow (spec §14.2).
         if (proxies := self.hass.data[DOMAIN].get(DATA_PROXIES)) is not None:
             proxies.async_alert_written(self)
@@ -741,17 +765,40 @@ class AlertEntity(Entity):
         runtime = self._runtime
         runtime.pre_acks[source] = until
         self._context = context
-        if runtime.state is not AlertState.ACTIVE:
+        if runtime.state not in (AlertState.ACTIVE, AlertState.LATCHED):
             self._async_update_timers()
             self.async_write_ha_state()
             self._persist()
             return
+        self._async_act_on_propagation(source, until)
+
+    @callback
+    def async_propagate_latch_ack(
+        self, source: str, until: datetime | None, context: Context | None
+    ) -> None:
+        """Take an acknowledgement propagated from a latched superseded alert.
+
+        A latched source isn't firing, so nothing is left to pre-acknowledge: it
+        acts only on this alert being latched too (spec §10).
+        """
+        if not self._acknowledgeable or self._runtime.state is not AlertState.LATCHED:
+            return
+        self._context = context
+        self._async_act_on_propagation(source, until)
+
+    @callback
+    def _async_act_on_propagation(self, source: str, until: datetime | None) -> None:
+        """Acknowledge an active or latched alert at once, or snooze it until
+        then, for a propagated acknowledgement (spec §8.2, §10)."""
+        runtime = self._runtime
         now = dt_util.utcnow()
         pre_acked = {ATTR_PRE_ACKED_BY: self._supersession.entity_ids([source])}
         if until is None:
             transition = runtime.ack(now, self._user_id)
             assert transition is not None
             self._apply(EVENT_ACKED, transition, pre_acked)
+            if transition.old_state is AlertState.LATCHED:
+                self._supersession.async_latch_acked(self)
         else:
             self._apply_changes(
                 runtime.snooze(now, until, self._user_id),
@@ -806,7 +853,8 @@ class AlertEntity(Entity):
 
     @callback
     def _async_sync_messages(self) -> None:
-        """Render the messages while firing, restarting when their inputs change.
+        """Render the messages while firing or latched, restarting when their
+        inputs change.
 
         The context is the on notification's (spec §9.5), so the card shows the on
         message as it would be sent.
@@ -823,7 +871,7 @@ class AlertEntity(Entity):
                 runtime.fire_data,
                 tuple(self._variables.items()),
             )
-            if runtime.firing
+            if runtime.firing or runtime.latched
             else None
         )
         if key == self._message_key:
@@ -851,10 +899,16 @@ class AlertEntity(Entity):
     ) -> dict[str, Any]:
         """Return the message template variables, for a notification or the card.
 
-        An ending transition supplies the details of the firing that ended.
+        An ending transition supplies the details of the firing that ended. A
+        reminder of a latched alert, and the done notification of a firing that
+        latched, say so with latched (spec §10).
         """
         runtime = self._runtime
         data = transition.fire_data if transition else runtime.fire_data
+        if transition is not None:
+            latched = transition.new_state is AlertState.LATCHED
+        else:
+            latched = reason == REASON_REMINDER and runtime.latched
         is_trigger = self._fire_data_is_trigger
         return message_context(
             self.hass,
@@ -871,7 +925,12 @@ class AlertEntity(Entity):
             ),
             end_reason=transition.reason if transition else None,
             started=transition.started if transition else None,
-            ended=transition.ended if transition else None,
+            ended=(
+                transition.ended
+                if transition
+                else runtime.last_ended if latched else None
+            ),
+            latched=latched,
             extra=self._variables,
         )
 
@@ -913,14 +972,15 @@ class AlertEntity(Entity):
 
     def quiet_hours_reminder(self) -> Notification | None:
         """Return the reminder sent when quiet hours end, with the real firing
-        duration; None unless the alert is active and not superseded (§9.9)."""
+        duration; None unless the alert is active or latched, and not
+        superseded (§9.9, §10)."""
         runtime = self._runtime
-        if runtime.state is not AlertState.ACTIVE or self._superseded_by:
+        if (
+            runtime.state not in (AlertState.ACTIVE, AlertState.LATCHED)
+            or self._superseded_by
+        ):
             return None
-        now = dt_util.utcnow()
-        duration = (
-            (now - runtime.firing_since).total_seconds() if runtime.firing_since else 0
-        )
+        duration = self._reminder_duration(dt_util.utcnow())
         return build_notification(
             self.hass,
             **self._notification_details(
@@ -1058,8 +1118,14 @@ class AlertEntity(Entity):
         """
         self._context = None
         ended = self._runtime.event_expires or dt_util.utcnow()
-        if (transition := self._runtime.end(ended, EndReason.RESOLVED)) is None:
+        if (
+            transition := self._runtime.end(
+                ended, EndReason.RESOLVED, latching=self._latching
+            )
+        ) is None:
             return
+        # A latched alert's reminders carry on (spec §10).
+        self._runtime.plan_reminder(self._reminder_schedule, ended)
         self._apply(EVENT_ENDED, transition, _ended_data(transition))
         self._async_notify_done(transition)
 
@@ -1102,7 +1168,7 @@ class AlertEntity(Entity):
             None,
             self._message_context(REASON_THROTTLE_SUMMARY, duration_seconds=duration),
             message=throttle_summary_message(summary, now, firing=firing),
-            final=not firing,
+            final=not firing and not runtime.latched,
         )
 
     @callback
@@ -1114,7 +1180,10 @@ class AlertEntity(Entity):
         then, or skipped if that alert did fire.
         """
         runtime = self._runtime
-        if runtime.state is not AlertState.ACTIVE or runtime.next_reminder is None:
+        if (
+            runtime.state not in (AlertState.ACTIVE, AlertState.LATCHED)
+            or runtime.next_reminder is None
+        ):
             return
         # The reminder is the alert's own doing, not the last user action's.
         self._context = None
@@ -1167,15 +1236,20 @@ class AlertEntity(Entity):
         if self._superseded_by:
             _LOGGER.debug("%s: reminder superseded", self.entity_id)
             return
-        runtime = self._runtime
-        duration = (
-            (now - runtime.firing_since).total_seconds() if runtime.firing_since else 0
-        )
         self._async_notify(
             REASON_REMINDER,
             self._reminder_message,
-            self._message_context(REASON_REMINDER, duration_seconds=duration),
+            self._message_context(
+                REASON_REMINDER, duration_seconds=self._reminder_duration(now)
+            ),
         )
+
+    def _reminder_duration(self, now: datetime) -> float:
+        """Return a reminder's duration: how long the alert has been firing, or
+        while latched, how long ago it stopped (spec §10)."""
+        runtime = self._runtime
+        since = runtime.last_ended if runtime.latched else runtime.firing_since
+        return (now - since).total_seconds() if since else 0
 
     @callback
     def _async_snooze_due(self, _now: datetime) -> None:
@@ -1189,9 +1263,9 @@ class AlertEntity(Entity):
         if not (changes := runtime.snooze_expire(now)):
             return
         remind = False
-        if runtime.firing_since is not None:
+        if (anchor := runtime.reminder_anchor) is not None:
             remind, runtime.next_reminder = snooze_end_reminder(
-                runtime.firing_since,
+                anchor,
                 self._reminder_schedule,
                 now,
                 self._settings.snooze_reminder_window,
@@ -1275,6 +1349,10 @@ class AlertEntity(Entity):
         self._applied_placement = definition.placement
         if not self._has_duration:
             self._runtime.event_expires = None
+        if not self._latching and self._runtime.release_latch():
+            # No longer kept until acknowledged: released, with no
+            # acknowledgement recorded (spec §10).
+            _LOGGER.info("%s: released; it no longer latches", self.entity_id)
         self._async_replan_reminder()
         self.async_write_ha_state()
         self._persist()
@@ -1295,12 +1373,18 @@ class AlertEntity(Entity):
         raise self._not_manual()
 
     async def async_ack(self) -> None:
-        """Acknowledge the alert, or make a snooze a lasting acknowledgement."""
+        """Acknowledge the alert, or make a snooze a lasting acknowledgement.
+
+        A latched alert is released, and passes the acknowledgement on to the
+        latched alerts superseding it (spec §10).
+        """
         self._require_acknowledgeable()
         if (transition := self._runtime.ack(dt_util.utcnow(), self._user_id)) is None:
             _LOGGER.debug("%s: ack ignored; not active or snoozed", self.entity_id)
             return
         self._apply(EVENT_ACKED, transition)
+        if transition.old_state is AlertState.LATCHED:
+            self._supersession.async_latch_acked(self)
 
     async def async_snooze(self, duration: timedelta) -> None:
         """Acknowledge the alert for a while (spec §6.2)."""
@@ -1456,7 +1540,8 @@ class AlertEntity(Entity):
         else:
             transition = self._runtime.fire(now, data)
         pre_acked = None
-        if transition.fire_count == 1:
+        if transition.old_state not in (AlertState.ACTIVE, AlertState.ACK):
+            # A new firing, including one from the latch (spec §10).
             pre_acked = self._pre_ack_new_firing(now)
             self._runtime.plan_reminder(self._reminder_schedule, now)
         self._apply(
@@ -1619,12 +1704,22 @@ class ManualAlertEntity(AlertEntity):
         self._async_start_firing(data, ATTR_FIRE_DATA)
 
     async def async_dismiss(self) -> None:
-        """Dismiss a firing manual alert."""
+        """Dismiss a firing manual alert.
+
+        A latching alert latches only if no user dismissed it: a person
+        dismissing it has seen it, an automation hasn't (spec §10).
+        """
         if (
-            transition := self._runtime.end(dt_util.utcnow(), EndReason.DISMISSED)
+            transition := self._runtime.end(
+                dt_util.utcnow(),
+                EndReason.DISMISSED,
+                latching=self._latching and self._user_id is None,
+            )
         ) is None:
             _LOGGER.debug("%s: dismiss ignored; not firing", self.entity_id)
             return
+        # A latched alert's reminders carry on (spec §10).
+        self._runtime.plan_reminder(self._reminder_schedule, dt_util.utcnow())
         self._apply(EVENT_ENDED, transition, _ended_data(transition))
         self._async_notify_done(transition)
 
@@ -1996,17 +2091,20 @@ class ConditionAlertEntity(AlertEntity):
         now = dt_util.utcnow()
         condition, missing = self._judge(self._results)
         was_missing = list(self._runtime.missing_inputs)
-        changes = self._runtime.evaluate(condition, missing, now, timing)
+        changes = self._runtime.evaluate(
+            condition, missing, now, timing, latching=self._latching
+        )
         pre_acked = None
         if any(change is Change.FIRED for change, _ in changes):
             pre_acked = self._pre_ack_new_firing(now)
             self._runtime.plan_reminder(self._reminder_schedule, now)
             if self._kind is AlertKind.ON_OFF:
                 self._runtime.on_off_fired()
-        if self._kind is AlertKind.ON_OFF and any(
-            change is Change.ENDED for change, _ in changes
-        ):
-            self._runtime.on_off_ended()
+        if any(change is Change.ENDED for change, _ in changes):
+            # A latched alert's reminders carry on (spec §10).
+            self._runtime.plan_reminder(self._reminder_schedule, now)
+            if self._kind is AlertKind.ON_OFF:
+                self._runtime.on_off_ended()
 
         self._deadline_timer.at(self.hass, self._runtime.next_deadline(timing))
 

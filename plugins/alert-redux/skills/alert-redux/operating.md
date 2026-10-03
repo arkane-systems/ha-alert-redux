@@ -53,16 +53,38 @@ nothing. These raise errors instead:
 | `idle` | Not firing. |
 | `active` | Firing, unacknowledged. Reminders are sent. |
 | `ack` | Firing, acknowledged (or snoozed: `snoozed_until` is set). |
+| `latched` | Stopped firing without being acknowledged, on an alert set to **Keep until acknowledged** (`latching`). Reminders carry on until it's acknowledged. |
 | `no_data` | Not firing, and its inputs are unavailable, unknown, or won't parse. |
 | `disabled` | Disabled, or suspended until `disabled_until`. Ignores its inputs. |
 
 A **firing** alert whose inputs disappear stays `active` or `ack` for its no-data
 grace period, with `no_data_since` and `missing_inputs` set; if the grace runs
-out, the firing ends with reason `no_data`.
+out, the firing ends with reason `no_data`. A `latched` alert stays `latched`
+when its inputs disappear, with `no_data_since` set.
+
+**Latching alerts.** With `latching` on, a firing that ends while `active` (for
+any reason but disabling) goes to `latched`, not `idle`: the freezer that was
+warm for ten minutes at 3 a.m. is still there in the morning. A firing that was
+acknowledged or snoozed before it ended goes to `idle` as usual. While latched:
+
+- `acknowledge` (by any route: action, card, voice, notification button, proxy
+  switch) releases it to `idle` and clears its notifications; `_acked` fires with
+  `old_state` `latched`. `unack` does nothing: it isn't acknowledged.
+- `snooze` puts its reminders off: it stays `latched` with `snoozed_until`, fires
+  `_snoozed` (not `_acked`), and when the snooze runs out, `_snooze_expired`
+  (not `_unacked`) and the snooze-end reminder.
+- If it fires again, it's `active` again and sends its on notification, but it's
+  the same item: `fire_count` carries on counting. Acknowledge it then, and it
+  ends as `idle`.
+- `dismiss` (manual alerts) latches only when no user is behind it: a person
+  dismissing it has seen it; an automation hasn't.
+- Disabling it clears the latch (no `_ended`, since it wasn't firing); turning
+  `latching` off releases it to `idle`, without recording an acknowledgement.
+- `message` and `display_message` stay rendered, so the card can show them.
 
 ## Attributes
 
-Every alert: `kind`, `priority`, `acknowledgeable`, `subject_entity`,
+Every alert: `kind`, `priority`, `acknowledgeable`, `latching`, `subject_entity`,
 `firing_since`, `last_fired`, `last_ended`, `fire_count`, `last_acked`,
 `last_acked_by`, `last_unacked`, `last_unacked_by`, `snoozed_until`,
 `last_snoozed`, `last_snoozed_by`, `disabled_until`, `last_disabled`,
@@ -73,7 +95,9 @@ Every alert: `kind`, `priority`, `acknowledgeable`, `subject_entity`,
 `buttons` (labels), `buttons_require_unlock` (the labels marked Require unlock), `generated_by` (the generator's sensor, for generated alerts).
 The `_by` attributes are user IDs. `fire_count` counts the fires of the
 **current** firing (firing again adds to it), and goes back to 0 when the firing
-ends; `fire_data` and `firing_since` clear then too.
+ends; `fire_data` and `firing_since` clear then too. A latched alert keeps its
+`fire_count` and `fire_data` (and adds to the count if it fires again) until
+it's acknowledged; `last_ended` is when it stopped.
 
 By kind:
 
@@ -119,7 +143,9 @@ Every change fires an event carrying `entity_id`, `name`, `priority`, `kind`,
 
 One change can fire two events: snoozing an active alert fires `_snoozed` then
 `_acked`; a snooze running out, `_snooze_expired` then `_unacked`; disabling a
-firing alert, `_ended` then `_disabled`.
+firing alert, `_ended` then `_disabled`. Latching has no event of its own:
+`_ended` has `new_state` `latched`, and acknowledging it fires `_acked` with
+`old_state` `latched` and `new_state` `idle`.
 
 ## Acknowledging, snoozing, disabling, suspending
 
@@ -136,20 +162,28 @@ firing alert, `_ended` then `_disabled`.
 ## Notifications
 
 - An alert sends an **on** notification when it starts firing, **reminders** on
-  its schedule while `active`, and a **done** notification when it stops (even if
-  acknowledged). Titles are the alert's name.
+  its schedule while `active` or `latched`, and a **done** notification when it
+  stops (even if acknowledged). Titles are the alert's name.
+- **Latched alerts** keep the schedule counted from when the item first fired.
+  Their reminders say how long ago it stopped ("…stopped firing 25 minutes ago
+  and hasn't been acknowledged"); in message templates, `latched` is true and
+  `duration` is the time since it stopped. A done notification of a firing that
+  latched adds "It's kept until acknowledged.", keeps its Acknowledge and Snooze
+  buttons, and stays clearable (it isn't final), with `latched` true.
 - It sends to its own groups, or the default groups. If no default groups are set,
   alerts relying on them send to the fallback, and a Repairs issue says so.
 - **Firing again** (manual and event kinds) sends the on message again unless
   acknowledged.
 - An event or self-ending manual alert only reminds if its duration outlasts the
-  first reminder interval.
+  first reminder interval, unless it's latching: then its reminders carry on
+  once it has latched.
 - **Throttling:** past the throttle, on and done notifications are held; the one
   that reaches the limit is marked "[Throttling starts]", and a summary is sent
   when the rate drops (`throttled_since` shows it's in force).
 - **Quiet hours** (loud groups only): below the threshold priority, notifications
   are held (or softened) while the quiet-hours entity is on; when it turns off,
-  still-firing alerts get one reminder and the ones that ended are summarised.
+  still-firing and latched alerts get one reminder and the ones that ended are
+  summarised.
 - **Replacing and clearing** (mobile app and persistent notifications): each
   alert's notifications replace one another, and are cleared when it's
   acknowledged or deleted.
@@ -184,6 +218,10 @@ An alert can **supersede** others (its `supersedes` relationships):
   `acknowledge` or `snooze` the superseding one. If that one isn't firing yet,
   it's **pre-acknowledged** (`pre_acked_by`, `pre_snoozed_until`) and starts as
   `ack` when it fires, for as long as the superseded alert stays acknowledged.
+  A superseding alert that's `latched` is acknowledged (or snoozed) at once, and
+  so it is when the superseded alert is acknowledged while itself `latched`.
+- A `latched` alert isn't firing, so it supersedes nothing. A `latched` alert
+  that a firing alert supersedes is hidden and silent like a firing one.
 
 The classic pair: *Door Open* (state, no delay) superseded by *Door Left Open*
 (same state, `delay_on` 10 minutes, propagation `acknowledge`): you're told the
@@ -198,7 +236,12 @@ through any pipeline, LLM agents included (the sentences are checked first):
 - "unacknowledge *name*", "remove the acknowledgement from *name*"
 - "snooze *name*", "snooze *name* for 30 minutes" (digits or words; without a
   duration, the alert's `button_snooze_duration`)
-- "what alerts are firing?", "are there any alerts?", "list the alerts"
+- "what alerts are firing?", "are there any alerts?", "list the alerts" (the
+  reply adds the `latched` alerts: "… stopped firing but hasn't been
+  acknowledged")
+
+Acknowledge and snooze work on `latched` alerts too; unacknowledge says it
+isn't acknowledged.
 
 Names match the alert's name or entity aliases, ignoring case, "the", and a
 trailing "alert"; a part of the name works if only one alert has it. With no
@@ -217,12 +260,13 @@ Assist:
 | Alert state | Switch | Turning it off | Turning it on |
 |---|---|---|---|
 | `active` | on | acknowledges | nothing |
+| `latched` | on | acknowledges | refused: `not_firing` |
 | `ack` (snoozed too) | off | nothing | removes the acknowledgement and snooze |
 | `idle`, `no_data`, `disabled` | off | nothing | refused: `not_firing` |
 
 An unacknowledgeable alert's switch refuses to turn off. The snooze button
 snoozes for the alert's snooze button duration, and refuses (`not_firing`) when
-the alert isn't firing. Both have an `alert` attribute (the alert's entity ID);
+the alert isn't firing or `latched`. Both have an `alert` attribute (the alert's entity ID);
 the button also has `snooze_duration` (seconds). On Alexa, a switch is also a
 contact sensor, open while on, so an Alexa routine can announce an alert firing.
 The proxies take the alert's area and labels, but not the "Alert Redux" label.
@@ -310,4 +354,5 @@ restarts. An alert still firing resumes quietly (no new on notification);
 deadlines that passed while Home Assistant was down are dealt with when it's back.
 After a restart, condition alerts wait for their inputs: those that weren't
 firing show `no_data` meanwhile, and those that were stay firing and resume if
-their condition still holds.
+their condition still holds. A `latched` alert stays `latched`, and a reminder
+that fell due while Home Assistant was down is sent once.

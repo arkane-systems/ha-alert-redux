@@ -62,6 +62,7 @@ Templates that return a value must be **clearly** true or false: anything else
 | `priority` | select, required | Default `warning`. |
 | `icon` | icon | Empty: the priority's icon. |
 | `acknowledgeable` | boolean, required | Default true. Off: can't be acknowledged or snoozed. |
+| `latching` | boolean, required | **Keep until acknowledged.** Default false (stored only when on). On: a firing that ends unacknowledged leaves the alert `latched`, still reminding, until someone acknowledges it. For alerts that matter even if they stop before anyone sees them (a freezer warm at night, a leak that dried). Needs `acknowledgeable`. |
 | `subject_entity` | entity | What the alert is about, for messages. Defaults to the watched entity. |
 
 ## The `placement` section
@@ -94,7 +95,7 @@ An alert's area and labels, which cards and automations use to select alerts
 | `throttle_count`, `throttle_minutes` | numbers | Used when `use_default_throttle` is false: at most this many on notifications in any window of this many minutes. Both empty: no throttling. |
 | `message` | template | The on message, also shown on the card. Default "{{ name }} is firing." |
 | `display_message` | template | A different message for the card. |
-| `reminder_message` | template | Default gives the name and how long it's been firing. |
+| `reminder_message` | template | Default gives the name and how long it's been firing. Also used while `latched`, where `latched` is true and `duration` is how long ago it stopped. |
 | `done_message` | template | Sent when it stops firing. |
 | `buttons` | list of `{label, action, require_unlock}` | Mobile notification buttons; `action` is an action sequence. Labels must be filled in, and each used once (the card presses a button by its label). |
 | `button_snooze_duration` | duration | How long the Snooze Alert button snoozes. |
@@ -187,8 +188,8 @@ own voice commands (see [operating.md](operating.md)).
 | Field | Type | Notes |
 |---|---|---|
 | `alert` | alert entity, required | The alert it watches. Not itself. |
-| `alert_states` | list, required | Any of `idle`, `active`, `ack`, `no_data`, `disabled`. Default `["active"]`. |
-| `condition`, `delay_on`, `delay_off`, `no_data_grace` | | E.g. `delay_on` 30 minutes on `active`: "unacknowledged for half an hour". |
+| `alert_states` | list, required | Any of `idle`, `active`, `ack`, `latched`, `no_data`, `disabled`. Default `["active"]`. |
+| `condition`, `delay_on`, `delay_off`, `no_data_grace` | | E.g. `delay_on` 30 minutes on `active`: "unacknowledged for half an hour"; on `active` and `latched`, whether or not it's still firing. |
 
 ### `trigger`
 
@@ -282,6 +283,7 @@ A form that's refused comes back with an error key:
 | `alert_state_self`, `alert_states_missing` | Watch another alert; choose a state. |
 | `supersedes_self`, `supersedes_duplicate`, `supersedes_cycle`, `relationship_target` | Fix the relationships. |
 | `propagation_unacknowledgeable` | Set propagation to `none`, or make the alert acknowledgeable. |
+| `latching_unacknowledgeable` | Make the alert acknowledgeable, or turn `latching` off: nothing could clear it. |
 | `snooze_duration_missing` | A `snooze` relationship needs `snooze_duration`. |
 | `button_incomplete`, `button_label_duplicate`, `invalid_button_action` | Each button needs a label (used once) and a valid action. |
 | `targets_required` | Generators: set at least one target criterion. |

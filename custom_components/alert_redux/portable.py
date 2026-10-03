@@ -28,6 +28,7 @@ from homeassistant.util.ulid import ulid_now
 from .const import (
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_LATCHING,
     CONF_AREA_FROM_TARGET,
     CONF_AREA_ID,
     CONF_PLACEMENT,
@@ -360,6 +361,7 @@ _COMMON: dict[Any, Any] = {
         [priority.value for priority in Priority]
     ),
     vol.Optional(CONF_ACKNOWLEDGEABLE, default=True): bool,
+    vol.Optional(CONF_LATCHING, default=False): bool,
     vol.Optional(CONF_ICON): _text,
     vol.Optional(CONF_MESSAGE): _text,
     vol.Optional(CONF_DISPLAY_MESSAGE): _text,
@@ -509,7 +511,7 @@ def _without_blanks(definition: Mapping[str, Any]) -> dict[str, Any]:
 def _stored(data: dict[str, Any]) -> dict[str, Any]:
     """Return validated data as the config flows store it: what's off or zero,
     where that is the default, is left out."""
-    for key in (CONF_PROXY_SWITCH, CONF_PROXY_SNOOZE_BUTTON):
+    for key in (CONF_LATCHING, CONF_PROXY_SWITCH, CONF_PROXY_SNOOZE_BUTTON):
         if not data.get(key):
             data.pop(key, None)
     if CONF_BUTTON_SNOOZE_DURATION in data and not any(

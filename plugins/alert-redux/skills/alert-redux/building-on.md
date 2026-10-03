@@ -64,18 +64,20 @@ Event triggers don't take wildcards; list the event types to listen to several.
 Act when an alert has been unacknowledged too long: make an **`alert_state`**
 alert watching it (`alert_states: [active]`, `delay_on` 30 minutes) rather than an
 automation with a `for:`. It then has its own notifications, card entry, and
-history.
+history. For an alert kept until acknowledged, watch `[active, latched]`, so the
+escalation doesn't stop just because the condition did.
 
 ## Summary sensors
 
 | Sensor | State |
 |---|---|
 | `sensor.alert_redux_highest_priority` | highest priority among firing alerts, or `none` |
-| `sensor.alert_redux_highest_unacked_priority` | the same, among `active` alerts that aren't superseded |
+| `sensor.alert_redux_highest_unacked_priority` | the same, among `active` and `latched` alerts that aren't superseded |
 | `sensor.alert_redux_firing` | count of firing alerts (`active` or `ack`) |
-| `sensor.alert_redux_active` | count of firing, unacknowledged alerts that aren't superseded |
+| `sensor.alert_redux_active` | count of unacknowledged alerts that aren't superseded: `active`, and `latched` (which still want acknowledging) |
 | `sensor.alert_redux_acknowledged` | count of acknowledged alerts |
-| `sensor.alert_redux_superseded` | count of firing alerts that a firing alert supersedes (`active` or `ack`) |
+| `sensor.alert_redux_superseded` | count of alerts that a firing alert supersedes (`active`, `ack`, or `latched`) |
+| `sensor.alert_redux_latched` | count of `latched` alerts: stopped firing, not yet acknowledged |
 | `sensor.alert_redux_no_data` | count missing data, including firing alerts in their grace period |
 | `sensor.alert_redux_disabled` | count disabled or suspended |
 

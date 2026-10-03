@@ -219,3 +219,28 @@ async def test_unload_removes_intents(
     assert not registered & set(INTENTS)
     reply = await _say(hass, "acknowledge back door open")
     assert reply != "Acknowledged Back Door Open."
+
+
+async def test_latched(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
+    """A latched alert is listed after the firing ones, and can be snoozed and
+    acknowledged, not unacknowledged (spec §10)."""
+    await _alerts(hass, setup_alerts, latching=True)
+    hass.states.async_set("binary_sensor.back_door", "off")
+    hass.states.async_set("binary_sensor.garage_door", "on")
+    await hass.async_block_till_done()
+    assert hass.states.get(BACK).state == "latched"
+    assert await _say(hass, "which alerts are firing") == (
+        "One alert is firing: Garage Door Open. Back Door Open stopped firing "
+        "but hasn't been acknowledged."
+    )
+    assert await _say(hass, "unacknowledge back door open") == (
+        "Back Door Open isn't acknowledged."
+    )
+    assert await _say(hass, "snooze back door open for 10 minutes") == (
+        "Snoozed Back Door Open for 10 minutes."
+    )
+    assert hass.states.get(BACK).state == "latched"
+    assert await _say(hass, "acknowledge back door open") == (
+        "Acknowledged Back Door Open."
+    )
+    assert hass.states.get(BACK).state == "idle"

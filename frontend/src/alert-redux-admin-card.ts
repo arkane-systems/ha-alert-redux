@@ -150,6 +150,11 @@ export class AlertReduxAdminCard extends LitElement {
       .state.ack {
         background: color-mix(in srgb, var(--c) 14%, transparent);
       }
+      .state.latched {
+        background: color-mix(in srgb, var(--c) 22%, transparent);
+        outline: 1px dashed var(--c);
+        outline-offset: -1px;
+      }
       .state.no_data {
         background: color-mix(in srgb, var(--warning-color, #ffa600) 20%, transparent);
       }
@@ -636,8 +641,11 @@ export class AlertReduxAdminCard extends LitElement {
         ? html`until ${clockTime(alert.disabledUntil, language)}`
         : nothing;
     }
-    if (alert.state === "ack" && alert.snoozedUntil) {
+    if ((alert.state === "ack" || alert.state === "latched") && alert.snoozedUntil) {
       return html`snoozed until ${clockTime(alert.snoozedUntil, language)}`;
+    }
+    if (alert.state === "latched" && alert.lastEnded) {
+      return html`stopped ${clockTime(alert.lastEnded, language)}`;
     }
     if (isFiring(alert) && alert.firingSince) {
       return html`since ${clockTime(alert.firingSince, language)}`;

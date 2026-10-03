@@ -3,17 +3,7 @@
 A replacement alert system for Home Assistant, intended to take over from the
 built-in `alert` integration, which is
 [effectively deprecated](https://community.home-assistant.io/t/wth-are-alerts-not-configurable-through-the-ui/804195).
-
-> **Status:** 1.0.0, the first stable release. Every alert kind works: manual
-> (optionally ending by itself), state, on/off, threshold, template, alert state,
-> trigger, and bus event alerts. The card shows, acknowledges, and snoozes them,
-> they send on, reminder, and done notifications (with throttling, quiet hours,
-> and buttons), the admin card lists, exports, imports, edits, and suspends them, alerts can supersede
-> each other, generators make alerts for every matching entity, summary sensors
-> and the Activity card make them easy to build on, and an agent skill lets AI
-> agents set them up for you. Voice control and more card features arrive in 1.x
-> releases; see the [phase plan](docs/SPEC.md#20-phase-plan).
-> The design is in [docs/SPEC.md](docs/SPEC.md).
+The design is in [docs/SPEC.md](docs/SPEC.md).
 
 ![The Alert Redux card, in Home Assistant's default light and dark themes](assets/screenshots/hero.png)
 
@@ -42,6 +32,7 @@ Each alert is an `alert_redux.*` entity, with one of these states:
 | `idle` | Not firing. |
 | `active` | Firing, and not acknowledged. |
 | `ack` | Firing, and acknowledged. |
+| `latched` | Stopped firing without being acknowledged, and kept until it is (see [Keeping alerts until acknowledged](#keeping-alerts-until-acknowledged)). |
 | `no_data` | Not firing, and its inputs are unavailable, unknown, or won't parse. |
 | `disabled` | Disabled, or suspended until `disabled_until`: it can't fire. |
 
@@ -51,7 +42,8 @@ it's about), and so on.
 
 To add an alert, go to **Settings → Devices & Services → Alert Redux → Add alert** and
 choose its kind. Every alert has a name (which also sets its entity ID), a priority,
-and optionally an icon, and can be made unacknowledgeable.
+and optionally an icon, and can be made unacknowledgeable, or kept until
+acknowledged.
 
 Every alert can also have an **on message** and a **card message**, both templates.
 The on message is sent when the alert starts firing (see
@@ -234,6 +226,28 @@ all, so a condition that still holds fires anew. **Suspending** disables an aler
 for a while, or until a time (`disabled_until`), and then enables it by itself.
 Disabling, enabling, and suspending are for admins only.
 
+### Keeping alerts until acknowledged
+
+Some alerts matter even if they stop before anyone sees them: the freezer that was
+warm for twelve minutes at 3 a.m., or a leak sensor that tripped three times
+overnight and is dry now. Turn on **Keep until acknowledged** for those. When such
+an alert stops firing without having been acknowledged, it doesn't go back to
+`idle`: it's `latched`. It stays on the card, still reminding you, until someone
+acknowledges it, by any of the usual routes.
+
+- A firing that was acknowledged (or snoozed) before it ended ends as usual.
+- If it fires again while latched, it's the same item: it's `active` again, with
+  its on notification, and its fire count carries on, so the card can say "fired
+  3×".
+- Its reminders follow its schedule from when it first fired, and say how long ago
+  it stopped. Snoozing a latched alert puts them off; it stays latched.
+- A manual alert dismissed by a person isn't latched: they've seen it. One
+  dismissed by an automation is.
+- Disabling it, or turning the setting off, clears it.
+- It counts as unacknowledged in the summary sensors, so a signal light stays on
+  until it's acknowledged, and `sensor.alert_redux_latched` lists them. An **alert
+  state** alert watching for `latched` can escalate one that's been left.
+
 Snoozes and suspensions survive a restart; one that ran out while Home Assistant was
 down ends as soon as it's back.
 
@@ -365,16 +379,17 @@ Alert state is saved as it changes and restored after a restart.
 
 ### Summary sensors
 
-Eight sensors summarise every alert, so glue needs to follow only one entity:
+Nine sensors summarise every alert, so glue needs to follow only one entity:
 
 | Sensor | State |
 |---|---|
 | `sensor.alert_redux_highest_priority` | the highest priority among firing alerts, or `none` |
-| `sensor.alert_redux_highest_unacked_priority` | the same, counting only unacknowledged (`active`) alerts that aren't superseded |
+| `sensor.alert_redux_highest_unacked_priority` | the same, counting only unacknowledged (`active` or `latched`) alerts that aren't superseded |
 | `sensor.alert_redux_firing` | how many alerts are firing (`active` or `ack`) |
-| `sensor.alert_redux_active` | how many are firing and unacknowledged, not counting superseded alerts |
+| `sensor.alert_redux_active` | how many are unacknowledged (firing and `active`, or `latched`), not counting superseded alerts |
 | `sensor.alert_redux_acknowledged` | how many are acknowledged |
-| `sensor.alert_redux_superseded` | how many firing alerts another firing alert supersedes |
+| `sensor.alert_redux_superseded` | how many firing or latched alerts a firing alert supersedes |
+| `sensor.alert_redux_latched` | how many are `latched`: stopped firing, not yet acknowledged |
 | `sensor.alert_redux_no_data` | how many are missing data, including firing alerts in their grace period |
 | `sensor.alert_redux_disabled` | how many are disabled or suspended (a diagnostic sensor) |
 
@@ -458,13 +473,15 @@ The notification's title is the alert's name. An alert sends:
 | Notification | When | Default message |
 |---|---|---|
 | **On** | It starts firing. | "{{ name }} is firing." |
-| **Reminder** | On its reminder schedule, while firing and unacknowledged. | "{{ name }} is still firing ({{ duration }})." |
-| **Done** | It stops firing, even if acknowledged. | "{{ name }} stopped firing after {{ duration }}." |
+| **Reminder** | On its reminder schedule, while firing and unacknowledged, or latched. | "{{ name }} is still firing ({{ duration }})."; latched, "{{ name }} stopped firing {{ duration }} ago and hasn't been acknowledged." |
+| **Done** | It stops firing, even if acknowledged. | "{{ name }} stopped firing after {{ duration }}.", adding "It's kept until acknowledged." when it latched |
 
 Each message can be replaced with your own template, in the alert's **Notifications
 and messages** section. There, `duration` is how long the alert has been firing (or
 fired, for the done message), `reason` is `on`, `reminder`, or `done`, and in the
-done message `end_reason` is `resolved`, `dismissed`, `no_data`, or `disabled`. The
+done message `end_reason` is `resolved`, `dismissed`, `no_data`, or `disabled`.
+`latched` is true in a latched alert's reminders (where `duration` is how long ago
+it stopped) and in the done message of a firing that latched. The
 default done message says when an alert stopped because its data was lost, or
 because it was disabled.
 
@@ -640,8 +657,10 @@ The options can also be set in the card's visual editor.
 
 ![The Alert Redux card with a range of alerts, in the light and dark themes](assets/screenshots/main-card.png)
 
-It shows one box per firing alert, most important first: by priority, then
-unacknowledged before acknowledged, then newest first. Each is coloured by
+It shows one box per firing or latched alert, most important first: by priority,
+then unacknowledged, latched, and acknowledged, then newest first. A latched alert
+has a dashed border, says when it stopped and how many times it fired, and offers
+Acknowledge and Snooze. Each is coloured by
 priority. Emergency and Critical alerts glow (an unacknowledged Emergency pulses),
 and Warning alerts have caution stripes; acknowledging an alert tones this down.
 Each box shows the alert's icon, name, how long it's been firing, and its message,
@@ -769,8 +788,9 @@ its **Voice assistants** section:
   integration's entities: it's on while the alert is active (unacknowledged).
   "Alexa, turn off the back door alert" acknowledges it, "… turn on …" removes
   the acknowledgement, and "Alexa, is the back door alert on?" asks whether it
-  needs attention. It turns off when the alert stops firing, and can't be turned
-  on while it isn't firing.
+  needs attention. It turns off when the alert stops firing (unless it's latched:
+  then it stays on until acknowledged), and can't be turned on while it isn't
+  firing.
 - A **snooze button**, "Snooze" and the alert's name, which snoozes the alert for
   its snooze button duration. Assistants show it as a scene: "Alexa, turn on
   Snooze back door alert", or "Hey Google, activate Snooze back door alert".

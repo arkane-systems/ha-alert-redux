@@ -669,3 +669,35 @@ async def test_generator_placement_round_trips(
     }
     await _import(hass, changed, overwrite=True)
     assert dict(entry.subentries["gen"].data["placement"]) == {"area_id": "porch"}
+
+
+async def test_latching(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
+    """Keep until acknowledged imports and exports, only when on (spec §10)."""
+    entry = await setup_alerts()
+    await _import(
+        hass,
+        _file(
+            {"name": "Leak", "kind": "manual", "latching": True},
+            {"name": "Door", "kind": "manual", "latching": False},
+        ),
+    )
+    by_title = {s.title: s.data for s in entry.subentries.values()}
+    assert by_title["Leak"]["latching"] is True
+    assert "latching" not in by_title["Door"]
+    exported = _by_name((await _export(hass))["alerts"])
+    assert exported["Leak"]["latching"] is True
+    assert "latching" not in exported["Door"]
+
+    with pytest.raises(ServiceValidationError) as err:
+        await _import(
+            hass,
+            _file(
+                {
+                    "name": "Stuck",
+                    "kind": "manual",
+                    "latching": True,
+                    "acknowledgeable": False,
+                }
+            ),
+        )
+    assert "alert 'Stuck': latching_unacknowledgeable" in str(err.value)

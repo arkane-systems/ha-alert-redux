@@ -1812,3 +1812,28 @@ async def test_fixed_alert_cycle_through_generator(
         },
     )
     assert result["errors"] == {"base": "supersedes_cycle"}
+
+
+async def test_latching(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
+    """Keep until acknowledged is stored only when on, and needs the alert to
+    be acknowledgeable (spec §10)."""
+    entry = await setup_alerts()
+    result = await _start(hass, entry, "manual")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**FORM, "latching": True, "acknowledgeable": False}
+    )
+    assert result["errors"] == {"base": "latching_unacknowledgeable"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**FORM, "latching": True}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (subentry,) = entry.subentries.values()
+    assert subentry.data["latching"] is True
+
+    result = await _start(hass, entry, "manual")
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**FORM, "name": "Garage Door Open"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    garage = next(s for s in entry.subentries.values() if s.title == "Garage Door Open")
+    assert "latching" not in garage.data

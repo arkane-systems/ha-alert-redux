@@ -42,14 +42,18 @@ class ProxySwitch(ProxyEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """Return whether the alert is active (firing, and unacknowledged)."""
+        """Return whether the alert wants acknowledging: active (firing, and
+        unacknowledged), or latched (spec §10)."""
         alert = self.alert
-        return alert is not None and alert.state == AlertState.ACTIVE
+        return alert is not None and alert.state in (
+            AlertState.ACTIVE,
+            AlertState.LATCHED,
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Acknowledge the alert; an unacknowledgeable one refuses (§6.1)."""
         alert = self._require_alert()
-        if alert.state == AlertState.ACTIVE:
+        if alert.state in (AlertState.ACTIVE, AlertState.LATCHED):
             await self._async_act(alert, SERVICE_ACK)
 
     async def async_turn_on(self, **kwargs: Any) -> None:

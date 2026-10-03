@@ -190,7 +190,8 @@ class AcknowledgeIntent(_AlertIntent):
 
     intent_type = INTENT_ACK
     description = (
-        "Acknowledges a firing Alert Redux alert, which stops its reminders. "
+        "Acknowledges a firing Alert Redux alert, which stops its reminders, "
+        "or a latched one, which stopped firing but is kept until acknowledged. "
         "Give the alert's name, or leave it out if only one alert needs "
         "acknowledging."
     )
@@ -198,12 +199,16 @@ class AcknowledgeIntent(_AlertIntent):
     service = SERVICE_ACK
 
     def fits(self, entity: AlertEntity) -> bool:
-        """Return whether the alert is unacknowledged, and can be acknowledged."""
-        return entity.state == AlertState.ACTIVE and entity.acknowledgeable
+        """Return whether the alert is unacknowledged (active or latched), and
+        can be acknowledged."""
+        return (
+            entity.state in (AlertState.ACTIVE, AlertState.LATCHED)
+            and entity.acknowledgeable
+        )
 
     def refusal(self, entity: AlertEntity, name: str) -> str | None:
         """Return why the alert can't be acknowledged now, if it can't."""
-        if not entity.firing:
+        if not entity.firing and not entity.latched:
             return speech.not_firing(name)
         if not entity.acknowledgeable:
             return speech.not_acknowledgeable(name)
@@ -234,6 +239,8 @@ class UnacknowledgeIntent(_AlertIntent):
 
     def refusal(self, entity: AlertEntity, name: str) -> str | None:
         """Return why the acknowledgement can't be removed, if it can't."""
+        if entity.latched:
+            return speech.not_acknowledged(name)
         if not entity.firing:
             return speech.not_firing(name)
         if entity.state != AlertState.ACK:
@@ -251,7 +258,8 @@ class SnoozeIntent(_AlertIntent):
     intent_type = INTENT_SNOOZE
     description = (
         "Snoozes a firing Alert Redux alert: acknowledges it for a number of "
-        "minutes, after which it reminds again. Without minutes, the alert's "
+        "minutes, after which it reminds again. A latched alert's reminders "
+        "are put off for that long instead. Without minutes, the alert's "
         "own snooze duration is used. Give the alert's name, or leave it out "
         "if only one alert can be snoozed."
     )
@@ -269,12 +277,12 @@ class SnoozeIntent(_AlertIntent):
         }
 
     def fits(self, entity: AlertEntity) -> bool:
-        """Return whether the alert is firing, and can be snoozed."""
-        return entity.firing and entity.acknowledgeable
+        """Return whether the alert is firing or latched, and can be snoozed."""
+        return (entity.firing or entity.latched) and entity.acknowledgeable
 
     def refusal(self, entity: AlertEntity, name: str) -> str | None:
         """Return why the alert can't be snoozed now, if it can't."""
-        if not entity.firing:
+        if not entity.firing and not entity.latched:
             return speech.not_firing(name)
         if not entity.acknowledgeable:
             return speech.not_acknowledgeable(name)
@@ -303,7 +311,8 @@ class ListFiringIntent(intent.IntentHandler):
     intent_type = INTENT_LIST
     description = (
         "Lists the Alert Redux alerts that are firing, highest priority first, "
-        "saying which are acknowledged or snoozed."
+        "saying which are acknowledged or snoozed, and then those that are "
+        "latched: stopped firing, but not yet acknowledged."
     )
     platforms = {DOMAIN}
 
@@ -316,9 +325,13 @@ class ListFiringIntent(intent.IntentHandler):
         """List the firing alerts."""
         hass = intent_obj.hass
         now = dt_util.utcnow()
+        exposed = async_exposed_alerts(hass, intent_obj.assistant)
         firing = sorted(
-            (e for e in async_exposed_alerts(hass, intent_obj.assistant) if e.firing),
+            (e for e in exposed if e.firing),
             key=lambda e: (e.priority.rank, e.state != AlertState.ACTIVE),
+        )
+        latched = sorted(
+            (e for e in exposed if e.latched), key=lambda e: e.priority.rank
         )
         return _reply(
             intent_obj,
@@ -332,7 +345,8 @@ class ListFiringIntent(intent.IntentHandler):
                         else entity.snoozed_until - now,
                     )
                     for entity in firing
-                ]
+                ],
+                [_candidate(hass, entity).name for entity in latched],
             ),
         )
 
