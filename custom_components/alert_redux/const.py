@@ -90,6 +90,8 @@ class AlertState(StrEnum):
     IDLE = "idle"
     ACTIVE = "active"
     ACK = "ack"
+    # Stopped firing without being acknowledged, on a latching alert (spec §10).
+    LATCHED = "latched"
     NO_DATA = "no_data"
     DISABLED = "disabled"
 
@@ -141,6 +143,8 @@ CONF_PRIORITY = "priority"
 CONF_ICON = "icon"
 CONF_ACKNOWLEDGEABLE = "acknowledgeable"
 CONF_USER_DISMISSABLE = "user_dismissable"
+# Keep until acknowledged (spec §10).
+CONF_LATCHING = "latching"
 # Manual alerts: end by itself after a duration, like an event alert (spec §4.3).
 CONF_ENDS_BY_ITSELF = "ends_by_itself"
 CONF_SUBJECT_ENTITY = "subject_entity"
@@ -267,6 +271,14 @@ DEFAULT_DONE_MESSAGE = "{{ name }} stopped firing after {{ duration }}."
 DEFAULT_DONE_NO_DATA_MESSAGE = (
     "{{ name }} lost its data; stopped firing after {{ duration }}."
 )
+# A latched alert's reminder (spec §10), where duration is how long ago it
+# stopped firing, and the suffix of the done notification of a firing that
+# latched.
+DEFAULT_LATCHED_REMINDER_MESSAGE = (
+    "{{ name }} stopped firing {{ duration }} ago and hasn't been acknowledged"
+    "{% if fire_count > 1 %} (fired {{ fire_count }} times){% endif %}."
+)
+LATCHED_DONE_SUFFIX = " It's kept until acknowledged."
 DEFAULT_DONE_DISABLED_MESSAGE = (
     "{{ name }} was disabled; stopped firing after {{ duration }}."
 )
@@ -394,6 +406,7 @@ ATTR_KIND = "kind"
 ATTR_PRIORITY = "priority"
 ATTR_ACKNOWLEDGEABLE = "acknowledgeable"
 ATTR_USER_DISMISSABLE = "user_dismissable"
+ATTR_LATCHING = "latching"
 ATTR_FIRING_SINCE = "firing_since"
 ATTR_LAST_FIRED = "last_fired"
 ATTR_LAST_ENDED = "last_ended"

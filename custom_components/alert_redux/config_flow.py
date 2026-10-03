@@ -49,6 +49,7 @@ from homeassistant.util import slugify
 from .const import (
     CONDITION_KINDS,
     CONF_ACKNOWLEDGEABLE,
+    CONF_LATCHING,
     CONF_AREA_FROM_TARGET,
     CONF_AREA_ID,
     CONF_AREAS,
@@ -826,6 +827,9 @@ def _alert_schema(
             CONF_ACKNOWLEDGEABLE, default=defaults.get(CONF_ACKNOWLEDGEABLE, True)
         )
     ] = BooleanSelector()
+    schema[
+        vol.Required(CONF_LATCHING, default=defaults.get(CONF_LATCHING, False))
+    ] = BooleanSelector()
     if kind is AlertKind.MANUAL:
         schema[
             vol.Required(
@@ -1186,6 +1190,9 @@ def _alert_data(kind: AlertKind, user_input: dict[str, Any]) -> dict[str, Any]:
         CONF_PRIORITY: user_input[CONF_PRIORITY],
         CONF_ACKNOWLEDGEABLE: user_input[CONF_ACKNOWLEDGEABLE],
     }
+    # Stored only when set, so alerts made before it existed stay as they were.
+    if user_input.get(CONF_LATCHING):
+        data[CONF_LATCHING] = True
     if kind is AlertKind.MANUAL:
         data[CONF_USER_DISMISSABLE] = user_input[CONF_USER_DISMISSABLE]
         data[CONF_ENDS_BY_ITSELF] = user_input[CONF_ENDS_BY_ITSELF]

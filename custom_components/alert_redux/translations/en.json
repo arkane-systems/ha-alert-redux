@@ -39,6 +39,7 @@
             "priority": "Priority",
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "user_dismissable": "Dismissable from the card",
             "ends_by_itself": "End by itself after",
             "duration": "Duration",
@@ -49,6 +50,7 @@
             "priority": "Sets the alert's colour and sort order.",
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
             "ends_by_itself": "If on, the alert stops firing by itself after its duration, like an event alert. It can still be dismissed early.",
             "duration": "How long the alert keeps firing after being fired. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
@@ -138,6 +140,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -151,6 +154,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -237,6 +241,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -249,6 +254,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -331,6 +337,7 @@
             "priority": "Priority",
             "icon": "Icon",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "user_dismissable": "Dismissable from the card",
             "ends_by_itself": "End by itself after",
             "duration": "Duration",
@@ -341,6 +348,7 @@
             "priority": "Sets the alert's colour and sort order.",
             "icon": "Leave empty to use the priority's default icon.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "user_dismissable": "Show a dismiss button on the card. The dismiss action always works, whatever this is set to.",
             "ends_by_itself": "If on, the alert stops firing by itself after its duration, like an event alert. It can still be dismissed early.",
             "duration": "How long the alert keeps firing after being fired. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
@@ -430,6 +438,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -443,6 +452,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -529,6 +539,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -541,6 +552,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -626,6 +638,7 @@
             "condition": "Condition",
             "duration": "Duration",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity"
           },
           "data_description": {
@@ -636,6 +649,7 @@
             "condition": "Optional. A template that must be true when the trigger fires; the trigger's variables are available as `trigger`. If it can't be judged (an error, `unknown`, `unavailable`), the alert fires anyway, and a warning is logged.",
             "duration": "How long the alert keeps firing after the trigger. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           },
           "sections": {
@@ -721,6 +735,7 @@
             "condition": "Condition",
             "duration": "Duration",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity"
           },
           "data_description": {
@@ -732,6 +747,7 @@
             "condition": "Optional. A template that must be true when the trigger fires; the trigger's variables are available as `trigger`. If it can't be judged (an error, `unknown`, `unavailable`), the alert fires anyway, and a warning is logged.",
             "duration": "How long the alert keeps firing after the trigger. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           },
           "sections": {
@@ -816,6 +832,7 @@
             "condition": "Condition",
             "duration": "Duration",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity"
           },
           "data_description": {
@@ -826,6 +843,7 @@
             "condition": "Optional. A template that must be true when the trigger fires; the trigger's variables are available as `trigger`. If it can't be judged (an error, `unknown`, `unavailable`), the alert fires anyway, and a warning is logged.",
             "duration": "How long the alert keeps firing after the trigger. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           },
           "sections": {
@@ -911,6 +929,7 @@
             "condition": "Condition",
             "duration": "Duration",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity"
           },
           "data_description": {
@@ -922,6 +941,7 @@
             "condition": "Optional. A template that must be true when the trigger fires; the trigger's variables are available as `trigger`. If it can't be judged (an error, `unknown`, `unavailable`), the alert fires anyway, and a warning is logged.",
             "duration": "How long the alert keeps firing after the trigger. Firing again restarts it. Leave empty to use the priority's default, set in the integration's options.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one."
           },
           "sections": {
@@ -1012,6 +1032,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -1029,6 +1050,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -1118,6 +1140,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -1133,6 +1156,7 @@
             "delay_on": "How long the on template must stay true before the alert fires. Needs an on template.",
             "delay_off": "How long the off template must stay true before the alert stops. Needs an off template.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -1222,6 +1246,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -1237,6 +1262,7 @@
             "delay_on": "How long the on template must stay true before the alert fires. Needs an on template.",
             "delay_off": "How long the off template must stay true before the alert stops. Needs an off template.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -1328,6 +1354,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -1345,6 +1372,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched entity, if there is one.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -1432,6 +1460,7 @@
             "delay_on": "For how long",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -1445,6 +1474,7 @@
             "delay_on": "How long the watched alert must stay in those states before this alert fires. Acknowledging it, or its firing ending, starts the time again.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched alert.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -1532,6 +1562,7 @@
             "delay_on": "For how long",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "subject_entity": "Subject entity",
             "no_data_grace": "No-data grace period"
           },
@@ -1545,6 +1576,7 @@
             "delay_on": "How long the watched alert must stay in those states before this alert fires. Acknowledging it, or its firing ending, starts the time again.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "subject_entity": "Optional. The entity the alert is about, for use in messages. Leave empty to use the watched alert.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
@@ -1638,6 +1670,7 @@
         "supersedes_duplicate": "Each alert can be listed only once.",
         "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself.",
         "propagation_unacknowledgeable": "This alert can't be acknowledged, so acknowledgements can't be passed on to it. Set each relationship to do nothing, or make the alert acknowledgeable.",
+        "latching_unacknowledgeable": "An alert that's kept until acknowledged must be acknowledgeable, or it could never be cleared. Make it acknowledgeable, or turn off Keep until acknowledged.",
         "snooze_duration_missing": "A relationship set to snooze this alert needs a duration to snooze it for.",
         "button_incomplete": "Each notification button needs a label and an action.",
         "invalid_button_action": "A notification button's action isn't valid.",
@@ -1677,6 +1710,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -1689,6 +1723,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -1800,6 +1835,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -1815,6 +1851,7 @@
             "delay_on": "How long the on template must stay true before the alert fires. Needs an on template.",
             "delay_off": "How long the off template must stay true before the alert stops. Needs an off template.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -1927,6 +1964,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -1943,6 +1981,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -2051,6 +2090,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -2063,6 +2103,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -2171,6 +2212,7 @@
             "delay_on": "For how long",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -2183,6 +2225,7 @@
             "delay_on": "How long the watched alert must stay in those states before this alert fires. Acknowledging it, or its firing ending, starts the time again.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -2291,6 +2334,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -2303,6 +2347,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -2414,6 +2459,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -2429,6 +2475,7 @@
             "delay_on": "How long the on template must stay true before the alert fires. Needs an on template.",
             "delay_off": "How long the off template must stay true before the alert stops. Needs an off template.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -2541,6 +2588,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -2557,6 +2605,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -2665,6 +2714,7 @@
             "delay_on": "Delay before firing",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -2677,6 +2727,7 @@
             "delay_on": "Optional. How long the condition must hold before the alert fires.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -2785,6 +2836,7 @@
             "delay_on": "For how long",
             "delay_off": "Delay before ending",
             "acknowledgeable": "Acknowledgeable",
+            "latching": "Keep until acknowledged",
             "no_data_grace": "No-data grace period"
           },
           "data_description": {
@@ -2797,6 +2849,7 @@
             "delay_on": "How long the watched alert must stay in those states before this alert fires. Acknowledging it, or its firing ending, starts the time again.",
             "delay_off": "Optional. How long the condition must stay false before the alert stops firing. Absorbs brief flickers.",
             "acknowledgeable": "Turn off for alerts that must not be silenced.",
+            "latching": "Latching: if it stops firing before anyone acknowledges it, it stays on the card as latched, and its reminders carry on, until it's acknowledged. Needs Acknowledgeable.",
             "no_data_grace": "Optional. How long a firing alert keeps firing while its inputs have no data. Leave empty to use the global default."
           },
           "sections": {
@@ -2911,6 +2964,7 @@
         "supersedes_duplicate": "Each generator or alert can be listed only once.",
         "supersedes_cycle": "This would make a supersession cycle: an alert would end up superseding itself, for some target.",
         "propagation_unacknowledgeable": "This alert can't be acknowledged, so acknowledgements can't be passed on to it. Set each relationship to do nothing, or make the alert acknowledgeable.",
+        "latching_unacknowledgeable": "An alert that's kept until acknowledged must be acknowledgeable, or it could never be cleared. Make it acknowledgeable, or turn off Keep until acknowledged.",
         "snooze_duration_missing": "A relationship set to snooze this alert needs a duration to snooze it for.",
         "relationship_target": "Each relationship needs either a generator or a fixed alert, not both.",
         "button_label_duplicate": "Each notification button needs its own label."
@@ -2999,6 +3053,7 @@
           "idle": "Idle",
           "active": "Active",
           "ack": "Acknowledged",
+          "latched": "Latched",
           "no_data": "No data",
           "disabled": "Disabled"
         },
@@ -3062,6 +3117,9 @@
       "superseded": {
         "name": "Alert Redux superseded"
       },
+      "latched": {
+        "name": "Alert Redux latched"
+      },
       "no_data": {
         "name": "Alert Redux no data"
       },
@@ -3097,6 +3155,7 @@
         "idle": "Idle",
         "active": "Active",
         "ack": "Acknowledged",
+        "latched": "Latched",
         "no_data": "No data",
         "disabled": "Disabled"
       }

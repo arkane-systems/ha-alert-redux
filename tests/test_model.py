@@ -832,3 +832,127 @@ def test_throttle_stored_form() -> None:
     assert Throttle.from_stored([]) is None
     assert Throttle.from_stored(None) is None
     assert Throttle(3, 10).to_stored() == [3, 10]
+
+
+# Latching (spec §10)
+
+MINUTE = timedelta(minutes=1)
+
+
+def _latched() -> AlertRuntime:
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    transition = runtime.end(T0 + MINUTE, EndReason.RESOLVED, latching=True)
+    assert transition is not None
+    assert transition.new_state is AlertState.LATCHED
+    return runtime
+
+
+@pytest.mark.parametrize(
+    "reason", [EndReason.RESOLVED, EndReason.DISMISSED, EndReason.NO_DATA]
+)
+def test_unacknowledged_end_latches(reason: EndReason) -> None:
+    runtime = AlertRuntime()
+    runtime.fire(T0, {"x": 1})
+    runtime.end(T0 + MINUTE, reason, latching=True)
+    assert runtime.state is AlertState.LATCHED
+    assert runtime.fire_count == 1
+    assert runtime.fire_data == {"x": 1}
+    assert runtime.latch_anchor == T0
+    assert runtime.last_ended == T0 + MINUTE
+
+
+def test_acknowledged_or_disabled_end_does_not_latch() -> None:
+    runtime = AlertRuntime()
+    runtime.fire(T0)
+    runtime.ack(T0, None)
+    runtime.end(T0 + MINUTE, EndReason.RESOLVED, latching=True)
+    assert runtime.state is AlertState.IDLE
+    runtime.fire(T0)
+    runtime.snooze(T0, T0 + MINUTE, None)
+    runtime.end(T0 + MINUTE, EndReason.RESOLVED, latching=True)
+    assert runtime.state is AlertState.IDLE
+    runtime.fire(T0)
+    runtime.disable(T0 + MINUTE, None)
+    runtime.enable(T0 + MINUTE, None, awaits_data=False)
+    assert runtime.state is AlertState.IDLE
+    assert runtime.latch_anchor is None
+
+
+def test_latched_item_counts_fires_and_keeps_its_anchor() -> None:
+    runtime = _latched()
+    transition = runtime.fire(T0 + 2 * MINUTE)
+    assert transition.old_state is AlertState.LATCHED
+    assert transition.new_state is AlertState.ACTIVE
+    assert runtime.fire_count == 2
+    runtime.end(T0 + 3 * MINUTE, EndReason.RESOLVED, latching=True)
+    assert runtime.state is AlertState.LATCHED
+    assert runtime.fire_count == 2
+    assert runtime.latch_anchor == T0
+    # Acknowledged during a firing, the item closes when it ends.
+    runtime.fire(T0 + 4 * MINUTE)
+    runtime.ack(T0 + 4 * MINUTE, None)
+    runtime.end(T0 + 5 * MINUTE, EndReason.RESOLVED, latching=True)
+    assert runtime.state is AlertState.IDLE
+    assert runtime.latch_anchor is None
+    runtime.fire(T0 + 6 * MINUTE)
+    assert runtime.fire_count == 1
+
+
+def test_ack_releases_and_unack_refuses() -> None:
+    runtime = _latched()
+    assert runtime.unack(T0, "u") is None
+    transition = runtime.ack(T0 + 2 * MINUTE, "u")
+    assert transition is not None
+    assert (transition.old_state, transition.new_state) == (
+        AlertState.LATCHED,
+        AlertState.IDLE,
+    )
+    assert transition.fire_count == 1
+    assert runtime.fire_count == 0
+    assert runtime.last_acked_by == "u"
+
+
+def test_snoozing_latched_puts_off_reminders() -> None:
+    runtime = _latched()
+    runtime.plan_reminder((10,), T0 + MINUTE)
+    assert runtime.next_reminder == T0 + 10 * MINUTE
+    changes = runtime.snooze(T0 + 2 * MINUTE, T0 + 30 * MINUTE, "u")
+    assert _changes(changes) == [
+        (Change.SNOOZED, AlertState.LATCHED, AlertState.LATCHED)
+    ]
+    assert runtime.next_reminder is None
+    runtime.plan_reminder((10,), T0 + 2 * MINUTE)
+    assert runtime.next_reminder is None
+    assert runtime.snooze_expire(T0 + 29 * MINUTE) == []
+    changes = runtime.snooze_expire(T0 + 30 * MINUTE)
+    assert _changes(changes) == [
+        (Change.SNOOZE_EXPIRED, AlertState.LATCHED, AlertState.LATCHED)
+    ]
+    assert runtime.reminder_anchor == T0
+    runtime.plan_reminder((10,), T0 + 30 * MINUTE)
+    assert runtime.next_reminder == T0 + 40 * MINUTE
+
+
+def test_latched_beats_no_data_and_round_trips() -> None:
+    runtime = _latched()
+    runtime.evaluate(None, ["sensor.x"], T0 + 2 * MINUTE, Timing(), latching=True)
+    assert runtime.state is AlertState.LATCHED
+    assert runtime.no_data_since is not None
+    restored = AlertRuntime.from_dict(runtime.to_dict())
+    assert restored.state is AlertState.LATCHED
+    assert restored.latch_anchor == T0
+
+
+def test_evaluate_latches() -> None:
+    runtime = AlertRuntime()
+    runtime.evaluate(True, [], T0, Timing(), latching=True)
+    changes = runtime.evaluate(False, [], T0 + MINUTE, Timing(), latching=True)
+    assert _changes(changes) == [(Change.ENDED, AlertState.ACTIVE, AlertState.LATCHED)]
+
+
+def test_release_latch() -> None:
+    runtime = _latched()
+    assert runtime.release_latch()
+    assert runtime.state is AlertState.IDLE
+    assert not runtime.release_latch()

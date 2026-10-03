@@ -17,7 +17,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from enum import StrEnum
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -298,23 +298,48 @@ class Supersession:
             if not acked:
                 superseder.async_remove_pre_ack(entity.unique_id)
                 continue
-            relationship = next(
-                (
-                    rel
-                    for rel in superseder.supersedes
-                    if rel.get(CONF_ALERT) == entity.entity_id
-                ),
-                {},
-            )
-            propagation = propagation_of(relationship)
-            if propagation is Propagation.NONE:
+            if (until := self._propagation(superseder, entity, now)) is False:
                 continue
-            until = None
-            if propagation is Propagation.SNOOZE:
-                if not (duration := to_timedelta(relationship.get(CONF_SNOOZE_DURATION))):
-                    continue
-                until = now + duration
             superseder.async_add_pre_ack(entity.unique_id, until, entity.context)
+
+    def async_latch_acked(self, entity: AlertEntity) -> None:
+        """Propagate the acknowledgement of a latched alert (spec §10).
+
+        It isn't firing, so there's nothing to pre-acknowledge, but each alert
+        directly superseding it with propagation set that is latched too is
+        acknowledged, or snoozed, at once.
+        """
+        entities = self._by_entity_id()
+        now = dt_util.utcnow()
+        for eid in self.graph.direct_superseders(entity.entity_id):
+            if (superseder := entities.get(eid)) is None or not superseder.latched:
+                continue
+            assert entity.unique_id is not None
+            if (until := self._propagation(superseder, entity, now)) is False:
+                continue
+            superseder.async_propagate_latch_ack(entity.unique_id, until, entity.context)
+
+    def _propagation(
+        self, superseder: AlertEntity, entity: AlertEntity, now: datetime
+    ) -> datetime | None | Literal[False]:
+        """Return what acknowledging entity propagates to superseder: False for
+        nothing, None to acknowledge it, or the deadline to snooze it until."""
+        relationship = next(
+            (
+                rel
+                for rel in superseder.supersedes
+                if rel.get(CONF_ALERT) == entity.entity_id
+            ),
+            {},
+        )
+        propagation = propagation_of(relationship)
+        if propagation is Propagation.NONE:
+            return False
+        if propagation is Propagation.SNOOZE:
+            if not (duration := to_timedelta(relationship.get(CONF_SNOOZE_DURATION))):
+                return False
+            return now + duration
+        return None
 
     def async_sweep_pre_acks(self) -> None:
         """Drop stale pre-acknowledgements: from an alert that's gone, or one

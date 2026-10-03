@@ -21,6 +21,8 @@ from .const import (
     DATA_ENTITIES,
     DATA_NOTIFIER,
     DEFAULT_DONE_DISABLED_MESSAGE,
+    DEFAULT_LATCHED_REMINDER_MESSAGE,
+    LATCHED_DONE_SUFFIX,
     DEFAULT_DONE_MESSAGE,
     DEFAULT_DONE_NO_DATA_MESSAGE,
     DEFAULT_ON_MESSAGE,
@@ -48,17 +50,25 @@ REASON_DONE = "done"
 REASON_THROTTLE_SUMMARY = "throttle_summary"
 
 
-def default_message(reason: str, end_reason: str | None = None) -> str:
-    """Return the built-in template for a notification."""
+def default_message(
+    reason: str, end_reason: str | None = None, *, latched: bool = False
+) -> str:
+    """Return the built-in template for a notification.
+
+    A latched alert's reminder, and the done notification of a firing that
+    latched, have their own (spec §10).
+    """
     if reason == REASON_ON:
         return DEFAULT_ON_MESSAGE
     if reason == REASON_REMINDER:
-        return DEFAULT_REMINDER_MESSAGE
+        return DEFAULT_LATCHED_REMINDER_MESSAGE if latched else DEFAULT_REMINDER_MESSAGE
     if end_reason == EndReason.NO_DATA:
-        return DEFAULT_DONE_NO_DATA_MESSAGE
-    if end_reason == EndReason.DISABLED:
-        return DEFAULT_DONE_DISABLED_MESSAGE
-    return DEFAULT_DONE_MESSAGE
+        message = DEFAULT_DONE_NO_DATA_MESSAGE
+    elif end_reason == EndReason.DISABLED:
+        message = DEFAULT_DONE_DISABLED_MESSAGE
+    else:
+        message = DEFAULT_DONE_MESSAGE
+    return message + LATCHED_DONE_SUFFIX if latched else message
 
 
 def throttle_summary_message(
@@ -182,21 +192,23 @@ def build_notification(
 ) -> Notification:
     """Render one of an alert's notifications.
 
-    A final notification (by default, the done notification) carries no
-    buttons (spec §9.11). A message given ready-made isn't rendered; a prefix
+    A final notification (by default, the done notification, unless the firing
+    latched: the alert still wants acknowledging, §10) carries no buttons
+    (spec §9.11). A message given ready-made isn't rendered; a prefix
     goes in front of the message. The urgency is the alert's priority's, for
     quiet hours (§9.9). The interruption level is the alert's priority's, and goes
     only with the notifications that demand attention: the on and reminder ones
     (§9.3).
     """
     reason = variables["reason"]
+    latched = bool(variables.get("latched"))
     if final is None:
-        final = reason == REASON_DONE
+        final = reason == REASON_DONE and not latched
     if message is None:
         message = render_message(
             hass,
             template,
-            default_message(reason, variables.get("end_reason")),
+            default_message(reason, variables.get("end_reason"), latched=latched),
             variables,
             f"{entity_id} {reason} message",
         )
@@ -253,7 +265,8 @@ def async_quiet_hours_ended(
     """Say what a group gets when its quiet hours end (spec §9.9).
 
     An alert still firing and unacknowledged gets one reminder, with the real
-    firing duration; one acknowledged in the meantime gets nothing more. The
+    firing duration, and so does a latched one (§10); one acknowledged in the
+    meantime gets nothing more. The
     firings that ended are listed in one summary: each alert with when it first
     started, when it last stopped, how long it fired, and how many times.
     Throttling summaries held for ended firings are listed as they are.
@@ -271,7 +284,7 @@ def async_quiet_hours_ended(
         entity = by_key.get(key)
         if (
             entity is not None
-            and entity.state == AlertState.ACTIVE
+            and entity.state in (AlertState.ACTIVE, AlertState.LATCHED)
             and (reminder := entity.quiet_hours_reminder()) is not None
         ):
             notifications.append(reminder)
