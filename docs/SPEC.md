@@ -2758,6 +2758,15 @@ approximated, and the notifier groups to create). Decided in building:
   settings of an Alert Redux generator that match the body (kind, messages,
   priority, delays, reminders, groups; `genElem` becomes `target`), with a
   `targets` placeholder and Alert2's list or template quoted, as a head start.
+- **Tested on the documentation's own examples** (the built-in `alert` page, and
+  Alert2's README and Recipes), kept as fixtures. They showed what the forms of
+  real configurations need: a `clear_notification` done message isn't text;
+  notifiers can be templates or entities (dropped, leaving the default groups,
+  never "nobody"); `condition: true` is a YAML boolean; on/off alerts need both
+  sides, so Alert2's on-only alerts (`manual_off`) become template alerts;
+  domains and names can hold spaces and capitals (entity IDs are slugged for
+  supersession); and generators' selections can often be read for their domain and
+  an entity ID glob.
 - **Not converted**, and reported: `skip_first` (without the option), titles,
   notifier `data` and `target`, `ack_required` (see phase 15), `done_notifier:
   false`, `early_start`, and the other options with no equivalent. `--strict` makes

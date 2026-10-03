@@ -16,6 +16,8 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _convert_common import (  # noqa: E402
+    CLEAR_ADVICE,
+    CLEAR_NOTIFICATION,
     GroupMap,
     Report,
     as_list,
@@ -78,13 +80,16 @@ def convert(
             definition["acknowledgeable"] = bool(config["can_acknowledge"])
         if (schedule := reminder_schedule(config.get("repeat"))) is not None:
             definition["reminder_schedule"] = schedule
-        for source, target in (("message", "message"), ("done_message", "done_message")):
-            if config.get(source):
-                definition[target] = config[source]
+        if config.get("message"):
+            definition["message"] = config["message"]
+        if config.get("done_message") == CLEAR_NOTIFICATION:
+            report.warn(label, CLEAR_ADVICE)
+        elif config.get("done_message"):
+            definition["done_message"] = config["done_message"]
         if "notifiers" in config:
-            definition["notifier_groups"] = groups.groups_for(
-                as_list(config["notifiers"]), report, label
-            )
+            names = groups.groups_for(as_list(config["notifiers"]), report, label)
+            if names or not as_list(config["notifiers"]):
+                definition["notifier_groups"] = names
         if config.get("skip_first"):
             schedule = definition.get("reminder_schedule")
             if skip_first_as_delay and schedule:

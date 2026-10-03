@@ -76,6 +76,20 @@ def test_alert_without_section_line_and_group_map() -> None:
     assert report.groups == {"Phones"}
 
 
+def test_alert_docs_examples() -> None:
+    """The built-in alert's documentation examples convert as they should."""
+    alerts, report = _convert(convert_alert, "alert_docs.yaml")
+    assert len(alerts) == 8
+    plant = alerts["Plant in office needs help"]
+    assert plant["target_state"] == "problem"
+    assert "state_attr('plant.plant_office', 'problem')" in plant["message"]
+    # clear_notification isn't a message; skip_first false is nothing to report.
+    assert "done_message" not in alerts["Garage is open (mobile)"]
+    assert not any("freshwater" in w for w in report.warnings)
+    assert sum("skip_first" in w for w in report.warnings) == 6
+    assert alerts["The Garage Door is open"]["target_state"] == "open"
+
+
 def test_alert_include_is_refused() -> None:
     """A section behind !include can't be followed."""
     data = common.load_yaml("alert: !include alert.yaml\n")
@@ -108,15 +122,58 @@ def test_alert2_block() -> None:
     assert alerts["House Reported"]["kind"] == "manual"
     assert alerts["House Reported"]["ends_by_itself"] is True
     assert "House Per door" not in alerts
-    assert any("per_door" in s for s in report.skipped)
+    assert any("generator doors" in s for s in report.skipped)
     # The generator's body, as the settings of an Alert Redux generator.
     (suggestion,) = report.suggestions
-    assert "house_per_door" in suggestion
+    assert "generator doors" in suggestion
     assert "kind: template" in suggestion
     assert "template: '{{ true }}'" in suggestion
     assert "mobile_app_pixel" in suggestion
     assert "targets:" in suggestion
     assert any("early_start" in w for w in report.warnings)
+
+
+def test_alert2_docs_examples() -> None:
+    """Alert2's own README and Recipes examples convert as they should."""
+    alerts, report = _convert(convert_alert2, "alert2_docs.yaml")
+    assert len(alerts) == 20
+    # YAML's `condition: true`, and a trigger alert with its condition.
+    assert alerts["Test Always firing"]["template"] == "{{ true }}"
+    assert alerts["Boiler Ignition failed"]["kind"] == "trigger"
+    assert "trigger.to_state.state" in alerts["Boiler Ignition failed"]["condition"]
+    # A split alert with only an on side (manual_off) follows its condition.
+    assert alerts["Basement Possible fire"]["kind"] == "template"
+    assert alerts["Laundry Done"]["off_triggers"][0]["to"] == "on"
+    # Domains and names with spaces and capitals; supersession by those.
+    assert "Garage Door Open for too long" in alerts
+    assert alerts["Test Supersedes one"]["supersedes"] == [
+        {"alert": "alert_redux.test_foo"}
+    ]
+    assert len(alerts["Test Supersedes both"]["supersedes"]) == 2
+    # Notifiers: the notify. prefix goes; templates and entities drop to the
+    # default groups, not to nobody.
+    assert alerts["Cam basement Motion while away"]["notifier_groups"] == [
+        "telegram_1",
+        "telegram_bot_x_y",
+    ]
+    assert "notifier_groups" in alerts["Test Foo"]
+    templated = alerts["Test Templated notifier"]
+    assert "notifier_groups" not in templated
+    # A mobile app's "clear_notification" isn't sent as a message.
+    assert "done_message" not in alerts["Front door Open too long"]
+    assert any("clear_notification" in w for w in report.warnings)
+    # Defaults' unsupported options are reported once, not for every alert.
+    assert sum(w.startswith("defaults: data") for w in report.warnings) == 1
+    assert any("tracked" in n for n in report.notes)
+    # Generators: each read for its targets where it can be.
+    by_generator = {s.split(":", 1)[0]: s for s in report.suggestions}
+    assert "pattern: sensor.temp_*" in by_generator["generator low_temp"]
+    assert "pattern: sensor*_battery_plus" in by_generator["generator low_bat"]
+    assert "domains:\n        - sensor" in by_generator["generator low_temp"]
+    assert "fixed alert" in by_generator["generator g1"]
+    assert "template_alert" not in by_generator
+    assert any("trigger alert can't be generated" in w for w in report.warnings)
+    assert len(report.skipped) == 6
 
 
 def test_alert2_single_alert_and_list() -> None:
@@ -149,8 +206,13 @@ def test_alert2_rejects_other_input() -> None:
 
 @pytest.mark.parametrize(
     ("module", "fixture"),
-    [(convert_alert, "alert.yaml"), (convert_alert2, "alert2.yaml"),
-     (convert_alert2, "alert2_single.yaml")],
+    [
+        (convert_alert, "alert.yaml"),
+        (convert_alert, "alert_docs.yaml"),
+        (convert_alert2, "alert2.yaml"),
+        (convert_alert2, "alert2_single.yaml"),
+        (convert_alert2, "alert2_docs.yaml"),
+    ],
 )
 async def test_output_imports(
     hass: HomeAssistant, setup_alerts: SetupAlerts, module: Any, fixture: str

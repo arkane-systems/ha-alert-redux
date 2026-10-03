@@ -27,6 +27,15 @@ _OPAQUE_TAGS = ("!secret", "!include", "!include_dir_list", "!include_dir_named"
                 "!input")
 
 
+# A done message the mobile app takes to mean "clear the notification".
+CLEAR_NOTIFICATION = "clear_notification"
+CLEAR_ADVICE = (
+    "done_message 'clear_notification' dropped: Alert Redux clears mobile "
+    "notifications itself; set the member's \"clear instead of showing the done "
+    "message\" option on the group"
+)
+
+
 class _Loader(yaml.SafeLoader):
     """A loader that accepts Home Assistant's tags as opaque text."""
 
@@ -132,15 +141,28 @@ class GroupMap:
     def _key(notifier: str) -> str:
         return str(notifier).strip().lower().removeprefix("notify.")
 
+    @staticmethod
+    def _is_service(notifier: Any) -> bool:
+        """Return whether a notifier is a plain notify service name."""
+        if not isinstance(notifier, str) or is_template(notifier):
+            return False
+        text = notifier.strip()
+        if text.startswith(("[", "{")):
+            return False
+        domain, dot, _ = text.partition(".")
+        return not dot or domain == "notify"
+
     def groups_for(
         self, notifiers: Iterable[str], report: Report, alert: str
     ) -> list[str]:
         """Return the group names for an alert's notifiers."""
         groups: list[str] = []
         for notifier in notifiers:
-            if not isinstance(notifier, str) or is_template(notifier):
+            if not self._is_service(notifier):
                 report.warn(
-                    alert, f"notifier {notifier!r} isn't a plain service name; dropped"
+                    alert,
+                    f"notifier {notifier!r} isn't a plain notify service name "
+                    "(a template, or an entity); dropped",
                 )
                 continue
             key = self._key(notifier)

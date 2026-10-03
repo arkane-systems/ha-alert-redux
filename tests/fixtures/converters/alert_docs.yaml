@@ -1,0 +1,103 @@
+# Examples from the built-in alert integration's documentation
+# (https://www.home-assistant.io/integrations/alert/), with unique keys, and the
+# example from Alert2's README for moving from `alert`.
+alert:
+  garage_door:
+    name: Garage is open
+    done_message: Garage is closed
+    entity_id: input_boolean.garage_door
+    state: "on"
+    repeat: 30
+    can_acknowledge: true
+    skip_first: true
+    notifiers:
+      - ryans_phone
+      - kristens_phone
+  freshwater_temp_alert:
+    name: "Warning: I have detected a problem with the freshwater tank temperature"
+    entity_id: binary_sensor.freshwater_temperature_status
+    state: "on"
+    repeat: 5
+    can_acknowledge: true
+    skip_first: false
+    notifiers:
+      - john_phone_sms
+  motion_battery:
+    name: Motion Battery is Low
+    entity_id: binary_sensor.motion_battery_is_low
+    repeat: 30
+    notifiers:
+      - ryans_phone
+      - kristens_phone
+  garage_door_escalating:
+    name: Garage is open (escalating)
+    entity_id: input_boolean.garage_door
+    state: "on"
+    repeat:
+      - 15
+      - 30
+      - 60
+    can_acknowledge: true
+    skip_first: true
+    notifiers:
+      - ryans_phone
+      - kristens_phone
+  office_plant:
+    name: Plant in office needs help
+    entity_id: plant.plant_office
+    state: "problem"
+    repeat: 30
+    can_acknowledge: true
+    skip_first: true
+    message: "Plant {{ states.plant.plant_office }} needs help ({{ state_attr('plant.plant_office', 'problem') }})"
+    done_message: Plant in office is fine
+    notifiers:
+      - ryans_phone
+      - kristens_phone
+  garage_door_telegram:
+    name: "Garage is open (Telegram)"
+    message: "The garage door is still open"
+    done_message: "The garage door is closed"
+    entity_id: input_boolean.garage_door
+    state: "on"
+    repeat:
+      - 15
+      - 30
+      - 60
+    can_acknowledge: true
+    skip_first: true
+    data:
+      inline_keyboard:
+        - 'Close garage:/close_garage, Acknowledge:/garage_acknowledge'
+    notifiers:
+      - frank_telegram
+  garage_door_mobile:
+    name: Garage is open (mobile)
+    done_message: clear_notification
+    entity_id: input_boolean.garage_door
+    state: "on"
+    repeat: 30
+    can_acknowledge: true
+    skip_first: true
+    notifiers:
+      - mobile_app_ryan
+      - mobile_app_kristen
+    data:
+      tag: garage-door
+  garage_door_alert2_readme:
+    name: The Garage Door is open
+    title: "[HA] Garage Door alert"
+    message: The Garage Door is still open
+    done_message: The Garage Door is now closed
+    entity_id: cover.garage_door
+    state: "open"
+    repeat:
+      - 30
+      - 60
+      - 120
+    can_acknowledge: true
+    skip_first: true
+    notifiers:
+      - telegram_me
+      - telegram_her
+      - email_me

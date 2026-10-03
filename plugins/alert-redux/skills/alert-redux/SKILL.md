@@ -65,6 +65,8 @@ Assistant works (an MCP server, the websocket API, or the UI).
   Repairs issue, a refused action): [troubleshooting.md](troubleshooting.md).
 - **Using the HA-MCP server** (`ha-mcp`): its tool names and quirks for all of the
   above: [ha-mcp.md](ha-mcp.md).
+- **Moving from the built-in `alert` or Alert2**: converter scripts in the repository
+  (not run through MCP): `tools/README.md`.
 
 ## Choosing a kind
 

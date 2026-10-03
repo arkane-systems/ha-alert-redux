@@ -17,6 +17,8 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _convert_common import (  # noqa: E402
+    CLEAR_ADVICE,
+    CLEAR_NOTIFICATION,
     GroupMap,
     Report,
     as_list,
@@ -38,7 +40,6 @@ BUILT_IN_DEFAULTS = {"priority": "low"}
 UNSUPPORTED = {
     "early_start": "Alert Redux waits for its inputs after startup (spec §15)",
     "manual_on": "use a manual alert",
-    "manual_off": "use a manual alert",
     "actions_on": "use an automation on the alert's events",
     "title": "notifications are titled with the alert's name",
     "target": "set it on the notifier group's members",
@@ -55,9 +56,14 @@ KNOWN = {
     "reminder_frequency_mins", "message", "done_message", "reminder_message",
     "display_msg", "icon", "notifier", "done_notifier", "throttle_fires_per_mins",
     "ack_required", "ack_reminders_only", "supersedes", "generator", "generator_name",
-    "supersedes_generator",
+    "supersedes_generator", "manual_off",
 } | UNSUPPORTED.keys()
 ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+
+
+def _alert2_id(domain: Any, name: Any) -> str:
+    """Return the entity ID Alert2 gives an alert."""
+    return f"alert2.{slugify(str(domain))}_{slugify(str(name))}"
 
 
 def _alerts_from(data: Any) -> tuple[dict[str, Any], list[Any]]:
@@ -109,7 +115,7 @@ def _names(alerts: list[dict[str, Any]], report: Report) -> dict[int, str]:
             continue
         if friendly:
             report.warn(
-                f"alert2.{alert['domain']}_{alert['name']}",
+                _alert2_id(alert["domain"], alert["name"]),
                 "friendly_name is a template; named from the domain and name",
             )
         names[index] = _display_name(alert["domain"], alert["name"])
@@ -120,6 +126,17 @@ def _names(alerts: list[dict[str, Any]], report: Report) -> dict[int, str]:
         if counts[names[index].lower()] > 1:
             names[index] = f"{_humanise(str(alert['domain']))} {names[index]}"
     return names
+
+
+class _Skip(Exception):
+    """An alert that can't be converted."""
+
+
+def _template_text(value: Any) -> str:
+    """Return a condition as template text: YAML's true and false are booleans."""
+    if isinstance(value, bool):
+        return "{{ true }}" if value else "{{ false }}"
+    return str(value)
 
 
 def _condition(config: dict[str, Any], label: str, report: Report) -> dict[str, Any]:
@@ -144,9 +161,34 @@ def _condition(config: dict[str, Any], label: str, report: Report) -> dict[str, 
         result = {"kind": "on_off"}
         for side in ("on", "off"):
             if config.get(f"condition_{side}"):
-                result[f"{side}_template"] = _rewrite(config[f"condition_{side}"])
+                result[f"{side}_template"] = _rewrite(
+                    _template_text(config[f"condition_{side}"])
+                )
             if config.get(f"trigger_{side}"):
                 result[f"{side}_triggers"] = as_list(config[f"trigger_{side}"])
+        has_on = "on_template" in result or "on_triggers" in result
+        has_off = "off_template" in result or "off_triggers" in result
+        if has_on and not has_off:
+            # Alert2 lets such an alert be turned off by hand; an on/off alert
+            # needs both sides, so it follows its condition (or trigger) alone.
+            if "on_template" in result:
+                report.warn(
+                    label,
+                    "has no off condition (turned off by hand, manual_off): "
+                    "converted to a template alert, which ends when its condition "
+                    "does",
+                )
+                if result.get("on_triggers"):
+                    report.warn(label, "its on triggers were dropped")
+                return {"kind": "template", "template": result["on_template"]}
+            report.warn(
+                label,
+                "has no off condition (turned off by hand, manual_off): converted "
+                "to a trigger alert, which ends after its duration",
+            )
+            return {"kind": "trigger", "triggers": result["on_triggers"]}
+        if not has_on:
+            raise _Skip("it has an off criterion but no on criterion")
         return result
     if "trigger" in config:
         result = {"kind": "trigger", "triggers": as_list(config["trigger"])}
@@ -154,7 +196,7 @@ def _condition(config: dict[str, Any], label: str, report: Report) -> dict[str, 
             result["condition"] = _rewrite(config["condition"])
         return result
     condition = config.get("condition")
-    if condition is None:
+    if condition is None or condition == "":
         # An event alert, reported by alert2.report: the closest thing is a
         # manual alert that ends by itself.
         report.notes.append(
@@ -164,7 +206,7 @@ def _condition(config: dict[str, Any], label: str, report: Report) -> dict[str, 
         return {"kind": "manual", "ends_by_itself": True}
     if isinstance(condition, str) and ENTITY_ID.match(condition.strip()):
         return {"kind": "state", "entity_id": condition.strip(), "target_state": "on"}
-    return {"kind": "template", "template": _rewrite(condition)}
+    return {"kind": "template", "template": _rewrite(_template_text(condition))}
 
 
 def _supersedes(
@@ -176,7 +218,7 @@ def _supersedes(
     result = []
     for item in as_list(config.get("supersedes")):
         if isinstance(item, dict) and "domain" in item and "name" in item:
-            old = f"alert2.{item['domain']}_{item['name']}"
+            old = _alert2_id(item["domain"], item["name"])
         elif isinstance(item, str) and ENTITY_ID.match(item.strip()):
             old = item.strip()
         else:
@@ -202,15 +244,66 @@ def _supersedes(
 GENERATED_KINDS = {"state", "threshold", "template", "on_off"}
 
 
+# Alert2's generator variables, and what stands for them here: the target entity
+# (its ID), which `target` is.
+GENERATOR_VARIABLES = {"genElem": "target", "genEntityId": "target"}
+
+
 def _generator_text(value: Any) -> Any:
-    """Return generator-body text with Alert2's genElem as the target."""
+    """Return generator-body text with Alert2's generator variables as the target."""
     if isinstance(value, str):
-        return re.sub(r"\bgenElem\b", "target", value)
+        return re.sub(
+            r"\b(" + "|".join(GENERATOR_VARIABLES) + r")\b",
+            lambda m: GENERATOR_VARIABLES[m.group(1)],
+            value,
+        )
     if isinstance(value, list):
         return [_generator_text(item) for item in value]
     if isinstance(value, dict):
         return {key: _generator_text(item) for key, item in value.items()}
     return value
+
+
+def _glob(regex: str) -> str | None:
+    """Return a regular expression as an entity ID glob, if it's only literal
+    text, `.*` (possibly as a group), and dots."""
+    text = regex.replace("(.*)", ".*")
+    if re.search(r"[\\^$+?()\[\]{}|*]", text.replace(".*", "")):
+        return None
+    return text.replace(".*", "*")
+
+
+def _selection(generator: Any) -> tuple[dict[str, Any], str]:
+    """Return the targets that match what a generator selects, as far as they can
+    be read from it, and a sentence about it."""
+    if isinstance(generator, list):
+        return (
+            {"labels": ["<a label on the entities>"]},
+            f"Alert2 generated it for each of {generator!r}. If these name entities, "
+            "give those entities a label and use it; if they're values (limits, "
+            "say), make one fixed alert for each instead",
+        )
+    text = str(generator)
+    targets: dict[str, Any] = {}
+    if domain := re.search(r"states\.(\w+)", text):
+        targets["domains"] = [domain.group(1)]
+    regex = re.search(r"(?:'match'|\"match\")\s*,\s*['\"]([^'\"]+)['\"]", text) or re.search(
+        r"entity_regex\(\s*['\"]([^'\"]+)['\"]", text
+    )
+    note = ""
+    if regex:
+        glob = _glob(regex.group(1))
+        if glob:
+            targets["pattern"] = glob
+        else:
+            note = f" Its pattern {regex.group(1)!r} isn't a plain glob; rewrite it as one."
+    if not targets:
+        targets["labels"] = ["<a label on the entities>"]
+    return (
+        targets,
+        f"Alert2 generated it from the template {text!r}, read here as the targets "
+        f"below; check them.{note}",
+    )
 
 
 def _suggest_generator(
@@ -233,27 +326,26 @@ def _suggest_generator(
             "make fixed alerts instead",
         )
         return
-    if "supersedes" in body:
+    if config.get("supersedes"):
         report.warn(label, "supersession in a generator isn't carried over")
-    name = config.get("generator_name") or config["name"]
-    generator = {
-        "name": body["name"] if not config.get("generator_name") else _humanise(str(name)),
-        **settings,
-        "targets": {"labels": ["<choose the entities this generator covers>"]},
+    generator: dict[str, Any] = {
+        "name": _humanise(str(config.get("generator_name") or config["name"])),
     }
-    elements = config.get("generator")
-    where = (
-        "Alert2 generated it for these values of genElem, which are now the "
-        f"target entity (`target`, `target_name`): {elements!r}"
-        if isinstance(elements, list)
-        else f"Alert2 generated it from the template {elements!r}, whose results are "
-        "now the targets Alert Redux chooses by criteria"
-    )
+    parts = [str(config.get("domain", "")), str(config["name"])]
+    if any(is_template(part) for part in parts):
+        where_named = (
+            f" Its name was the template {' '.join(parts)!r}; Alert Redux names "
+            "each alert after its target unless you set a name template."
+        )
+    else:
+        where_named = ""
+    targets, where = _selection(config.get("generator"))
+    generator |= settings | {"targets": targets}
     report.suggest(
         label,
-        f"as a generator (kind {settings['kind']}). {where}. Choose targets by "
-        "label, area, domain, device class, or entity ID pattern; for a fixed list, "
-        "give those entities a label and use it:",
+        f"as a generator (kind {settings['kind']}). {where.rstrip('.')}.{where_named} "
+        "Alert Redux chooses targets by label, area, domain, device class, or an "
+        "entity ID glob:",
         generator,
     )
 
@@ -271,22 +363,36 @@ def convert(
     names = _names(config_alerts, report)
     # Alert2's entity IDs, to Alert Redux's, for supersession.
     ids = {
-        f"alert2.{a['domain']}_{a['name']}": "alert_redux." + slugify(names[i])
+        _alert2_id(a["domain"], a["name"]): "alert_redux." + slugify(names[i])
         for i, a in enumerate(config_alerts)
     }
     seen_ids: set[str] = set()
+    defaults_warned: set[str] = set()
+    if isinstance(data, dict) and (data.get("alert2") or data).get("tracked"):
+        report.notes.append(
+            "The tracked: section (Alert2's internal alerts and alert2.report "
+            "events) isn't converted; Alert Redux logs its own problems instead"
+        )
     out: list[dict[str, Any]] = []
     for index, alert in enumerate(config_alerts):
-        label = f"alert2.{alert['domain']}_{alert['name']}"
         config = {**BUILT_IN_DEFAULTS, **defaults, **alert}
         is_generator = "generator" in config or "generator_name" in config
+        label = (
+            f"generator {config.get('generator_name') or alert['name']}"
+            if is_generator
+            else _alert2_id(alert["domain"], alert["name"])
+        )
         if not is_generator:
             if ids[label] in seen_ids:
                 report.warn(label, f"its entity ID {ids[label]} clashes with another's")
             seen_ids.add(ids[label])
 
         definition: dict[str, Any] = {"name": names[index]}
-        definition.update(_condition(config, label, report))
+        try:
+            definition.update(_condition(config, label, report))
+        except _Skip as err:
+            report.skip(label, str(err))
+            continue
         if config["priority"] in PRIORITIES:
             definition["priority"] = PRIORITIES[config["priority"]]
         else:
@@ -302,12 +408,18 @@ def convert(
             ("display_msg", "display_message"),
             ("icon", "icon"),
         ):
-            if config.get(source):
+            if config.get(source) == CLEAR_NOTIFICATION and source == "done_message":
+                report.warn(label, CLEAR_ADVICE)
+            elif config.get(source):
                 definition[target] = _rewrite(config[source])
         if "notifier" in config:
-            definition["notifier_groups"] = groups.groups_for(
+            group_names = groups.groups_for(
                 as_list(config["notifier"]), report, label
             )
+            # An explicit null or empty list means nobody. Notifiers that all had
+            # to be dropped leave the alert on the default groups instead.
+            if group_names or not as_list(config["notifier"]):
+                definition["notifier_groups"] = group_names
         if config.get("done_notifier") is False:
             report.warn(label, "done_notifier: false has no equivalent; done messages are sent")
         elif isinstance(config.get("done_notifier"), (str, list)):
@@ -323,8 +435,13 @@ def convert(
         if relationships := _supersedes(config, label, report, ids):
             definition["supersedes"] = relationships
         for key, advice in UNSUPPORTED.items():
-            if config.get(key):
+            if not config.get(key):
+                continue
+            if key in alert:
                 report.warn(label, f"{key} dropped: {advice}")
+            elif key not in defaults_warned:
+                defaults_warned.add(key)
+                report.warn("defaults", f"{key} dropped: {advice}")
         for key in config.keys() - KNOWN:
             report.warn(label, f"unknown option {key!r} ignored")
         if is_generator:

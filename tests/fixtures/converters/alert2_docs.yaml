@@ -1,0 +1,169 @@
+# Examples from Alert2's README and Recipes
+# (https://github.com/redstone99/hass-alert2), gathered into one block: their
+# `...` placeholders are filled in, and a few repeated names made unique.
+alert2:
+  defaults:
+    reminder_frequency_mins: 60
+    notifier: telegram
+    annotate_messages: true
+    throttle_fires_per_mins: [ 10, 60 ]
+    icon: mdi:alert-rhombus
+    summary_notifier: telegram
+    data:
+      parse_mode: "plain_text"
+      disable_notification: "{{ notify_reason in ['StopFiring'] }}"
+  alerts:
+    - domain: thermostat_fl2
+      name: temperature_low
+      condition: "{{ states('sensor.nest_therm_fl2_temperature')|float <= 50 }}"
+      message: "Temp: {{ states('sensor.nest_therm_fl2_temperature') }}"
+    - domain: thermostat_fl1
+      name: temperature_low
+      condition: binary_sensor.nest_therm_fl1_temperature_too_low
+      message: Too low
+    - domain: thermostat_fl3
+      name: temperature_low
+      threshold:
+        value: sensor.nest_therm_fl3_temperature
+        minimum: 50
+        hysteresis: 5
+      message: "Temp: {{ states('sensor.nest_therm_fl3_temperature') }}"
+    - domain: boiler
+      name: ignition_failed
+      trigger:
+       - platform: state
+         entity_id: sensor.boiler_failed_ignition_count
+      condition: "{{ (trigger.from_state is not none) and (trigger.to_state is not none) and (trigger.from_state.state|int(-1) > 0) and (trigger.to_state.state|int(-1) > 0) and (trigger.to_state.state|int > trigger.from_state.state|int) }}"
+      message: "{{ trigger.from_state.state }} -> {{ trigger.to_state.state }}"
+    - domain: basement
+      name: possible_fire
+      condition_on: "{{ states('binary_sensor.smoke_detector_basement') }}"
+      manual_off: true
+      display_msg: Smoke detector is "{{ states('binary_sensor.smoke_detector_basement') }}"
+    - domain: laundry
+      name: done
+      condition_on:  "{{ states('sensor.laundry_room_power_watts')|float > 200 }}"
+      trigger_off:
+        - trigger: state
+          entity_id:
+            - binary_sensor.door_washer_open
+            - binary_sensor.door_dryer_open
+          to: "on"
+    - domain: sidedoor
+      name: low_battery
+      condition: binary_sensor.sidedoor_deadbolt_low_battery
+    - domain: test
+      name: always_firing
+      condition: true
+    - domain: sys
+      name: memory low
+      condition:  "{{ states('sensor.memory_free')|float < 1000 }}"
+    - domain: front_door
+      name: open too long
+      condition:  binary_sensor.front_door_open
+      delay_on_secs: 600
+      notifier: mobile_app_pixel_12
+      annotate_messages: false
+      message: front_door open too long
+      done_message: clear_notification
+      data:
+        tag: "front_door-open-too-long"
+    - domain: cam_basement
+      name: motion_while_away
+      condition: "{{ (states('sensor.jdahua_basement_motion') == 'on') and (states('input_select.homeaway') in [ 'Away-local', 'Away-travel' ]) }}"
+      notifier: [ telegram_1, notify.telegram_bot_x_y ]
+      title: "test title"
+      data:
+        group: motion-alarms
+        channel: "{% if notify_reason == 'Fire' %}channel-a{% else %}channel-b{% endif %}"
+    - domain: test
+      name: templated_notifier
+      condition: binary_sensor.t1
+      notifier: "{{ [ 'notifier_a', 'notifier_b' ] + [ 'notifier_c', 'notifier_d' ] }}"
+    - domain: test
+      name: entity_notifier
+      condition: binary_sensor.t2
+      notifier: sensor.my_notifier_list
+    - domain: test
+      name: foo
+      condition: binary_sensor.foo
+    - domain: test
+      name: foo2
+      condition: binary_sensor.foo2
+    - domain: test
+      name: supersedes_both
+      condition: binary_sensor.both
+      supersedes: [ { domain: test, name: foo }, { domain: test, name: foo2 } ]
+    - domain: test
+      name: supersedes_one
+      condition: binary_sensor.one
+      supersedes: { domain: test, name: foo }
+    - domain: test
+      name: leak_valve
+      condition: "{{ states('sensor.water_leak_detected')|bool }}"
+      actions_on:
+         actions:
+            - service: switch.turn_off
+              data:
+                 entity_id: switch.water_valve
+         mode: single
+      ack_required: true
+    - domain: Garage Door
+      name: Open for too long
+      title: "[HA] Garage Door"
+      message: The door is still open
+      done_message: The door is now closed
+      condition: "{{ states('cover.garage_door') == 'open' }}"
+      delay_on_secs: 600
+      reminder_frequency_mins: [30, 60, 120]
+      notifier: [notify.telegram_me, notify.telgram_her, email_me]
+    - domain: general
+      name: ha_startup_delayed
+      condition: "{{ states('binary_sensor.alert2_ha_startup_done') == 'off' }}"
+      message: "Starting for a while"
+      early_start: true
+    - domain: test
+      name: "low_disk_{{ genElem }}"
+      condition: "{{ states('sensor.disk_free_mb')|float < genElem }}"
+      supersedes: "{{ genPrevDomainName }}"
+      generator: [ 20, 10 ]
+      generator_name: g1
+    - generator_name: low_bat
+      generator: "{{ states.sensor|selectattr('entity_id','match','sensor.*_battery_plus')
+                                  |map(attribute='entity_id')
+                                  |list }}"
+      domain: battery
+      name: "{{ genEntityId|regex_replace('sensor.(.*)_battery_plus', '\\\\1') }}_is_low"
+      condition: "{{ state_attr(genEntityId, 'battery_low') }}"
+    - generator_name: low_bat2
+      generator: "{{ states.sensor|entity_regex('sensor.(.*)_battery_plus')|list }}"
+      domain: battery
+      name: "{{ genGroups[0] }}_is_low"
+      condition: "{{ state_attr(genEntityId, 'battery_low') }}"
+    - domain: "{{ genElem }}"
+      name: open too long
+      condition:  "{{ states('binary_sensor.' + genElem + '_open') }}"
+      delay_on_secs: 600
+      generator_name: g2
+      generator: [ front_door, side_door, garage_door ]
+    - generator_name: low_temp
+      generator: "{{ states.sensor|selectattr('entity_id', 'match', 'sensor.temp_.*')
+                                  |map(attribute='entity_id')|list }}"
+      domain: thermostat
+      name: "{{ genEntityId|regex_replace('sensor.temp_(.*)','\\\\1') }}_is_low"
+      condition: "{{ states(genEntityId)|float < 40 }}"
+    - generator_name: temp_events
+      generator: "{{ states.sensor|selectattr('entity_id', 'match', 'sensor.temp_.*')|map(attribute='entity_id')|list }}"
+      domain: test
+      name: my_alert
+      trigger:
+        - trigger: state
+          entity_id: "{{ genEntityId }}"
+  tracked:
+    - domain: alert2
+      name: error
+      notifier: foo
+    - domain: alert2
+      name: global_exception
+      throttle_fires_per_mins: [5, 60]
+      notifier: null

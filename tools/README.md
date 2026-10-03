@@ -45,7 +45,9 @@ Input: the `alert:` section, with or without its `alert:` line, or a whole
 `configuration.yaml`. (An `!include` can't be followed: convert the included file.)
 Every alert becomes a state alert: `entity_id` and `state`, `repeat` as the
 reminder schedule, `can_acknowledge`, `message`, `done_message`, and `notifiers`.
-Not converted, with a warning: `title` (notifications are titled with the alert's
+A `done_message` of `clear_notification` (the mobile app's way to clear a
+notification) isn't kept as text: set the group member's "clear instead of showing
+the done message" option. Not converted, with a warning: `title` (notifications are titled with the alert's
 name), `data` (set it on the group's members), and `skip_first`. The built-in
 `skip_first` has no exact equivalent, but people moving to Alert2 usually use a delay
 before the alert fires. With `--skip-first-as-delay`, an alert with `skip_first`
@@ -61,8 +63,13 @@ choose entities by criteria (label, area, domain, device class, entity ID
 pattern), so they can't be converted. The report instead gives, under "Suggested
 settings", the settings of an Alert Redux generator that match the generator's
 body: its kind, messages, priority, delays, reminders, and notifier groups, with
-`genElem` rewritten to `target`. The `targets` are left for you to choose, and
-the report quotes Alert2's list or template to help. Create the generator from
+`genElem` and `genEntityId` rewritten to `target`. For a generator that selects
+entities from `states.<domain>` with a pattern (`'match'`, or `entity_regex`),
+the targets are the domain and the pattern as an entity ID glob, to check; for a
+list, they're a label to put on those entities, or, if the list's values aren't
+entities (limits, say), fixed alerts are suggested instead. A templated name isn't
+carried over (Alert Redux names alerts after their target), and the report quotes
+it. Create the generator from
 those settings in the integration's forms. Only condition kinds (state, threshold,
 template, on/off) can be generated; supersession in a generator isn't carried over.
 
@@ -87,6 +94,15 @@ YAML**, as the Alert Manager card shows it, or a list of alerts.
 | `message`, `done_message`, `reminder_message`, `display_msg`, `icon` | the same; `on_time_str` and `on_secs` become `duration` and `duration_seconds` |
 | `notifier` | notifier groups |
 | `supersedes` | supersedes (by the converted alerts' entity IDs) |
+
+Notifiers may be a name, a list, or `notify.<name>`. A template or an entity (which
+Alert2 allows) can't be mapped: it's dropped with a warning, leaving the alert on
+the default groups. An explicit `null` or empty list means nobody. `defaults:`
+options that can't be converted are reported once, not for every alert.
+
+An alert with `condition_on` but no off side (`manual_off`) becomes a template
+alert that ends when its condition does; one with only trigger criteria becomes a
+trigger alert. `condition: true` (YAML's boolean) is accepted.
 
 Alerts are named by a plain `friendly_name`; otherwise by both `domain` and `name`,
 with underscores as spaces (`house` and `door_open` give "House Door open"), since a
