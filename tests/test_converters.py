@@ -146,6 +146,12 @@ def test_alert2_docs_examples() -> None:
     assert alerts["Laundry Done"]["off_triggers"][0]["to"] == "on"
     # Domains and names with spaces and capitals; supersession by those.
     assert "Garage Door Open for too long" in alerts
+    # A template that only compares an entity's state is a state alert.
+    garage = alerts["Garage Door Open for too long"]
+    assert garage["kind"] == "state"
+    assert garage["entity_id"] == "cover.garage_door"
+    assert garage["target_state"] == "open"
+    assert garage["delay_on"] == {"seconds": 600}
     assert alerts["Test Supersedes one"]["supersedes"] == [
         {"alert": "alert_redux.test_foo"}
     ]
@@ -196,6 +202,23 @@ def test_alert2_single_alert_and_list() -> None:
     )
     names = [a["name"] for a in convert_alert2.convert(named, common.GroupMap())[0]]
     assert names == ["A Same", "B Same", "C Z"]  # a clash, and a template
+
+
+@pytest.mark.parametrize(
+    ("template", "expected"),
+    [
+        ("{{ states('cover.g') == 'open' }}", ("cover.g", "open")),
+        ('{{states("cover.g")=="open"}}', ("cover.g", "open")),
+        ("{{ is_state('cover.g', 'open') }}", ("cover.g", "open")),
+        ("{{ states('cover.g') != 'open' }}", None),
+        ("{{ states('cover.g') == 'open' and is_state('a.b', 'on') }}", None),
+        ("{{ states('cover.g') == states('cover.h') }}", None),
+        ("{{ states(genElem) == 'open' }}", None),
+    ],
+)
+def test_state_comparison(template: str, expected: Any) -> None:
+    """Only a template that is just one comparison becomes a state alert."""
+    assert convert_alert2._state_comparison(template) == expected
 
 
 def test_alert2_rejects_other_input() -> None:

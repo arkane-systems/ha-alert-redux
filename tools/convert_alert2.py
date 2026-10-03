@@ -58,6 +58,15 @@ KNOWN = {
     "ack_required", "ack_reminders_only", "supersedes", "generator", "generator_name",
     "supersedes_generator", "manual_off",
 } | UNSUPPORTED.keys()
+# A template that only compares one entity's state with a value, which a state
+# alert says directly: {{ states('x') == 'v' }} or {{ is_state('x', 'v') }}.
+_Q = r"""(?:'([^']*)'|"([^"]*)")"""
+STATE_TEMPLATES = (
+    re.compile(
+        r"^\{\{\s*states\(\s*" + _Q + r"\s*\)\s*==\s*" + _Q + r"\s*\}\}$"
+    ),
+    re.compile(r"^\{\{\s*is_state\(\s*" + _Q + r"\s*,\s*" + _Q + r"\s*\)\s*\}\}$"),
+)
 ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
 
 
@@ -139,6 +148,17 @@ def _template_text(value: Any) -> str:
     return str(value)
 
 
+def _state_comparison(template: str) -> tuple[str, str] | None:
+    """Return the entity and state a template only compares, if it does."""
+    for pattern in STATE_TEMPLATES:
+        if match := pattern.match(template.strip()):
+            groups = match.groups()
+            entity, state = (groups[0] or groups[1]), (groups[2] or groups[3] or "")
+            if ENTITY_ID.match(entity or ""):
+                return entity, state
+    return None
+
+
 def _condition(config: dict[str, Any], label: str, report: Report) -> dict[str, Any]:
     """Return the kind and its fields for an alert's condition or trigger."""
     if "threshold" in config:
@@ -206,7 +226,18 @@ def _condition(config: dict[str, Any], label: str, report: Report) -> dict[str, 
         return {"kind": "manual", "ends_by_itself": True}
     if isinstance(condition, str) and ENTITY_ID.match(condition.strip()):
         return {"kind": "state", "entity_id": condition.strip(), "target_state": "on"}
-    return {"kind": "template", "template": _rewrite(_template_text(condition))}
+    text = _template_text(condition)
+    if comparison := _state_comparison(text):
+        report.notes.append(
+            f"{label}: its template only compares {comparison[0]} with "
+            f"{comparison[1]!r}, so it's a state alert"
+        )
+        return {
+            "kind": "state",
+            "entity_id": comparison[0],
+            "target_state": comparison[1],
+        }
+    return {"kind": "template", "template": _rewrite(text)}
 
 
 def _supersedes(

@@ -2758,6 +2758,15 @@ approximated, and the notifier groups to create). Decided in building:
   settings of an Alert Redux generator that match the body (kind, messages,
   priority, delays, reminders, groups; `genElem` becomes `target`), with a
   `targets` placeholder and Alert2's list or template quoted, as a head start.
+- **Checked on a live instance** (a dry-run import of the Alert2 documentation's
+  alerts, with notifiers mapped onto the instance's existing groups): all accepted,
+  nothing created. Without the map the same file was refused for its unknown
+  groups, which is why the migration guide (`tools/README.md`) has the user map or
+  create groups first, and dry-run before importing.
+- **Template conditions that only compare one entity's state** (`{{ states('x') ==
+  'v' }}`, `{{ is_state('x', 'v') }}`) become state alerts, which report missing
+  data precisely (§4.1); Alert2's own migration example is one. Any other
+  template stays a template alert.
 - **Tested on the documentation's own examples** (the built-in `alert` page, and
   Alert2's README and Recipes), kept as fixtures. They showed what the forms of
   real configurations need: a `clear_notification` done message isn't text;

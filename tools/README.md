@@ -25,6 +25,28 @@ Both take `-` for standard input, and these options:
 A report goes to standard error: what was converted, what wasn't, and the notifier
 groups the file needs. Exit status is 2 if the input can't be read.
 
+## A good way to migrate
+
+Converting is the easy part; moving alerting you rely on deserves a little care.
+
+1. **Convert, and read the report.** Everything that wasn't converted exactly is
+   listed, with the reason. Decide each one: fix it by hand in the file, accept
+   the difference, or recreate it (generators) from the suggested settings.
+2. **Settle the notifier groups.** Create the groups the report names, or map the
+   old notifiers onto groups you already have with `--group-map` and convert again.
+   An import naming a group that doesn't exist is refused.
+3. **Dry-run the import.** `alert_redux.import` with `dry_run: true` makes every
+   check a real import would and changes nothing. It lists what would be created,
+   updated, or left alone, or refuses with every problem at once. Fix and repeat
+   until it's clean.
+4. **Import for real, then look.** Check the alerts on the admin card, and the
+   ones that now use the default groups because their notifier couldn't be mapped.
+5. **Run both side by side for a while** if you can: leave the old alerts in place
+   (or just their notifiers off) until the new ones have fired, notified, and been
+   acknowledged the way you expect. Then remove the old configuration.
+6. **Keep the files.** The converted file and the original YAML are a record of what
+   you moved; importing the file again is harmless.
+
 ## Notifier groups
 
 Alert Redux alerts name notifier **groups**, which an import file can't create. Each
@@ -84,7 +106,8 @@ YAML**, as the Alert Manager card shows it, or a list of alerts.
 | Alert2 | Alert Redux |
 |---|---|
 | `condition`: an entity | state alert, target state `on` |
-| `condition`: a template | template alert |
+| `condition`: a template that only compares one entity's state (`{{ states('x') == 'v' }}`, `{{ is_state('x', 'v') }}`) | state alert (with a note in the report) |
+| `condition`: any other template | template alert |
 | `condition_on` / `condition_off`, `trigger_on` / `trigger_off` | on/off alert |
 | `trigger` (and `condition`) | trigger alert |
 | `threshold` | threshold alert |
