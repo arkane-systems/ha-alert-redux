@@ -24,7 +24,17 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-None.
+- **Set up 2026-10-03, 20:12 UTC (phase 15, 1.3.0). A latched alert stays
+  latched across a restart.** Test Latching Alert (a state alert on
+  `input_boolean.test_latching`, Quiet only, latching, reminders every 60
+  minutes) was left `latched`, `fire_count` 2, `last_ended` 20:12:47 UTC,
+  `next_reminder` 21:12:47 UTC, with its proxy switch on. After the 1.3.0
+  release install restart, check: still `latched` with `fire_count` 2 and the
+  same `last_ended`; `sensor.alert_redux_latched` and `…_active` count it; the
+  switch is on; if 21:12:47 passed while HA was down, one reminder arrives when
+  it's back (else `next_reminder` is unchanged); acknowledging it then releases
+  it to `idle`. Afterwards delete the alert and its helper (they're throwaways,
+  not the permanent rig).
 
 ## Done
 
