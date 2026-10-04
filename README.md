@@ -3,7 +3,9 @@
 A replacement alert system for Home Assistant, intended to take over from the
 built-in `alert` integration, which is
 [effectively deprecated](https://community.home-assistant.io/t/wth-are-alerts-not-configurable-through-the-ui/804195).
-The design is in [docs/SPEC.md](docs/SPEC.md).
+The design is in [docs/SPEC.md](docs/SPEC.md). For worked examples, from a first
+alert to escalation and generators, see the
+[cookbook on the wiki](https://github.com/arkane-systems/ha-alert-redux/wiki).
 
 ![The Alert Redux card, in Home Assistant's default light and dark themes](assets/screenshots/hero.png)
 
