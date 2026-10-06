@@ -279,8 +279,7 @@ def _async_refresh_generators(hass: HomeAssistant, call: ServiceCall) -> None:
                 translation_placeholders={"entity_id": entity_id},
             )
         subentry_ids.append(subentry_id)
-    for subentry_id in subentry_ids:
-        generators.async_refresh(subentry_id)
+    generators.async_refresh(subentry_ids)
 
 
 def _entity_services_take_admin_only(component: EntityComponent[AlertEntity]) -> bool:

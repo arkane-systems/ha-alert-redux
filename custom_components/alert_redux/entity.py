@@ -603,6 +603,7 @@ class AlertEntity(Entity):
         follows the same rule (spec §14.1).
         """
         assert self.unique_id is not None
+        self._supersession.async_invalidate()
         record = self._store.get_alert(self.unique_id)
         if record is not None:
             self._runtime = AlertRuntime.from_dict(record["runtime"])
@@ -668,6 +669,7 @@ class AlertEntity(Entity):
         alert is being deleted: its notifications are cleared, and a done one sent
         now would stay on show for an alert that no longer exists.
         """
+        self._supersession.async_invalidate()
         if self._deleted:
             self._held_dones = []
         self._async_done_due(dt_util.utcnow())
@@ -1350,6 +1352,8 @@ class AlertEntity(Entity):
         a duration after the edit, since every firing with a duration must.
         """
         self._configure(definition)
+        if self.hass is not None:
+            self._supersession.async_invalidate()
         # Only a generated alert follows a change: a fixed alert's registry values
         # are edited in place by its form, and the stored ones were applied once.
         if (

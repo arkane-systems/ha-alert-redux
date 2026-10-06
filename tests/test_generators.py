@@ -35,7 +35,11 @@ from custom_components.alert_redux.const import (
     STORAGE_KEY,
     SUBENTRY_GENERATOR,
 )
-from custom_components.alert_redux.generators import Candidate, TargetCriteria
+from custom_components.alert_redux.generators import (
+    Candidate,
+    GeneratorManager,
+    TargetCriteria,
+)
 
 from .conftest import SetupAlerts, alert_subentry, generator_subentry
 
@@ -457,6 +461,35 @@ async def test_refresh_generator(
             {"entity_id": "sensor.alert_redux_firing"},
             blocking=True,
         )
+
+
+async def test_refresh_generators_finds_candidates_once(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Refreshing several generators finds the candidate entities once."""
+    await setup_alerts(
+        _unlocked(),
+        generator_subentry(
+            "Jammed",
+            "state",
+            "jammed",
+            targets={"domains": ["lock"]},
+            target_state="jammed",
+        ),
+    )
+    with patch.object(
+        GeneratorManager,
+        "_candidates",
+        autospec=True,
+        side_effect=GeneratorManager._candidates,  # noqa: SLF001
+    ) as candidates:
+        await hass.services.async_call(
+            DOMAIN,
+            "refresh_generator",
+            {"entity_id": [SENSOR, "sensor.alert_redux_generator_jammed"]},
+            blocking=True,
+        )
+    assert candidates.call_count == 1
 
 
 # Restarts, and the startup grace period.

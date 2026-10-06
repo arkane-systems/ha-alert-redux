@@ -482,9 +482,12 @@ class GeneratorManager:
             self._async_apply(generator, candidates)
 
     @callback
-    def async_refresh(self, subentry_id: str) -> None:
-        """Re-evaluate one generator's targets now (the refresh action)."""
-        self._async_apply(self.generators[subentry_id], self._candidates())
+    def async_refresh(self, subentry_ids: Iterable[str]) -> None:
+        """Re-evaluate some generators' targets now (the refresh action), finding
+        the candidates once for them all."""
+        candidates = self._candidates()
+        for subentry_id in subentry_ids:
+            self._async_apply(self.generators[subentry_id], candidates)
 
     @callback
     def async_add_generator(self, subentry: ConfigSubentry) -> None:

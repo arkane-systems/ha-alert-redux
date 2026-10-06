@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -14,7 +15,12 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.alert_redux.const import DOMAIN, EVENT_SUPERSEDED
-from custom_components.alert_redux.supersession import SupersessionGraph, find_cycle
+from custom_components.alert_redux.model import Settings
+from custom_components.alert_redux.supersession import (
+    Supersession,
+    SupersessionGraph,
+    find_cycle,
+)
 
 from .conftest import SetupAlerts, alert_subentry, group_subentry, state_alert
 
@@ -74,6 +80,36 @@ def test_graph_closure() -> None:
     assert graph.direct_superseders("c") == {"b", "d"}
     assert graph.has_superseders("c")
     assert not graph.has_superseders("a")
+
+
+async def test_graph_kept_until_changed_or_the_next_loop_run(
+    hass: HomeAssistant,
+) -> None:
+    """The graph is kept, not built for every question: built afresh when an
+    alert says it changed, and in the next run of the event loop regardless."""
+
+    class Alert:
+        def __init__(self, entity_id: str, supersedes: list[dict[str, Any]]) -> None:
+            self.entity_id = entity_id
+            self.supersedes = supersedes
+            self.hass = hass
+            self.firing = True
+            self.priority = "warning"
+
+    left_open = Alert(LEFT_OPEN, [])
+    supersession = Supersession(
+        hass, {"open": Alert(OPEN, []), "left": left_open}, Settings()
+    )
+    assert supersession.superseded_by(OPEN) == []
+
+    left_open.supersedes = _supersedes(OPEN)
+    assert supersession.superseded_by(OPEN) == []  # kept
+    supersession.async_invalidate()
+    assert supersession.superseded_by(OPEN) == [LEFT_OPEN]
+
+    left_open.supersedes = []
+    await asyncio.sleep(0)
+    assert supersession.superseded_by(OPEN) == []  # unannounced, but not kept
 
 
 def test_graph_survives_a_cycle() -> None:
