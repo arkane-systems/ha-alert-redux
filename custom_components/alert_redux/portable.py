@@ -104,6 +104,7 @@ from .validation import (
     async_check_generator,
     check_generator_references,
     check_references,
+    name_in_use,
 )
 
 FILE_FORMAT = "alert_redux"
@@ -757,22 +758,12 @@ def _identify(
         subentry_id = existing.subentry_id if existing else ulid_now()
     seen_ids.add(subentry_id)
 
-    if _titled(entry, subentry_type, name, exclude=subentry_id):
+    if name_in_use(entry, subentry_type, name, exclude=subentry_id):
         # A new definition with an existing one's name, or one renamed to it.
         plan.problems.append(Problem(PROBLEM_NAME_EXISTS, type_name, name))
         return None
     item = Item(subentry_type, subentry_id, name)
     return item, definition, existing
-
-
-def _titled(entry: ConfigEntry, subentry_type: str, name: str, exclude: str) -> bool:
-    """Return whether another subentry of the type has the name."""
-    return any(
-        subentry.subentry_type == subentry_type
-        and subentry_id != exclude
-        and subentry.title.casefold() == name.casefold()
-        for subentry_id, subentry in entry.subentries.items()
-    )
 
 
 def _normalise(
