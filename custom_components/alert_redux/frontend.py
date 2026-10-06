@@ -63,7 +63,11 @@ async def _websocket_info(
 
 
 async def async_register_frontend(hass: HomeAssistant, store: AlertStore) -> None:
-    """Serve the card bundle and make dashboards load it. Idempotent; never raises."""
+    """Serve the card bundle and make dashboards load it, once per HA run.
+
+    Problems with the card's resource are logged, not raised, since the card is
+    optional; a failure to serve the bundle at all is a bug, and is raised.
+    """
     data = hass.data.setdefault(DOMAIN, {})
     if data.get(_DATA_REGISTERED):
         return
@@ -72,18 +76,21 @@ async def async_register_frontend(hass: HomeAssistant, store: AlertStore) -> Non
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_URL_BASE, str(Path(__file__).parent / "frontend"), False)]
     )
+    # Set now, not once the card is loaded: the path mustn't be served twice, and
+    # nothing else here changes before HA restarts.
+    data[_DATA_REGISTERED] = True
 
     integration = await async_get_integration(hass, DOMAIN)
     url = f"{CARD_URL}?v={integration.version}"
 
     if not await _async_register_lovelace_resource(hass, url):
+        # What add_extra_js_url needs, and set up only by the frontend.
         if DATA_EXTRA_MODULE_URL not in hass.data:
             _LOGGER.info("The frontend isn't loaded, so the Alert Redux card isn't")
             return
         add_extra_js_url(hass, url)
         _LOGGER.debug("Loaded Alert Redux card via add_extra_js_url")
 
-    data[_DATA_REGISTERED] = True
     _async_announce_version(hass, store, str(integration.version))
 
 
@@ -107,27 +114,25 @@ def _async_announce_version(hass: HomeAssistant, store: AlertStore, version: str
 async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> bool:
     """Add or update the card as a storage-mode Lovelace resource.
 
-    Returns False if we can't manage the resource (no Lovelace, or resources kept in
-    YAML, where an entry the user has added themselves counts as registered), so the
-    caller can fall back to another loading mechanism.
+    Returns False if we can't manage the resource (no Lovelace, resources kept in
+    YAML, or an error from the resource collection), so the caller can fall back to
+    another loading mechanism.
     """
     lovelace = hass.data.get(LOVELACE_DATA)
-    if lovelace is None:
+    if lovelace is None or lovelace.resource_mode != "storage":
+        # In YAML mode resources are a read-only list, which the user can reload.
+        # Should they also list the card there, the card guards its definitions, so
+        # loading it twice is harmless.
         return False
 
     resources = lovelace.resources
-    if lovelace.resource_mode != "storage":
-        # A read-only list: the user keeps it, and may have added the card to it.
-        return any(
-            (item.get("url") or "").split("?")[0] == CARD_URL
-            for item in resources.async_items()
-        )
-
     try:
         # async_items() sees nothing until the collection is loaded, and we'd then
-        # create a duplicate of a resource that's already there.
+        # create a duplicate of a resource that's already there. Marking it loaded
+        # is what HA does itself, and stops it loading the collection again.
         if not resources.loaded:
             await resources.async_load()
+            resources.loaded = True
 
         for item in resources.async_items():
             if (item.get("url") or "").split("?")[0] != CARD_URL:
@@ -146,6 +151,12 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> bo
             "Could not register the Alert Redux card as a Lovelace resource; "
             "loading it in every page instead",
             exc_info=True,
+        )
+        return False
+    except Exception:  # noqa: BLE001 - the card is optional; never block setup
+        _LOGGER.exception(
+            "Unexpected error registering the Alert Redux card as a Lovelace "
+            "resource; loading it in every page instead"
         )
         return False
     return True
