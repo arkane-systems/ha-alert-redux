@@ -72,6 +72,8 @@ def test_match_ambiguous_and_none() -> None:
         ("Ten mins", 600),
         ("ten minutes please", 600),
         ("an hour, thanks", 3600),
+        ("ten minutes.", 600),
+        ("1.5 hours.", 5400),
     ],
 )
 def test_parse_duration(text: str, seconds: int) -> None:

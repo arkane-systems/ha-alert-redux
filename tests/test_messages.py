@@ -66,6 +66,26 @@ async def test_message_tracks_entities(
     assert _attrs(hass)["message"] == "Server room is 33 °C"
 
 
+async def test_message_is_text_as_in_notifications(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """The card's message is the text the notifications get: not parsed."""
+    hass.states.async_set(TEMP, "1.50")
+    await setup_alerts(
+        alert_subentry(
+            "Back Door Open",
+            message="{{ states('sensor.server_room') }}",
+            display_message="{{ none }}",
+        )
+    )
+    await _fire(hass)
+    assert _attrs(hass)["message"] == "1.50"
+    assert _attrs(hass)["display_message"] == "None"
+    hass.states.async_set(TEMP, "2.50")
+    await hass.async_block_till_done()
+    assert _attrs(hass)["message"] == "2.50"
+
+
 async def test_message_context(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
     """Messages can use the alert's context variables, including fire data."""
     hass.states.async_set(SENSOR, "off", {"friendly_name": "Back door"})

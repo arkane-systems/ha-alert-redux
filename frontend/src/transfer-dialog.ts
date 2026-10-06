@@ -40,8 +40,12 @@ function downloadText(text: string, filename: string): void {
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  // In the document, and revoked once the browser has taken the download:
+  // revoking it straight after the click can cancel it (Firefox, Safari).
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
