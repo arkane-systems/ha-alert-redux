@@ -24,7 +24,20 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-None.
+- **A deleted alert that was holding a throttled done notification isn't
+  announced as deleted again at startup** (the repository review's fixes,
+  PR #34). Set up during the live soak test: RX Throttled, a manual alert
+  (Notice) to the RX Persistent group (persistent notification only), with a
+  throttle of 1 notification in 60 minutes, and RX Throttled Over, which
+  supersedes it, with the done window raised to 60 seconds. Fire RX Throttled,
+  then RX Throttled Over; dismiss RX Throttled, so its done notification is
+  held; then delete RX Throttled within the done window. Before the fix, the
+  held done notification was sent on removal, throttling held it, and that
+  wrote the alert's stored record back. **Check after the restart:** the
+  logbook has one "deleted" entry for RX Throttled, from the deletion, and
+  none from the startup; no "RX Throttled stopped firing" notification ever
+  appeared. Then delete RX Throttled Over and set the done window back to 5
+  seconds.
 
 ## Done
 
