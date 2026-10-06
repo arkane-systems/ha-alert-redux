@@ -10,7 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 from homeassistant.setup import async_setup_component
 
-from custom_components.alert_redux.const import DOMAIN, STORAGE_KEY
+from homeassistant.components.lovelace.resources import ResourceYAMLCollection
+
+from custom_components.alert_redux.const import CARD_URL, DOMAIN, STORAGE_KEY
 from custom_components.alert_redux.frontend import REFRESH_NOTIFICATION_ID
 
 from .conftest import SetupAlerts
@@ -80,3 +82,35 @@ async def test_notification_for_upgrade(
     }
     await setup_alerts()
     assert REFRESH_NOTIFICATION_ID in await _notifications(hass)
+
+
+async def test_yaml_resources_fall_back_to_extra_js(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Where resources are a read-only YAML list, the card loads in every page."""
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+    from homeassistant.components.lovelace.const import LOVELACE_DATA
+
+    hass.data[DATA_EXTRA_MODULE_URL] = set()
+    hass.data[LOVELACE_DATA].resource_mode = "yaml"
+    hass.data[LOVELACE_DATA].resources = ResourceYAMLCollection([])
+
+    await setup_alerts()
+    assert [u.split("?")[0] for u in hass.data[DATA_EXTRA_MODULE_URL]] == [CARD_URL]
+
+
+async def test_yaml_resource_added_by_user_is_left_alone(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A card the user already lists in their YAML resources isn't loaded twice."""
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+    from homeassistant.components.lovelace.const import LOVELACE_DATA
+
+    hass.data[DATA_EXTRA_MODULE_URL] = set()
+    hass.data[LOVELACE_DATA].resource_mode = "yaml"
+    hass.data[LOVELACE_DATA].resources = ResourceYAMLCollection(
+        [{"type": "module", "url": CARD_URL}]
+    )
+
+    await setup_alerts()
+    assert not hass.data[DATA_EXTRA_MODULE_URL]

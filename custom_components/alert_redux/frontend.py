@@ -2,9 +2,10 @@
 
 The card bundle lives inside the integration package, so a single HACS install of the
 integration delivers both. On setup we expose the bundle directory via a static path,
-then register the card as a Lovelace *resource* (storage-mode dashboards). If the
-Lovelace resource collection is unavailable (e.g. YAML-mode dashboards), we fall back
-to ``add_extra_js_url``, which loads the module app-wide.
+then register the card as a Lovelace *resource* (storage-mode dashboards). Where we
+can't write resources (YAML-mode dashboards, where they're a read-only list, or no
+Lovelace at all), we fall back to ``add_extra_js_url``, which loads the module in
+every frontend page, out of sight of the dashboard's resource list.
 
 The resource URL carries a ``?v=<version>`` query so that browsers pick up a new
 bundle after an upgrade; an existing resource pointing at an older version is updated
@@ -26,8 +27,11 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.components import persistent_notification, websocket_api
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.const import LOVELACE_DATA
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.loader import async_get_integration
 
 from .const import CARD_URL, CARD_URL_BASE, DOMAIN
@@ -64,29 +68,19 @@ async def async_register_frontend(hass: HomeAssistant, store: AlertStore) -> Non
     if data.get(_DATA_REGISTERED):
         return
 
-    try:
-        await hass.http.async_register_static_paths(
-            [
-                StaticPathConfig(
-                    CARD_URL_BASE, str(Path(__file__).parent / "frontend"), False
-                )
-            ]
-        )
-    except Exception:  # noqa: BLE001 - the card is optional; never block setup
-        _LOGGER.warning("Could not serve the Alert Redux card bundle", exc_info=True)
-        return
+    # http is a hard dependency, so a failure here is a bug: let it surface.
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(CARD_URL_BASE, str(Path(__file__).parent / "frontend"), False)]
+    )
 
     integration = await async_get_integration(hass, DOMAIN)
     url = f"{CARD_URL}?v={integration.version}"
 
     if not await _async_register_lovelace_resource(hass, url):
-        from homeassistant.components.frontend import add_extra_js_url
-
-        try:
-            add_extra_js_url(hass, url)
-        except Exception:  # noqa: BLE001 - e.g. the frontend isn't loaded
-            _LOGGER.warning("Could not load the Alert Redux card", exc_info=True)
+        if DATA_EXTRA_MODULE_URL not in hass.data:
+            _LOGGER.info("The frontend isn't loaded, so the Alert Redux card isn't")
             return
+        add_extra_js_url(hass, url)
         _LOGGER.debug("Loaded Alert Redux card via add_extra_js_url")
 
     data[_DATA_REGISTERED] = True
@@ -113,16 +107,26 @@ def _async_announce_version(hass: HomeAssistant, store: AlertStore, version: str
 async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> bool:
     """Add or update the card as a storage-mode Lovelace resource.
 
-    Returns False if the resource collection is not available, so the caller can
-    fall back to another loading mechanism.
+    Returns False if we can't manage the resource (no Lovelace, or resources kept in
+    YAML, where an entry the user has added themselves counts as registered), so the
+    caller can fall back to another loading mechanism.
     """
-    lovelace = hass.data.get("lovelace")
-    resources = getattr(lovelace, "resources", None)
-    if resources is None or not hasattr(resources, "async_create_item"):
+    lovelace = hass.data.get(LOVELACE_DATA)
+    if lovelace is None:
         return False
 
+    resources = lovelace.resources
+    if lovelace.resource_mode != "storage":
+        # A read-only list: the user keeps it, and may have added the card to it.
+        return any(
+            (item.get("url") or "").split("?")[0] == CARD_URL
+            for item in resources.async_items()
+        )
+
     try:
-        if not getattr(resources, "loaded", True):
+        # async_items() sees nothing until the collection is loaded, and we'd then
+        # create a duplicate of a resource that's already there.
+        if not resources.loaded:
             await resources.async_load()
 
         for item in resources.async_items():
@@ -137,7 +141,11 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> bo
 
         await resources.async_create_item({"res_type": "module", "url": url})
         _LOGGER.info("Registered Lovelace resource %s", url)
-    except Exception:  # noqa: BLE001
-        _LOGGER.debug("Lovelace resource registration unavailable", exc_info=True)
+    except (HomeAssistantError, vol.Invalid):
+        _LOGGER.warning(
+            "Could not register the Alert Redux card as a Lovelace resource; "
+            "loading it in every page instead",
+            exc_info=True,
+        )
         return False
     return True
