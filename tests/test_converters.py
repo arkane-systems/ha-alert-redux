@@ -200,6 +200,11 @@ def test_alert2_single_alert_and_list() -> None:
     listed, _ = convert_alert2.convert(data, common.GroupMap())
     assert [a["name"] for a in listed] == ["A X", "B X"]  # domain and name
 
+    block = common.load_yaml("alert2:\n  - {domain: a, name: x, condition: s.a}\n")
+    assert [a["name"] for a in convert_alert2.convert(block, common.GroupMap())[0]] == [
+        "A X"
+    ]  # an alert2: block that's a list
+
     named = common.load_yaml(
         "- {domain: a, name: x, friendly_name: Same, condition: s.a}\n"
         "- {domain: b, name: y, friendly_name: Same, condition: s.b}\n"

@@ -12,9 +12,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+import math
 from types import MappingProxyType
 from typing import Any
-import re
 
 import voluptuous as vol
 
@@ -216,6 +216,9 @@ _DURATION_UNITS = frozenset({"days", "hours", "minutes", "seconds", "millisecond
 def _number(value: Any) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise vol.Invalid("expected a number")
+    # YAML's .nan and .inf are floats, and no setting can use them.
+    if not math.isfinite(value):
+        raise vol.Invalid("expected a finite number")
     return value
 
 
@@ -300,15 +303,6 @@ def _throttle(value: Any) -> list[float]:
     return [int(count), minutes]
 
 
-def _pattern(value: Any) -> str:
-    pattern = _text(value)
-    try:
-        re.compile(pattern)
-    except re.error as err:
-        raise vol.Invalid(f"not a regular expression: {err}") from err
-    return pattern
-
-
 _BUTTON = vol.Schema(
     {
         vol.Required(CONF_LABEL): _text,
@@ -349,7 +343,8 @@ _TARGETS = vol.Schema(
         vol.Optional(CONF_AREAS): [str],
         vol.Optional(CONF_DOMAINS): [str],
         vol.Optional(CONF_DEVICE_CLASSES): [str],
-        vol.Optional(CONF_PATTERN): _pattern,
+        # A glob (fnmatch), as in the form: any text is one.
+        vol.Optional(CONF_PATTERN): _text,
         vol.Optional(CONF_EXCLUDE): _entity_list,
     }
 )

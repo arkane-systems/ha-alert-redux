@@ -132,6 +132,36 @@ async def test_a_night_of_quiet_hours(
     assert _messages(speaker)[2] == "Back Door Open is firing."
 
 
+async def test_summary_reaches_members_that_clear_when_ended(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A member set to clear instead of showing the done message still gets the
+    summary: it isn't a done message."""
+    speaker = async_mock_service(hass, "notify", "mobile_app_speaker")
+    await _quiet(hass, "on")
+    await setup_alerts(
+        alert_subentry(
+            "Back Door Open",
+            "door",
+            priority="notice",
+            notifier_groups=["speaker"],
+            reminder_schedule=[],
+        ),
+        group_subentry(
+            "Speaker",
+            "speaker",
+            actions=[{"action": "notify.mobile_app_speaker", "clear_when_ended": True}],
+            loud=True,
+        ),
+        options=OPTIONS,
+    )
+    await _call(hass, "fire", "Back Door Open")
+    await _call(hass, "dismiss", "Back Door Open")
+    await _quiet(hass, "off")
+    summaries = [c for c in speaker if c.data.get("title") == "Quiet hours summary"]
+    assert len(summaries) == 1
+
+
 async def test_threshold(hass: HomeAssistant, setup_alerts: SetupAlerts) -> None:
     """Alerts at the threshold or above get through; a group can have its own."""
     speaker = async_mock_service(hass, "notify", "speaker")

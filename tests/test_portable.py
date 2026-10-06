@@ -103,7 +103,7 @@ async def _setup_everything(setup_alerts: SetupAlerts):
             "Open Doors",
             "state",
             GEN_B,
-            targets={"pattern": "^binary_sensor.door_"},
+            targets={"pattern": "binary_sensor.door_*"},
             target_state="on",
         ),
     )
@@ -326,6 +326,13 @@ async def test_dry_run_changes_nothing(
 
     with pytest.raises(ServiceValidationError):
         await _import(hass, _file({"name": "X", "kind": "nonsense"}), dry_run=True)
+    for schedule in ([10, float("nan")], [float("inf")]):
+        with pytest.raises(ServiceValidationError, match="finite"):
+            await _import(
+                hass,
+                _file({"name": "X", "kind": "manual", "reminder_schedule": schedule}),
+                dry_run=True,
+            )
 
 
 async def test_all_or_nothing_lists_every_problem(
@@ -620,6 +627,28 @@ async def test_generators_by_name_in_one_file(
     )
     ids = {item["name"]: item["id"] for item in result["created"]}
     assert entry.subentries[ids["A"]].data["supersedes"] == [{"generator": ids["B"]}]
+
+
+async def test_generator_pattern_is_a_glob(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """A target pattern is a glob, as generators match it: not a regular expression."""
+    entry = await setup_alerts()
+    result = await _import(
+        hass,
+        _file(
+            generators=[
+                {
+                    "name": "Doors",
+                    "kind": "state",
+                    "target_state": "on",
+                    "targets": {"pattern": "*_door"},
+                }
+            ]
+        ),
+    )
+    (created,) = result["created"]
+    assert entry.subentries[created["id"]].data["targets"]["pattern"] == "*_door"
 
 
 async def test_alert_placement_is_not_exported_and_does_not_stop_unchanged(

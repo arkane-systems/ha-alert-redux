@@ -336,6 +336,8 @@ class AlertEntity(Entity):
         self._on_debounce_timer = PointTimer(self._async_on_debounce_due)
         self._done_timer = PointTimer(self._async_done_due)
         self._held_dones: list[Transition] = []
+        # Being deleted, not just unloaded: see async_will_remove_from_hass.
+        self._deleted = False
         self._superseded_by: list[str] = []
         self._broken_references: list[str] = []
         # The superseded alerts last shown: a generated alert's change as other
@@ -650,11 +652,24 @@ class AlertEntity(Entity):
         if record is None:
             self._fire_event(EVENT_CREATED, None)
 
+    @callback
+    def async_mark_deleted(self) -> None:
+        """Say the alert is being deleted, before it's removed."""
+        self._deleted = True
+
+    async def async_removed_from_registry(self) -> None:
+        """Deleted with its subentry: HA calls this before removing it."""
+        self.async_mark_deleted()
+
     async def async_will_remove_from_hass(self) -> None:
         """Stop rendering the messages, and the timers.
 
-        Held done notifications are sent rather than lost (fail loud).
+        Held done notifications are sent rather than lost (fail loud), unless the
+        alert is being deleted: its notifications are cleared, and a done one sent
+        now would stay on show for an alert that no longer exists.
         """
+        if self._deleted:
+            self._held_dones = []
         self._async_done_due(dt_util.utcnow())
         self._async_stop_messages()
         self._async_cancel_timers()
@@ -1330,7 +1345,9 @@ class AlertEntity(Entity):
 
         A running firing keeps its expiry: a new duration applies from the next
         fire (spec §4.2). But if the alert no longer has a duration at all, any
-        pending expiry is cleared, or it would still end the firing unannounced.
+        pending expiry is cleared, or it would still end the firing unannounced;
+        and a firing that had none (a manual alert now ending by itself) runs out
+        a duration after the edit, since every firing with a duration must.
         """
         self._configure(definition)
         # Only a generated alert follows a change: a fixed alert's registry values
@@ -1349,11 +1366,16 @@ class AlertEntity(Entity):
         self._applied_placement = definition.placement
         if not self._has_duration:
             self._runtime.event_expires = None
+        elif self._runtime.firing and self._runtime.event_expires is None:
+            self._runtime.event_expires = dt_util.utcnow() + self._duration
         if not self._latching and self._runtime.release_latch():
             # No longer kept until acknowledged: released, with no
             # acknowledgement recorded (spec §10).
             _LOGGER.info("%s: released; it no longer latches", self.entity_id)
         self._async_replan_reminder()
+        # Edited triggers may now attach: if they still can't, the watcher says so
+        # again once the kind re-attaches them.
+        self._attr_available = True
         self.async_write_ha_state()
         self._persist()
 

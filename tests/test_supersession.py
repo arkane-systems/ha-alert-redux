@@ -351,6 +351,32 @@ async def test_door_left_open_example(
     assert hass.states.get(LEFT_OPEN).state == "idle"
 
 
+async def test_held_done_dropped_when_deleted(
+    hass: HomeAssistant,
+    setup_alerts: SetupAlerts,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Deleting an alert drops its held done notification: its notifications
+    are cleared, and the alert is forgotten for good."""
+    calls = async_mock_service(hass, "notify", "phone")
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open", "open", throttle=[1, 60]),
+        alert_subentry("Back Door Left Open", supersedes=_supersedes(OPEN)),
+        PHONE,
+        options=DEFAULTS,
+    )
+    await _call(hass, "fire", OPEN)
+    await _call(hass, "fire", LEFT_OPEN)
+    await _tick(hass, freezer, 1)
+    await _call(hass, "dismiss", OPEN)
+    calls.clear()
+    hass.config_entries.async_remove_subentry(entry, "open")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 10)
+    assert [title for title, _ in _sent(calls)] == []
+    assert "open" not in hass.data[DOMAIN]["store"].alert_ids()
+
+
 async def test_reminder_held_for_a_superseder_about_to_fire(
     hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
 ) -> None:

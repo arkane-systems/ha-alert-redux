@@ -710,6 +710,7 @@ class GeneratorManager:
 
     async def _async_remove_entity(self, entity: AlertEntity, unique_id: str) -> None:
         entity_id = entity.entity_id
+        entity.async_mark_deleted()
         await entity.async_remove(force_remove=True)
         registry = er.async_get(self.hass)
         if registry.async_get(entity_id) is not None:

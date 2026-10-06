@@ -12,6 +12,7 @@ from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
+import math
 from typing import Any
 
 from .const import (
@@ -197,7 +198,8 @@ def parse_schedule(text: str) -> tuple[float, ...]:
     schedule = tuple(
         float(item) for item in text.replace(";", ",").split(",") if item.strip()
     )
-    if any(minutes <= 0 for minutes in schedule):
+    # float() also reads "nan" and "inf", which no timedelta can hold.
+    if any(not math.isfinite(minutes) or minutes <= 0 for minutes in schedule):
         raise ValueError("reminder intervals must be positive")
     return tuple(
         int(minutes) if minutes.is_integer() else minutes for minutes in schedule

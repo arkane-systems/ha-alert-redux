@@ -232,3 +232,29 @@ async def test_turning_off_mid_firing_cancels_the_expiry(
 
     await _tick(hass, freezer, 10)
     assert _state(hass) == "active"
+
+
+async def test_turning_on_mid_firing_runs_out_from_the_edit(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, freezer: FrozenDateTimeFactory
+) -> None:
+    """Turning the option on while firing gives the firing an expiry, a duration
+    after the edit: it had none to keep, and every firing with a duration must
+    run out (as a restart would otherwise make it, at once)."""
+    entry = await setup_alerts(alert_subentry("Back Door Open", subentry_id="door"))
+    await _fire(hass)
+    await _tick(hass, freezer, 30)
+
+    subentry = entry.subentries["door"]
+    hass.config_entries.async_update_subentry(
+        entry,
+        subentry,
+        data={**subentry.data, "ends_by_itself": True, "duration": TEN_MINUTES},
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(DOOR).attributes["event_expires"] is not None
+    assert _state(hass) == "active"
+
+    await _tick(hass, freezer, 9)
+    assert _state(hass) == "active"
+    await _tick(hass, freezer, 1)
+    assert _state(hass) == "idle"
