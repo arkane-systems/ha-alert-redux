@@ -1393,14 +1393,16 @@ triggers:
   frontend change to look up those variables for any domain whose theme defines
   them. With that in place, Alert Redux would ship default state colours.
   [Deferred] An upstream request is left until after the phase plan is complete.
-- **Known limitation: deleted alerts in filtered views.** A deleted alert's rows,
-  "Deleted" included, are recorded, but only the unfiltered Activity view shows
-  them all. Filtered by the alert's entity, HA keeps an integration's described
-  rows only for entities whose config entry, found through the entity registry,
-  is that integration's; a deleted alert has no registry entry, so only its
-  state rows remain. Filtered by label, area, or device, HA finds the entities
-  through the registry too, so a deleted alert has no rows at all. Nothing on
-  our side changes this.
+- [Decided, after 1.3.0] **Deleted alerts: dashboards leave them out, admins
+  can still see them.** A deleted alert's rows, "Deleted" included, are
+  recorded, but only the unfiltered Activity panel shows them. Filtered by
+  label, area, or device, HA finds the entities through the entity registry, so
+  a deleted alert has no rows; filtered by its entity, HA keeps an
+  integration's described rows only for entities registered to it, so only the
+  state rows remain. That suits dashboards: an Activity card on the alerts
+  label shows the history of the alerts that exist, which is what users care
+  about. Admins who need a deleted alert's history, or to check a deletion, use
+  the unfiltered Activity panel.
 
 ### 11.5 The alerts label
 
@@ -2434,6 +2436,7 @@ Decisions with their reasons, in the order they were made.
 | The notification button is "Snooze Alert", and the app's own snooze options stay | Tells ours apart without taking away something people may use [§9.11]. |
 | A superseded alert's reminder waits for a superseding alert about to fire; sent late if it doesn't | A reminder and the superseding on notification arriving together is noise, and no setting should be needed to avoid it; a lost reminder would fail quiet [§8.1]. |
 | Logbook messages are capitalised | They sit beside the translated states, which are [§11.4]. |
+| Dashboards leave out deleted alerts' history; the unfiltered Activity panel keeps it | HA resolves filtered logbook views through the entity registry. Users care about the alerts that exist; admins can still see deletions [§11.4]. |
 | Manual alerts can end by themselves after a duration, as an option, not a new kind | Fills the gap between manual and event alerts without a ninth kind, and without overturning R2 or R3 [§4.3]. |
 | 1.0.0 is 0.11.1 plus self-ending manual alerts and an entity refactor, after a shorter soak of its own | The 0.11.1 soak found only trivia, and a 1.0.0 identical to it would add nothing; the refactor keeps manual-only code out of the base class every kind shares [§20]. |
 | An alert's area and labels live in the entity registry; the form edits them there | One place for the values, so edits on the entity's settings page aren't overwritten, and proxies can follow the alert whichever way it was edited [§11.6]. |
