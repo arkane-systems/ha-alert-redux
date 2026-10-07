@@ -1393,6 +1393,14 @@ triggers:
   frontend change to look up those variables for any domain whose theme defines
   them. With that in place, Alert Redux would ship default state colours.
   [Deferred] An upstream request is left until after the phase plan is complete.
+- **Known limitation: deleted alerts in filtered views.** A deleted alert's rows,
+  "Deleted" included, are recorded, but only the unfiltered Activity view shows
+  them all. Filtered by the alert's entity, HA keeps an integration's described
+  rows only for entities whose config entry, found through the entity registry,
+  is that integration's; a deleted alert has no registry entry, so only its
+  state rows remain. Filtered by label, area, or device, HA finds the entities
+  through the registry too, so a deleted alert has no rows at all. Nothing on
+  our side changes this.
 
 ### 11.5 The alerts label
 

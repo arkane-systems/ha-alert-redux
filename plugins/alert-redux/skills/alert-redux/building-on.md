@@ -180,4 +180,6 @@ lists:
 The logbook (Activity) shows each state change of an alert with who made it, plus
 rows for snoozes, snoozes running out, suspensions, supersession, lost and
 restored data, and creation and deletion. Point an Activity card at the Alert
-Redux label for an alert history.
+Redux label for an alert history. A deleted alert drops out of any view filtered
+by label, area, or entity, because HA finds those entities through the entity
+registry: its rows, "Deleted" included, show only in the unfiltered Activity.

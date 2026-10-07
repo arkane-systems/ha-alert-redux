@@ -24,22 +24,22 @@ snooze or suspend for 1 minute, then request the restart 20 to 25 seconds later.
 In 9a that worked: the restart went 21 seconds after, the deadlines fell 39
 seconds after the request, and set-up came 11 seconds after them.
 
-- **A deleted alert that was holding a throttled done notification isn't
-  announced as deleted again at startup** (the repository review's fixes,
-  PR #34). Set up during the live soak test: RX Throttled, a manual alert
-  (Notice) to the RX Persistent group (persistent notification only), with a
-  throttle of 1 notification in 60 minutes, and RX Throttled Over, which
-  supersedes it, with the done window raised to 60 seconds. Fire RX Throttled,
-  then RX Throttled Over; dismiss RX Throttled, so its done notification is
-  held; then delete RX Throttled within the done window. Before the fix, the
-  held done notification was sent on removal, throttling held it, and that
-  wrote the alert's stored record back. **Check after the restart:** the
-  logbook has one "deleted" entry for RX Throttled, from the deletion, and
-  none from the startup; no "RX Throttled stopped firing" notification ever
-  appeared. Then delete RX Throttled Over and set the done window back to 5
-  seconds.
+None.
 
 ## Done
+
+- **2026-10-07, a restart during the soak test of PR #34. A deleted alert that
+  was holding a throttled done notification isn't announced as deleted again
+  at startup** (the repository review's fixes). RX Throttled (a manual alert,
+  Notice, to a persistent-notification-only group, throttled to 1 notification
+  in 60 minutes) was fired, then RX Throttled Over, which supersedes it, with
+  the done window raised to 60 seconds; RX Throttled was dismissed, so its done
+  notification was held, and deleted within the window. No "RX Throttled
+  stopped firing" notification appeared. After the restart, the unfiltered
+  Activity view had one "Deleted" row for RX Throttled, from the deletion, and
+  none from the startup. A view filtered by entity, label, or area shows no
+  rows for a deleted alert (spec §11.4), so this check needs the unfiltered
+  one. Passed.
 
 - **2026-10-03, install restart for 1.3.0. A latched alert stays latched across
   a restart** (phase 15). Test Latching Alert (a state alert on
