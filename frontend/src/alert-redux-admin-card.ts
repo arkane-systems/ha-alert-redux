@@ -6,9 +6,12 @@ import {
   PRIORITY_NAMES,
   STATE_NAMES,
   collectAlerts,
+  collectGenerators,
   compareName,
   isAlertEntity,
   isFiring,
+  isGeneratorSensor,
+  type Generator,
 } from "./alerts";
 import "./dialog";
 import "./flow-dialog";
@@ -25,7 +28,8 @@ const SUSPEND_DURATIONS: readonly number[] = [60, 240, 480, 1440, 10080];
 
 /**
  * The admin card (spec §13.2): every alert, grouped by priority, with its kind and
- * state, and for admins, controls to enable, disable, and suspend it.
+ * state, and for admins, controls to enable, disable, and suspend it. Generators
+ * with no alerts, which would otherwise be out of sight, are listed under them.
  */
 export class AlertReduxAdminCard extends LitElement {
   static properties = {
@@ -63,7 +67,7 @@ export class AlertReduxAdminCard extends LitElement {
   declare _flow?: { type: SubentryType; entryId: string; subentryId?: string };
   /** The deletion awaiting confirmation. */
   declare _delete?: {
-    alert: Alert;
+    name: string;
     entryId: string;
     subentryId: string;
     generator: boolean;
@@ -84,6 +88,12 @@ export class AlertReduxAdminCard extends LitElement {
       }
       .content.has-header {
         padding-top: 0;
+      }
+      .section-title.generators {
+        margin-top: 8px;
+      }
+      .row.generator > .line > ha-icon {
+        color: var(--secondary-text-color);
       }
       .section-title .dot {
         width: 10px;
@@ -283,20 +293,25 @@ export class AlertReduxAdminCard extends LitElement {
     if (height > this._listMin) this._listMin = height;
   }
 
-  /** Skip renders for state changes that don't touch any alert. */
+  /** Skip renders for state changes that don't touch any alert or generator. */
   protected shouldUpdate(changed: PropertyValues<this>): boolean {
     if (changed.size !== 1 || !changed.has("hass")) return true;
     const old = changed.get("hass") as HomeAssistant | undefined;
     if (!old || !this.hass || old.user?.is_admin !== this.hass.user?.is_admin) {
       return true;
     }
-    const states = this.hass.states;
+    const hass = this.hass;
+    const states = hass.states;
     const oldStates = old.states;
+    const ours = (entityId: string) =>
+      isAlertEntity(entityId) ||
+      isGeneratorSensor(hass, states[entityId]) ||
+      isGeneratorSensor(old, oldStates[entityId]);
     for (const entityId in states) {
-      if (isAlertEntity(entityId) && states[entityId] !== oldStates[entityId]) return true;
+      if (states[entityId] !== oldStates[entityId] && ours(entityId)) return true;
     }
     for (const entityId in oldStates) {
-      if (isAlertEntity(entityId) && !(entityId in states)) return true;
+      if (!(entityId in states) && ours(entityId)) return true;
     }
     return false;
   }
@@ -343,6 +358,7 @@ export class AlertReduxAdminCard extends LitElement {
             <div class="list-inner">${this._renderGroups(alerts, shown)}</div>
           </div>
           ${pages > 1 ? this._renderPager(page, pages) : nothing}
+          ${this._renderGenerators()}
         </div>
       </ha-card>
       ${this._flow
@@ -380,6 +396,64 @@ export class AlertReduxAdminCard extends LitElement {
         <div class="group">${group.map((alert) => this._renderRow(alert))}</div>
       `;
     });
+  }
+
+  /** Generators that have no alerts now, which no alert's row leads to (§12.3). */
+  private _renderGenerators() {
+    if (!this.hass) return nothing;
+    const empty = collectGenerators(this.hass)
+      .filter((generator) => !generator.alerts.length)
+      .sort(compareName);
+    if (!empty.length) return nothing;
+    return html`
+      <div class="section-title generators">
+        <ha-icon icon="mdi:creation"></ha-icon>Generators with no alerts (${empty.length})
+      </div>
+      <div class="group">${empty.map((generator) => this._renderGenerator(generator))}</div>
+    `;
+  }
+
+  private _renderGenerator(generator: Generator) {
+    const admin = this.hass?.user?.is_admin ?? false;
+    const busy = this._busy.has(generator.entityId);
+    return html`
+      <div class="row generator">
+        <div class="line">
+          <ha-icon icon="mdi:creation" @click=${() => this._moreInfo(generator)}></ha-icon>
+          <div class="text">
+            <div class="name" @click=${() => this._moreInfo(generator)}>${generator.name}</div>
+            <div class="meta">Generator · no matching entities</div>
+          </div>
+          <div class="controls">
+            <button
+              aria-label=${`Settings summary of ${generator.name}`}
+              title="Settings summary"
+              @click=${() => (this._transfer = { mode: "summary", entityId: generator.entityId })}
+            >
+              <ha-icon icon="mdi:text-box-outline"></ha-icon>
+            </button>
+            ${admin
+              ? html`<button
+                    aria-label=${`Edit ${generator.name}`}
+                    title="Edit"
+                    ?disabled=${busy}
+                    @click=${() => this._editGenerator(generator)}
+                  >
+                    <ha-icon icon="mdi:pencil-outline"></ha-icon>
+                  </button>
+                  <button
+                    aria-label=${`Delete ${generator.name}`}
+                    title="Delete"
+                    ?disabled=${busy}
+                    @click=${() => this._confirmDeleteGenerator(generator)}
+                  >
+                    <ha-icon icon="mdi:delete-outline"></ha-icon>
+                  </button>`
+              : nothing}
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   private _renderPager(page: number, pages: number) {
@@ -514,7 +588,7 @@ export class AlertReduxAdminCard extends LitElement {
   }
 
   private _renderDelete(pending: NonNullable<AlertReduxAdminCard["_delete"]>) {
-    const { alert, generator, referrers } = pending;
+    const { name, generator, referrers } = pending;
     return html`
       <alert-redux-dialog
         .heading=${generator ? "Delete generator?" : "Delete alert?"}
@@ -522,8 +596,8 @@ export class AlertReduxAdminCard extends LitElement {
       >
         <div>
           ${generator
-            ? html`This deletes <b>${this._generatorName(alert)}</b> and all the alerts it makes.`
-            : html`This deletes <b>${alert.name}</b>.`}
+            ? html`This deletes <b>${name}</b> and all the alerts it makes.`
+            : html`This deletes <b>${name}</b>.`}
           Its history stays in the logbook.
         </div>
         ${referrers.length
@@ -574,13 +648,39 @@ export class AlertReduxAdminCard extends LitElement {
           (entity.attributes.supersedes as string[]).includes(alert.entityId),
       )
       .map((entity) => String(entity.attributes.friendly_name ?? entity.entity_id));
+    const generator = target.type === "generator";
     this._delete = {
-      alert,
+      name: generator ? this._generatorName(alert) : alert.name,
       entryId: target.entryId,
       subentryId: target.subentryId,
-      generator: target.type === "generator",
+      generator,
       referrers,
     };
+  }
+
+  /** Edit a generator with no alerts, through its sensor's subentry. */
+  private async _editGenerator(generator: Generator): Promise<void> {
+    const found = await this._subentry(generator.entityId);
+    if (found) this._flow = { type: "generator", ...found };
+  }
+
+  /** Delete a generator with no alerts: nothing refers to alerts it doesn't have. */
+  private async _confirmDeleteGenerator(generator: Generator): Promise<void> {
+    const found = await this._subentry(generator.entityId);
+    if (!found) return;
+    this._delete = { name: generator.name, ...found, generator: true, referrers: [] };
+  }
+
+  private async _subentry(
+    entityId: string,
+  ): Promise<{ entryId: string; subentryId: string } | undefined> {
+    if (!this.hass) return undefined;
+    try {
+      return await subentryOf(this.hass, entityId);
+    } catch (err) {
+      this._notify(err);
+      return undefined;
+    }
   }
 
   private async _deleteNow(pending: NonNullable<AlertReduxAdminCard["_delete"]>): Promise<void> {
@@ -726,8 +826,8 @@ export class AlertReduxAdminCard extends LitElement {
     }
   }
 
-  private _moreInfo(alert: Alert): void {
-    this._fire("hass-more-info", { entityId: alert.entityId });
+  private _moreInfo(item: { entityId: string }): void {
+    this._fire("hass-more-info", { entityId: item.entityId });
   }
 
   private _fire(type: string, detail: Record<string, unknown>): void {

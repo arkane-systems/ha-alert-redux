@@ -128,7 +128,9 @@ page_size: 20                          # optional: alerts per page; unset shows 
 ```
 
 Lists every alert by priority with its kind and state; admins get disable,
-enable, and suspend controls. With `page_size`, the list is paged (still in
+enable, and suspend controls. Generators that match no entities right now are
+listed under the alerts ("Generators with no alerts"), since no alert leads to
+them. With `page_size`, the list is paged (still in
 priority order, headings counting the whole priority) with previous and next
 buttons.
 

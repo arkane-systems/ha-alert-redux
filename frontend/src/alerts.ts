@@ -87,6 +87,44 @@ export function toAlert(entity: HassEntity): Alert {
   };
 }
 
+/** A generator, from its sensor (spec §12.3). */
+export interface Generator {
+  /** The generator's sensor. */
+  entityId: string;
+  name: string;
+  /** The alerts it has made now. */
+  alerts: string[];
+}
+
+const GENERATOR_PREFIX = "Alert Redux generator ";
+
+/**
+ * Whether an entity is a generator's sensor: one of ours with the targets and
+ * alerts attributes, which the summary sensors don't have.
+ */
+export function isGeneratorSensor(hass: HomeAssistant, entity: HassEntity | undefined): boolean {
+  if (!entity || !entity.entity_id.startsWith("sensor.")) return false;
+  const platform = hass.entities?.[entity.entity_id]?.platform;
+  return (
+    (platform === undefined || platform === DOMAIN) &&
+    "targets" in entity.attributes &&
+    Array.isArray(entity.attributes.alerts)
+  );
+}
+
+/** Every generator, by its sensor, in no particular order. */
+export const collectGenerators = (hass: HomeAssistant): Generator[] =>
+  Object.values(hass.states)
+    .filter((entity) => isGeneratorSensor(hass, entity))
+    .map((entity) => ({
+      entityId: entity.entity_id,
+      name: (toText(entity.attributes.friendly_name) ?? entity.entity_id).replace(
+        GENERATOR_PREFIX,
+        "",
+      ),
+      alerts: textList(entity.attributes.alerts),
+    }));
+
 /** Every alert entity, in no particular order. */
 export const collectAlerts = (hass: HomeAssistant): Alert[] =>
   Object.values(hass.states)
@@ -177,7 +215,8 @@ export const KIND_NAMES: Record<string, string> = {
 };
 
 /** Alerts by name. */
-export const compareName = (a: Alert, b: Alert): number => a.name.localeCompare(b.name);
+export const compareName = (a: { name: string }, b: { name: string }): number =>
+  a.name.localeCompare(b.name);
 
 /** The snooze menu's durations, in minutes, unless the card sets its own. */
 export const DEFAULT_SNOOZE_DURATIONS: readonly number[] = [15, 30, 60, 120, 240];

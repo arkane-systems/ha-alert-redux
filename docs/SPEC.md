@@ -1838,6 +1838,13 @@ To make sure it gets fixed:
 - [Decided, phase 11] Generated alerts are marked "generated" beside their
   kind, with the generator's name as a tooltip; they're edited through their
   generator (§12.3).
+- [Decided, after 1.3.0] **Generators with no alerts.** A generator is reached
+  through its alerts, so one that matches no entities now had no row at all,
+  which was confusing. Under the list (and outside its pages), a "Generators
+  with no alerts" section lists them by name, from their sensors, as
+  "Generator · no matching entities", with the Summary button and, for admins,
+  Edit and Delete, as on an alert's row. Generators that have alerts aren't
+  listed there: their alerts already lead to them.
 - [Decided, 0.11.1] A firing alert that's currently **superseded** (§8.1) says
   so after its state's detail: "superseded by Back Door Left Open", naming the
   highest-priority superseder and counting any others ("+1"), with all of them
