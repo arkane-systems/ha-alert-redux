@@ -96,7 +96,11 @@ class StubForm extends HTMLElement {
         <small>${this.computeHelper(item, { path })}</small>
         ${error ? `<div style="color:red">${this.computeError(error, item)}</div>` : ""}</label>`;
     };
-    root.innerHTML = this.schema.map((item) => field(item, this.data, [])).join("");
+    // Like ha-form, a form-wide (base) error goes above the fields.
+    const base = this.error?.base
+      ? `<div style="color:red">${this.computeError(this.error.base, this.schema)}</div>`
+      : "";
+    root.innerHTML = base + this.schema.map((item) => field(item, this.data, [])).join("");
     root.querySelectorAll("input").forEach((input) =>
       input.addEventListener("input", () => {
         const next = structuredClone(this.data);

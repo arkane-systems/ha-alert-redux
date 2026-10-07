@@ -216,11 +216,9 @@ export class AlertReduxFlowDialog extends LitElement {
         </div>`;
     }
     if (step.type === "form") {
+      // ha-form shows a form-wide (base) error itself, above the fields.
       const errors = step.errors ?? {};
       return html`${text}
-        ${errors.base
-          ? html`<div class="error">${this._t(`error.${errors.base}`) || errors.base}</div>`
-          : nothing}
         <ha-form
           .hass=${this.hass}
           .data=${this._data}

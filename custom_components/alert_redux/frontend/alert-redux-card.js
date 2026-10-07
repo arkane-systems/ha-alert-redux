@@ -680,7 +680,6 @@ var Ni=Object.defineProperty;var Li=(e,n,t)=>n in e?Ni(e,n,{enumerable:!0,config
               ${this._t(`step.${t.step_id}.menu_options.${o}`)||o}
             </button>`)}
         </div>`}if(t.type==="form"){let s=t.errors??{};return p`${r}
-        ${s.base?p`<div class="error">${this._t(`error.${s.base}`)||s.base}</div>`:h}
         <ha-form
           .hass=${this.hass}
           .data=${this._data}
