@@ -335,7 +335,7 @@ def test_parse_schedule() -> None:
     assert parse_schedule(" 1.5 ; 2") == (1.5, 2)
     assert parse_schedule("  ") == ()
     assert format_schedule((10, 1.5)) == "10, 1.5"
-    for bad in ("0", "-5", "ten"):
+    for bad in ("0", "-5", "ten", "10, nan", "inf"):
         with pytest.raises(ValueError):
             parse_schedule(bad)
 

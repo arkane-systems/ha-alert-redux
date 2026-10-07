@@ -278,7 +278,11 @@ class Notifier:
         now = dt_util.utcnow()
         for delivery in list(self._deliveries.values()):
             for attempt in list(delivery.attempts.values()):
-                if now >= delivery.deadline:
+                if attempt.cleared:
+                    # Cleared while it was on its way, before the restart.
+                    delivery.delivered = True
+                    self._async_done(delivery, attempt)
+                elif now >= delivery.deadline:
                     self._async_give_up(
                         delivery, attempt, "timed out while Home Assistant was down"
                     )
@@ -410,8 +414,13 @@ class Notifier:
         """Follow a key being changed.
 
         What's showing keeps its old tag; the next notification to such a member
-        clears it first, and clearing the new key clears it.
+        clears it first, and clearing the new key clears it. So does what's still
+        waiting to be retried, once it arrives.
         """
+        for delivery in self._deliveries.values():
+            if delivery.notification.key == old:
+                delivery.notification = replace(delivery.notification, key=new)
+                self._async_save()
         for keys in self._held.values():
             if (held := keys.pop(old, None)) is not None:
                 keys.setdefault(new, []).extend(
@@ -428,19 +437,25 @@ class Notifier:
         """Clear the key's notifications from the chosen members showing them.
 
         Ones still waiting to be retried to those members are dropped, so that
-        they can't arrive after the clear; a final one is left to arrive.
+        they can't arrive after the clear, and ones on their way are cleared once
+        they arrive; a final one is left to arrive.
         """
         for delivery in list(self._deliveries.values()):
             notification = delivery.notification
             if delivery.clear or notification.final or notification.key != key:
                 continue
             for attempt in list(delivery.attempts.values()):
-                if which(attempt.member) and attempt.id in self._timers:
+                if not which(attempt.member):
+                    continue
+                if attempt.id in self._timers:
                     _LOGGER.debug(
                         "%s: dropped a retry for %s; cleared", key, attempt.member
                     )
                     delivery.delivered = True
                     self._async_done(delivery, attempt)
+                else:
+                    attempt.cleared = True
+                    self._async_save()
         records = self._live.get(key, {})
         chosen = [shown for shown in records.values() if which(shown.member)]
         if not chosen:
@@ -485,21 +500,38 @@ class Notifier:
         )
         clears: list[Shown] = []
         records = self._live.get(key, {})
-        # A member in several of the groups is sent the notification only once.
-        # (Members with data aren't hashable, so they're compared, not keyed.)
-        members: list[Member] = []
-        held = False
+        judged: list[tuple[GroupConfig, bool, bool]] = []
         for group in groups:
             quiet = self._affected(group, notification)
             soften = quiet and group.quiet_behaviour is QuietBehaviour.SOFTEN
+            judged.append((group, quiet, soften))
+
+        def holds(quiet: bool, soften: bool, member: Member) -> bool:
+            return quiet and not (soften and can_soften(member))
+
+        # A member in several of the groups is sent the notification only once,
+        # through the first that sends it now; it's held only if they all hold
+        # it, whatever their order. (Members with data aren't hashable, so
+        # they're compared, not keyed.)
+        sending = [
+            member
+            for group, quiet, soften in judged
+            for member in group.members
+            if not holds(quiet, soften, member)
+        ]
+        members: list[Member] = []
+        held = False
+        for group, quiet, soften in judged:
             holding = False
             for member in group.members:
+                if holds(quiet, soften, member):
+                    if member not in sending and member not in members:
+                        members.append(member)
+                        holding = True
+                    continue
                 if member in members:
                     continue
                 members.append(member)
-                if quiet and not (soften and can_soften(member)):
-                    holding = True
-                    continue
                 if member.replaces:
                     shown = records.pop(member.destination, None)
                     if notification.final and member.clear_when_ended:
@@ -688,13 +720,24 @@ class Notifier:
                 member,
             )
             delivery.delivered = True
-            if not delivery.clear and member.replaces:
+            if attempt.cleared:
+                # Cleared while it was on its way: clear it now it's here.
+                self._async_start_clear(
+                    delivery.notification.key,
+                    [Shown(member, attempt.tag, attempt.group_id, attempt.group_name)],
+                )
+            elif not delivery.clear and member.replaces:
                 self._async_record(delivery, attempt)
             self._async_done(delivery, attempt)
             return
 
         if self._stopped or delivery.id not in self._deliveries:
             # Kept in the saved queue, to be retried when the notifier restarts.
+            return
+        if attempt.cleared:
+            # It didn't arrive, and has been cleared since: nothing to retry.
+            delivery.delivered = True
+            self._async_done(delivery, attempt)
             return
         now = dt_util.utcnow()
         if now >= delivery.deadline:

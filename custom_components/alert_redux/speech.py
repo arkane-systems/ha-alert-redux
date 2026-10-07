@@ -129,6 +129,9 @@ def parse_duration(text: str) -> timedelta | None:
     "two hours thirty minutes", "twenty-five minutes", "1.5 hours".
     """
     text = re.sub(r"[^\w\s.]", " ", text.lower().replace("-", " "))
+    # A dot only counts in a number ("1.5"): speech-to-text, or text typed into
+    # Assist, may end the sentence with one.
+    text = re.sub(r"(?<!\d)\.|\.(?!\d)", " ", text)
     text = re.sub(r"\bhalf (?:an|a) hour\b", "30 minutes", text)
     text = re.sub(r"\bhalf (?:an|a) minute\b", "30 seconds", text)
     words = _without_courtesy(text.split())

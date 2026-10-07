@@ -128,7 +128,9 @@ page_size: 20                          # optional: alerts per page; unset shows 
 ```
 
 Lists every alert by priority with its kind and state; admins get disable,
-enable, and suspend controls. With `page_size`, the list is paged (still in
+enable, and suspend controls. Generators that match no entities right now are
+listed under the alerts ("Generators with no alerts"), since no alert leads to
+them. With `page_size`, the list is paged (still in
 priority order, headings counting the whole priority) with previous and next
 buttons.
 
@@ -180,4 +182,8 @@ lists:
 The logbook (Activity) shows each state change of an alert with who made it, plus
 rows for snoozes, snoozes running out, suspensions, supersession, lost and
 restored data, and creation and deletion. Point an Activity card at the Alert
-Redux label for an alert history.
+Redux label for an alert history of the alerts that exist. A deleted alert drops
+out of any view filtered by label, area, or entity, because HA finds those
+entities through the entity registry; that's intended for dashboards. To see a
+deleted alert's history, "Deleted" row included (for example, to check a
+deletion), use the unfiltered Activity panel.

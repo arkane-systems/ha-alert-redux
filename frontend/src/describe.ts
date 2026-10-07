@@ -80,7 +80,8 @@ function firesWhen(d: Definition, generator: boolean): string[] {
     case "manual":
       lines.push("Fired and dismissed by actions (fire, dismiss)");
       if (d.user_dismissable) lines.push("Dismissable from the card");
-      if (d.ends_by_itself || d.duration) {
+      // A duration is kept with the option off, but then it isn't used.
+      if (d.ends_by_itself) {
         lines.push(`Ends by itself${d.duration ? ` after ${durationText(d.duration)}` : ""}`);
       }
       return lines;

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 from dataclasses import replace
 from datetime import timedelta
@@ -599,6 +600,54 @@ async def test_clearing_drops_a_waiting_retry(
     persistent.assert_not_called()
 
 
+async def test_clearing_reaches_a_send_on_its_way(hass: HomeAssistant) -> None:
+    """A notification on its way when it's acknowledged is cleared once it
+    arrives, rather than staying on show."""
+    calls: list[ServiceCall] = []
+    arrive = asyncio.Event()
+
+    async def handler(call: ServiceCall) -> None:
+        calls.append(call)
+        if call.data["message"] != "clear_notification":
+            await arrive.wait()
+
+    hass.services.async_register("notify", "mobile_app_phone", handler)
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PHONE,)))
+    notifier.async_send(["g"], NOTIFICATION)
+    await asyncio.sleep(0)
+    notifier.async_acknowledged(KEY)
+    arrive.set()
+    await hass.async_block_till_done()
+    assert _messages(calls) == [
+        ("The back door is open.", {"tag": KEY}),
+        ("clear_notification", {"tag": KEY}),
+    ]
+
+
+async def test_cleared_send_that_fails_is_not_retried(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, persistent: MagicMock
+) -> None:
+    """A notification on its way when it's acknowledged, which then fails, isn't
+    retried or sent to the fallback."""
+    calls: list[ServiceCall] = []
+    fail = asyncio.Event()
+
+    async def handler(call: ServiceCall) -> None:
+        calls.append(call)
+        await fail.wait()
+        raise HomeAssistantError("boom")
+
+    hass.services.async_register("notify", "mobile_app_phone", handler)
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PHONE,)))
+    notifier.async_send(["g"], NOTIFICATION)
+    await asyncio.sleep(0)
+    notifier.async_acknowledged(KEY)
+    fail.set()
+    await _tick(hass, freezer, 600)
+    assert len(calls) == 1
+    persistent.assert_not_called()
+
+
 async def test_newer_notification_drops_a_waiting_retry(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, persistent: MagicMock
 ) -> None:
@@ -656,6 +705,23 @@ async def test_rekey(hass: HomeAssistant) -> None:
         ("clear_notification", {"tag": KEY}),
         ("Open.", {"tag": new}),
     ]
+
+
+async def test_rekey_follows_a_waiting_retry(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A notification still waiting for its retry when the key changes is filed
+    under the new key once it arrives, so clearing the new key clears it."""
+    new = "alert_redux_side_door_open"
+    calls = _failing(hass, "mobile_app_phone", failures=1)
+    notifier = await _new_notifier(hass, GroupConfig("g", "G", (PHONE,)))
+    await _send(notifier, ["g"])
+    notifier.async_rekey(KEY, new)
+    await _tick(hass, freezer, 10)
+    assert len(calls) == 2  # the retry arrived, with its old tag
+    notifier.async_clear(new)
+    await hass.async_block_till_done()
+    assert _messages(calls)[-1] == ("clear_notification", {"tag": KEY})
 
 
 async def test_live_records_survive_restart(
@@ -769,6 +835,26 @@ async def test_held_never_goes_to_the_fallback(
     await _tick(hass, freezer, 600)
     assert calls == []
     persistent.assert_not_called()
+
+
+@pytest.mark.parametrize("loud_first", [True, False])
+async def test_member_in_a_quiet_group_and_another(
+    hass: HomeAssistant, loud_first: bool
+) -> None:
+    """A member in a group in quiet hours and in one that isn't gets the
+    notification now, whichever group comes first, and isn't held for it."""
+    hass.states.async_set(QUIET, "on")
+    calls = async_mock_service(hass, "notify", "speaker")
+    speaker = ActionMember("speaker")
+    loud = GroupConfig("loud", "Loud", (speaker,), loud=True)
+    other = GroupConfig("other", "Other", (speaker,))
+    notifier = await _quiet_notifier(hass, loud, other)
+    order = ["loud", "other"] if loud_first else ["other", "loud"]
+    await _send(notifier, order)
+    assert len(calls) == 1
+    hass.states.async_set(QUIET, "off")
+    await hass.async_block_till_done()
+    assert len(calls) == 1  # nothing was held
 
 
 async def test_urgent_notifications_get_through(hass: HomeAssistant) -> None:

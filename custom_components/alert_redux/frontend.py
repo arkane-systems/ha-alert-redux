@@ -32,6 +32,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.const import LOVELACE_DATA
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 
 from .const import CARD_URL, CARD_URL_BASE, DOMAIN
@@ -41,7 +42,11 @@ _LOGGER = logging.getLogger(__name__)
 
 _DATA_REGISTERED = "frontend_registered"
 
-REFRESH_NOTIFICATION_ID = f"{DOMAIN}_card_updated"
+# With a hyphen, which no object ID has, so that it can't be an alert's
+# notification (alert_redux_<object ID>, notifications.lifecycle_key).
+REFRESH_NOTIFICATION_ID = f"{DOMAIN}-card_updated"
+# The ID used before, which an alert named "Card Updated" would share.
+_LEGACY_REFRESH_NOTIFICATION_ID = f"{DOMAIN}_card_updated"
 
 
 @callback
@@ -99,6 +104,9 @@ def _async_announce_version(hass: HomeAssistant, store: AlertStore, version: str
     """Ask for a browser refresh the first time this card version is served."""
     if store.card_version == version:
         return
+    # Unless it's an alert's: the alerts aren't added yet, but are registered.
+    if er.async_get(hass).async_get(f"{DOMAIN}.card_updated") is None:
+        persistent_notification.async_dismiss(hass, _LEGACY_REFRESH_NOTIFICATION_ID)
     persistent_notification.async_create(
         hass,
         f"The Alert Redux card is now version {version}. Refresh your browser "

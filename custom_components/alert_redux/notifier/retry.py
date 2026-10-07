@@ -47,6 +47,8 @@ class Attempt:
     next_try: datetime | None = None
     # Softened for quiet hours: sent with the member's quiet-hours data (§9.9).
     soft: bool = False
+    # Cleared while on its way: it's cleared once it arrives, and not retried.
+    cleared: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Return the attempt in storable form."""
@@ -59,6 +61,7 @@ class Attempt:
             "tries": self.tries,
             "next_try": self.next_try.isoformat() if self.next_try else None,
             "soft": self.soft,
+            "cleared": self.cleared,
         }
 
     @classmethod
@@ -73,6 +76,7 @@ class Attempt:
             data.get("tries", 0),
             datetime.fromisoformat(data["next_try"]) if data.get("next_try") else None,
             data.get("soft", False),
+            data.get("cleared", False),
         )
 
 

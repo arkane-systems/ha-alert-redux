@@ -399,7 +399,9 @@ def convert(
     }
     seen_ids: set[str] = set()
     defaults_warned: set[str] = set()
-    if isinstance(data, dict) and (data.get("alert2") or data).get("tracked"):
+    # The alert2: block, which may be a list of alerts, with no tracked: section.
+    block = data.get("alert2", data) if isinstance(data, dict) else data
+    if isinstance(block, dict) and block.get("tracked"):
         report.notes.append(
             "The tracked: section (Alert2's internal alerts and alert2.report "
             "events) isn't converted; Alert Redux logs its own problems instead"

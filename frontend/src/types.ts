@@ -10,6 +10,8 @@ export interface HassEntity {
 /** The entity registry's display entry for an entity (area and labels). */
 export interface EntityRegistryDisplay {
   entity_id: string;
+  /** The integration that made the entity. */
+  platform?: string;
   area_id?: string | null;
   labels?: string[];
 }

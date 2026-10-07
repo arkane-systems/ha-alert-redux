@@ -185,10 +185,18 @@ class MessageTracker:
             self._on_update(self.messages)
 
     def _store(self, template: Template, result: Any) -> None:
+        if not isinstance(result, TemplateError):
+            # As text, as notifications render it: tracking parses the result
+            # ("1.50" would show as 1.5, "None" as nothing), and can't be told not
+            # to. Tracking still says when to render.
+            try:
+                result = template.async_render(self._variables, parse_result=False)
+            except TemplateError as err:
+                result = err
         if isinstance(result, TemplateError):
             _LOGGER.warning(
                 "%s: message template failed to render: %s", self._description, result
             )
             self._results[template] = None
         else:
-            self._results[template] = "" if result is None else str(result)
+            self._results[template] = str(result)

@@ -16,13 +16,14 @@ from homeassistant.components.lovelace.resources import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 from homeassistant.setup import async_setup_component
 
 from custom_components.alert_redux.const import CARD_URL, DOMAIN, STORAGE_KEY
 from custom_components.alert_redux.frontend import REFRESH_NOTIFICATION_ID
 
-from .conftest import SetupAlerts
+from .conftest import SetupAlerts, alert_subentry, group_subentry
 
 
 @pytest.fixture(autouse=True)
@@ -89,6 +90,57 @@ async def test_notification_for_upgrade(
     }
     await setup_alerts()
     assert REFRESH_NOTIFICATION_ID in await _notifications(hass)
+
+
+async def test_notification_apart_from_an_alerts(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """An alert named Card Updated has a notification of its own, and an
+    undismissed refresh notification from before is replaced."""
+    persistent_notification.async_create(hass, "Old", notification_id="x")
+    persistent_notification.async_create(
+        hass, "Refresh", notification_id=f"{DOMAIN}_card_updated"
+    )
+    await setup_alerts(
+        alert_subentry("Card Updated", notifier_groups=["persistent"]),
+        group_subentry("Persistent", "persistent", persistent=True),
+    )
+    notifications = await _notifications(hass)
+    assert f"{DOMAIN}_card_updated" not in notifications  # the old one
+    await hass.services.async_call(
+        DOMAIN, "fire", {"entity_id": f"{DOMAIN}.card_updated"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    notifications = await _notifications(hass)
+    assert REFRESH_NOTIFICATION_ID in notifications
+    assert f"{DOMAIN}_card_updated" in notifications  # the alert's
+    assert "x" in notifications
+
+
+async def test_upgrade_keeps_a_card_updated_alerts_notification(
+    hass: HomeAssistant, setup_alerts: SetupAlerts, hass_storage: dict[str, Any]
+) -> None:
+    """Replacing the old refresh notification leaves an alert's that has its ID:
+    on an upgrade, the alert is registered, though not yet added."""
+    hass_storage[STORAGE_KEY] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": STORAGE_KEY,
+        "data": {"alerts": {}, "card_version": "0.0.1"},
+    }
+    er.async_get(hass).async_get_or_create(
+        DOMAIN, DOMAIN, "card", suggested_object_id="card_updated"
+    )
+    persistent_notification.async_create(
+        hass, "Card Updated is firing.", notification_id=f"{DOMAIN}_card_updated"
+    )
+    await setup_alerts(
+        alert_subentry("Card Updated", "card", notifier_groups=["persistent"]),
+        group_subentry("Persistent", "persistent", persistent=True),
+    )
+    notifications = await _notifications(hass)
+    assert REFRESH_NOTIFICATION_ID in notifications
+    assert f"{DOMAIN}_card_updated" in notifications
 
 
 @pytest.fixture

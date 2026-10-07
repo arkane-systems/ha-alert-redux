@@ -279,8 +279,7 @@ def _async_refresh_generators(hass: HomeAssistant, call: ServiceCall) -> None:
                 translation_placeholders={"entity_id": entity_id},
             )
         subentry_ids.append(subentry_id)
-    for subentry_id in subentry_ids:
-        generators.async_refresh(subentry_id)
+    generators.async_refresh(subentry_ids)
 
 
 def _entity_services_take_admin_only(component: EntityComponent[AlertEntity]) -> bool:
@@ -354,7 +353,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     await notifier.async_load()
     _async_configure_notifier(notifier, settings)
-    groups = data[DATA_GROUPS] = _group_subentries(entry)
+    groups = data[DATA_GROUPS] = _subentries(entry, SUBENTRY_NOTIFIER_GROUP)
     notifier.async_set_groups(_group_configs(groups))
     notifier.async_start()
     async_check_default_groups(hass, entry, settings)
@@ -378,7 +377,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, entry, store, settings, entities, _generated_alerts_changed
     )
     generators.async_load()
-    data[DATA_GENERATOR_SUBENTRIES] = _generator_subentries(entry)
+    data[DATA_GENERATOR_SUBENTRIES] = _subentries(entry, SUBENTRY_GENERATOR)
     # Alerts deleted while Home Assistant was down: their notifications are
     # cleared too, so the notifier comes first.
     _async_forget_deleted_alerts(hass, entry, store)
@@ -406,7 +405,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Subentry and option changes are applied in place, not by reloading the
     # entry, so that other alerts don't go through unavailable and no_data.
-    data[DATA_SUBENTRIES] = _alert_subentries(entry)
+    data[DATA_SUBENTRIES] = _subentries(entry, SUBENTRY_ALERT)
     data[DATA_OPTIONS] = dict(entry.options)
     entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
     # Taps on notification buttons (spec §9.11).
@@ -432,7 +431,7 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     data = hass.data[DOMAIN]
     entities: dict[str, AlertEntity] = data[DATA_ENTITIES]
     old: dict[str, tuple[str, dict[str, Any]]] = data[DATA_SUBENTRIES]
-    new = data[DATA_SUBENTRIES] = _alert_subentries(entry)
+    new = data[DATA_SUBENTRIES] = _subentries(entry, SUBENTRY_ALERT)
 
     # Home Assistant removes a deleted subentry's entities itself, through the
     # entity registry; what's left is their stored records and deleted events.
@@ -440,7 +439,9 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     old_generators: dict[str, tuple[str, dict[str, Any]]] = data[
         DATA_GENERATOR_SUBENTRIES
     ]
-    new_generators = data[DATA_GENERATOR_SUBENTRIES] = _generator_subentries(entry)
+    new_generators = data[DATA_GENERATOR_SUBENTRIES] = _subentries(
+        entry, SUBENTRY_GENERATOR
+    )
     removed_generators = old_generators.keys() - new_generators.keys()
     for subentry_id in removed_generators:
         generators.async_remove_generator(subentry_id)
@@ -470,7 +471,7 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
         if new_generators[subentry_id] != old_generators[subentry_id]:
             generators.async_update_generator(entry.subentries[subentry_id])
 
-    groups = _group_subentries(entry)
+    groups = _subentries(entry, SUBENTRY_NOTIFIER_GROUP)
     groups_changed = groups != data[DATA_GROUPS]
     if groups_changed:
         if deleted := data[DATA_GROUPS].keys() - groups.keys():
@@ -555,12 +556,15 @@ def _async_follow_rename(
             hass.config_entries.async_update_subentry(entry, subentry, data=data)
 
 
-def _alert_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]]]:
-    """Return what identifies a change to each alert subentry."""
+def _subentries(
+    entry: ConfigEntry, subentry_type: str
+) -> dict[str, tuple[str, dict[str, Any]]]:
+    """Return what identifies a change to each subentry of a type: its name and
+    its definition."""
     return {
         subentry_id: (subentry.title, dict(subentry.data))
         for subentry_id, subentry in entry.subentries.items()
-        if subentry.subentry_type == SUBENTRY_ALERT
+        if subentry.subentry_type == subentry_type
     }
 
 
@@ -592,26 +596,6 @@ def _async_configure_notifier(notifier: Notifier, settings: Settings) -> None:
         quiet_entity=settings.quiet_entity,
         quiet_threshold=settings.quiet_threshold.urgency,
     )
-
-
-def _generator_subentries(
-    entry: ConfigEntry,
-) -> dict[str, tuple[str, dict[str, Any]]]:
-    """Return what identifies a change to each generator subentry."""
-    return {
-        subentry_id: (subentry.title, dict(subentry.data))
-        for subentry_id, subentry in entry.subentries.items()
-        if subentry.subentry_type == SUBENTRY_GENERATOR
-    }
-
-
-def _group_subentries(entry: ConfigEntry) -> dict[str, tuple[str, dict[str, Any]]]:
-    """Return each notifier group subentry's name and definition."""
-    return {
-        subentry_id: (subentry.title, dict(subentry.data))
-        for subentry_id, subentry in entry.subentries.items()
-        if subentry.subentry_type == SUBENTRY_NOTIFIER_GROUP
-    }
 
 
 def _group_configs(

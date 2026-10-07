@@ -715,7 +715,10 @@ settings to copy (handy when setting up a matching alert), or its definition as
 YAML. Everyone also gets **Export** (all definitions as YAML, to copy or download).
 Admins also get, on each row, buttons to **edit**, **delete**, **disable** or
 **enable**, and **suspend** it for 1 hour to a week or until a date and time, and
-**Import**, **Add alert**, and **Add generator** above the list.
+**Import**, **Add alert**, and **Add generator** above the list. A generator is
+reached through its alerts, so generators that match no entities right now are
+listed under the alerts, in **Generators with no alerts**, with the same Summary,
+edit, and delete buttons.
 
 ![The Alert Redux admin card, in the light and dark themes](assets/screenshots/admin-card.png)
 

@@ -311,8 +311,9 @@ def async_quiet_hours_ended(
             Notification(
                 title=QUIET_SUMMARY_TITLE,
                 message="\n".join([QUIET_SUMMARY_HEADING, *lines]),
+                # An ordinary notification (spec §9.9), not a done one: members
+                # that clear instead of showing a done message still show it.
                 key=f"{DOMAIN}_quiet_hours_{group_id}",
-                final=True,
             )
         )
     return notifications

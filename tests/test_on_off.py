@@ -183,3 +183,34 @@ async def test_extra_condition_and_delays(
     # The extra condition turning false ends it.
     await _set(hass, "input_boolean.away", "off")
     assert _state(hass) == "idle"
+
+
+async def test_fixed_trigger_makes_it_available(
+    hass: HomeAssistant, setup_alerts: SetupAlerts
+) -> None:
+    """Triggers that can't be attached make it unavailable, until they're fixed."""
+    hass.states.async_set(DOOR, "on")
+    entry = await setup_alerts(
+        on_off_alert(
+            "Garage Intruder",
+            on_triggers=[{"trigger": "no_such_platform"}],
+            off_template=OFF,
+        )
+    )
+    assert _state(hass) == "unavailable"
+
+    subentry = next(iter(entry.subentries.values()))
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, "priority": "critical"}
+    )
+    await hass.async_block_till_done()
+    assert _state(hass) == "unavailable"  # still broken
+
+    on = [{"trigger": "state", "entity_id": MOTION, "to": "on"}]
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, "on_triggers": on}
+    )
+    await hass.async_block_till_done()
+    assert _state(hass) == "idle"
+    await _set(hass, MOTION, "on")
+    assert _state(hass) == "active"

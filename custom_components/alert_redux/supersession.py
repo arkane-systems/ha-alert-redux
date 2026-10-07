@@ -13,13 +13,14 @@ alerts' current state and passes on changes between them.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from enum import StrEnum
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
@@ -150,7 +151,10 @@ class Supersession:
 
     The entities are looked up by their current entity IDs, so renames need no
     bookkeeping here; the graph is rebuilt whenever those, or any alert's
-    relationships, change.
+    relationships, change. Building it reads every alert, so it's kept: the
+    alerts say when they're added, removed (a rename is both), or edited, and
+    it's built afresh in the next run of the event loop anyway, so that a change
+    nothing says about can't last.
     """
 
     def __init__(
@@ -165,27 +169,53 @@ class Supersession:
         self._settings = settings
         self._graph_key: tuple[Any, ...] | None = None
         self._graph = SupersessionGraph({})
+        # Kept until the alerts change, or the next run of the event loop.
+        self._current: SupersessionGraph | None = None
+        self._entities_by_id: dict[str, AlertEntity] | None = None
+        self._expiry: asyncio.Handle | None = None
+
+    @callback
+    def async_invalidate(self) -> None:
+        """Build the graph afresh when next asked: an alert was added, removed,
+        or edited."""
+        self._current = None
+        self._entities_by_id = None
+        if self._expiry is not None:
+            self._expiry.cancel()
+            self._expiry = None
+
+    def _kept(self) -> None:
+        if self._expiry is None:
+            self._expiry = self._hass.loop.call_soon(self.async_invalidate)
 
     @property
     def graph(self) -> SupersessionGraph:
         """Return the graph of the alerts as they're currently configured."""
+        if self._current is not None:
+            return self._current
         relationships = {
             entity.entity_id: entity.supersedes
             for entity in self._entities.values()
             if entity.entity_id
         }
+        # Built again only if something changed, so that a cycle is logged once.
         key = tuple(sorted((eid, repr(rels)) for eid, rels in relationships.items()))
         if key != self._graph_key:
             self._graph_key = key
             self._graph = SupersessionGraph(relationships)
+        self._current = self._graph
+        self._kept()
         return self._graph
 
     def _by_entity_id(self) -> dict[str, AlertEntity]:
-        return {
-            entity.entity_id: entity
-            for entity in self._entities.values()
-            if entity.entity_id and entity.hass is not None
-        }
+        if self._entities_by_id is None:
+            self._entities_by_id = {
+                entity.entity_id: entity
+                for entity in self._entities.values()
+                if entity.entity_id and entity.hass is not None
+            }
+            self._kept()
+        return self._entities_by_id
 
     def has_superseders(self, entity_id: str) -> bool:
         """Return whether any alert supersedes this one."""

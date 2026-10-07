@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -14,7 +15,12 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.alert_redux.const import DOMAIN, EVENT_SUPERSEDED
-from custom_components.alert_redux.supersession import SupersessionGraph, find_cycle
+from custom_components.alert_redux.model import Settings
+from custom_components.alert_redux.supersession import (
+    Supersession,
+    SupersessionGraph,
+    find_cycle,
+)
 
 from .conftest import SetupAlerts, alert_subentry, group_subentry, state_alert
 
@@ -74,6 +80,36 @@ def test_graph_closure() -> None:
     assert graph.direct_superseders("c") == {"b", "d"}
     assert graph.has_superseders("c")
     assert not graph.has_superseders("a")
+
+
+async def test_graph_kept_until_changed_or_the_next_loop_run(
+    hass: HomeAssistant,
+) -> None:
+    """The graph is kept, not built for every question: built afresh when an
+    alert says it changed, and in the next run of the event loop regardless."""
+
+    class Alert:
+        def __init__(self, entity_id: str, supersedes: list[dict[str, Any]]) -> None:
+            self.entity_id = entity_id
+            self.supersedes = supersedes
+            self.hass = hass
+            self.firing = True
+            self.priority = "warning"
+
+    left_open = Alert(LEFT_OPEN, [])
+    supersession = Supersession(
+        hass, {"open": Alert(OPEN, []), "left": left_open}, Settings()
+    )
+    assert supersession.superseded_by(OPEN) == []
+
+    left_open.supersedes = _supersedes(OPEN)
+    assert supersession.superseded_by(OPEN) == []  # kept
+    supersession.async_invalidate()
+    assert supersession.superseded_by(OPEN) == [LEFT_OPEN]
+
+    left_open.supersedes = []
+    await asyncio.sleep(0)
+    assert supersession.superseded_by(OPEN) == []  # unannounced, but not kept
 
 
 def test_graph_survives_a_cycle() -> None:
@@ -349,6 +385,32 @@ async def test_door_left_open_example(
     assert _sent(calls)[2:] == [("Back Door Left Open", "Back door closed.")]
     assert hass.states.get(OPEN).state == "idle"
     assert hass.states.get(LEFT_OPEN).state == "idle"
+
+
+async def test_held_done_dropped_when_deleted(
+    hass: HomeAssistant,
+    setup_alerts: SetupAlerts,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Deleting an alert drops its held done notification: its notifications
+    are cleared, and the alert is forgotten for good."""
+    calls = async_mock_service(hass, "notify", "phone")
+    entry = await setup_alerts(
+        alert_subentry("Back Door Open", "open", throttle=[1, 60]),
+        alert_subentry("Back Door Left Open", supersedes=_supersedes(OPEN)),
+        PHONE,
+        options=DEFAULTS,
+    )
+    await _call(hass, "fire", OPEN)
+    await _call(hass, "fire", LEFT_OPEN)
+    await _tick(hass, freezer, 1)
+    await _call(hass, "dismiss", OPEN)
+    calls.clear()
+    hass.config_entries.async_remove_subentry(entry, "open")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 10)
+    assert [title for title, _ in _sent(calls)] == []
+    assert "open" not in hass.data[DOMAIN]["store"].alert_ids()
 
 
 async def test_reminder_held_for_a_superseder_about_to_fire(

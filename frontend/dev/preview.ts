@@ -96,7 +96,11 @@ class StubForm extends HTMLElement {
         <small>${this.computeHelper(item, { path })}</small>
         ${error ? `<div style="color:red">${this.computeError(error, item)}</div>` : ""}</label>`;
     };
-    root.innerHTML = this.schema.map((item) => field(item, this.data, [])).join("");
+    // Like ha-form, a form-wide (base) error goes above the fields.
+    const base = this.error?.base
+      ? `<div style="color:red">${this.computeError(this.error.base, this.schema)}</div>`
+      : "";
+    root.innerHTML = base + this.schema.map((item) => field(item, this.data, [])).join("");
     root.querySelectorAll("input").forEach((input) =>
       input.addEventListener("input", () => {
         const next = structuredClone(this.data);
@@ -338,9 +342,28 @@ const GENERATOR: HassEntity = {
   entity_id: "sensor.alert_redux_generator_battery_low",
   state: "1",
   last_changed: ago(0),
-  attributes: { friendly_name: "Alert Redux generator Battery Low" },
+  attributes: {
+    friendly_name: "Alert Redux generator Battery Low",
+    targets: { domains: ["sensor"], device_classes: ["battery"] },
+    alerts: ["alert_redux.battery_low"],
+    supersedes: [],
+    problems: [],
+  },
 } as HassEntity;
-setStates([...ALERTS, GENERATOR]);
+// A generator with no targets now, listed under the alerts on the admin card.
+const EMPTY_GENERATOR: HassEntity = {
+  entity_id: "sensor.alert_redux_generator_unlocked_locks",
+  state: "0",
+  last_changed: ago(0),
+  attributes: {
+    friendly_name: "Alert Redux generator Unlocked Locks",
+    targets: { domains: ["lock"] },
+    alerts: [],
+    supersedes: [],
+    problems: [],
+  },
+} as HassEntity;
+setStates([...ALERTS, GENERATOR, EMPTY_GENERATOR]);
 
 function update(entityId: string, changes: Partial<HassEntity>) {
   const old = states[entityId];
@@ -436,8 +459,10 @@ function hassFor(dark: boolean): HomeAssistant {
     async callService(_domain, service, data) {
       if (service === "export") {
         await new Promise((resolve) => setTimeout(resolve, 200));
-        // A generated alert exports its generator.
-        const generated = data?.entity_id === "alert_redux.battery_low";
+        // A generated alert, or a generator's sensor, exports the generator.
+        const generated =
+          data?.entity_id === "alert_redux.battery_low" ||
+          String(data?.entity_id ?? "").startsWith("sensor.alert_redux_generator_");
         return {
           response: {
             ...DEFINITIONS,
@@ -552,7 +577,7 @@ function build() {
     const alert = collectAlerts(hassFor(false)).find((a) => a.entityId.endsWith(params.get("delete")!));
     for (const card of cards) {
       Object.assign(card, {
-        _delete: { alert, entryId: "entry1", subentryId: "sub1", generator: false, referrers: ["Back Door Left Open"] },
+        _delete: { name: alert?.name, entryId: "entry1", subentryId: "sub1", generator: false, referrers: ["Back Door Left Open"] },
       });
     }
   }
