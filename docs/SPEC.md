@@ -1393,7 +1393,7 @@ triggers:
   frontend change to look up those variables for any domain whose theme defines
   them. With that in place, Alert Redux would ship default state colours.
   [Deferred] An upstream request is left until after the phase plan is complete.
-- [Decided, after 1.3.0] **Deleted alerts: dashboards leave them out, admins
+- [Decided, 1.3.1] **Deleted alerts: dashboards leave them out, admins
   can still see them.** A deleted alert's rows, "Deleted" included, are
   recorded, but only the unfiltered Activity panel shows them. Filtered by
   label, area, or device, HA finds the entities through the entity registry, so
@@ -1840,7 +1840,7 @@ To make sure it gets fixed:
 - [Decided, phase 11] Generated alerts are marked "generated" beside their
   kind, with the generator's name as a tooltip; they're edited through their
   generator (§12.3).
-- [Decided, after 1.3.0] **Generators with no alerts.** A generator is reached
+- [Decided, 1.3.1] **Generators with no alerts.** A generator is reached
   through its alerts, so one that matches no entities now had no row at all,
   which was confusing. Under the list (and outside its pages), a "Generators
   with no alerts" section lists them by name, from their sensors, as
@@ -2465,6 +2465,7 @@ Decisions with their reasons, in the order they were made.
 | The quiet-hours summary stays an ordinary notification | The queue it might have used is gone; the summary already tells you what you missed [§9.9]. |
 | Displayed state names in a state alert are dropped (N38) | Translations, device classes, and entities' own state names make recognising them a lot of complexity for marginal gain; a state alert's target stays the real state. Revisit if HA's state selector becomes usable for it [§4.1]. |
 | Phase 13 is 1.2.0, phase 14 1.2.1, phase 15 1.3.0 | Integration feature phases are minor releases; phase 14 ships tools, not integration features, so it takes a patch version [§20]. |
+| The fixes from the review of the whole repository are 1.3.1 | Bug fixes, and two small admin card changes from the soak test; no feature phase, so a patch version [§20]. |
 | Converters take only the shapes users have to hand, and drop what has no equivalent with a warning | A single alert's YAML (as the Alert Manager card shows it) is the commonest conversion request; generators and a few options can't be translated faithfully, so the report names them rather than guessing [§20]. |
 | Latching alerts are a state, `latched`, with user choices on the details (phase 15) | A state shows in automations, history, and the alert state kind; latched alerts count as unacknowledged so signal lights stay on; snoozing one puts its reminders off; a dismissal latches only without a user, since a person dismissing it has seen it [§10]. |
 | `ack_reminders_only` needs no conversion (phase 15) | In Alert2 it only keeps the done notification of an acknowledged alert, which Alert Redux always sends (§9.7); the phase plan had grouped it with `ack_required` [§20]. |
