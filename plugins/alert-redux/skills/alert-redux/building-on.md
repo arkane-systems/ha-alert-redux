@@ -61,6 +61,15 @@ actions:
 
 Event triggers don't take wildcards; list the event types to listen to several.
 
+The repository has a **blueprint** for this, *React to Alert Redux alerts*
+(`blueprints/automation/alert_redux/react_to_alerts.yaml`). It runs the user's
+actions when chosen alerts (by entity, label, or generator, and a lowest
+priority) fire, end (for chosen reasons), or are acknowledged, with variables
+such as `alert`, `alert_name`, `priority`, `message`, `reason`, `duration`,
+`area`, and `user`. Use it for a user who wants to send their own notifications
+(an email subject that changes when the alert clears, say). Take the notifier group it
+replaces off the alerts, or they're notified twice.
+
 Act when an alert has been unacknowledged too long: make an **`alert_state`**
 alert watching it (`alert_states: [active]`, `delay_on` 30 minutes) rather than an
 automation with a `for:`. It then has its own notifications, card entry, and

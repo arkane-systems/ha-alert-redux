@@ -1,0 +1,223 @@
+blueprint:
+  name: React to Alert Redux alerts
+  author: Alistair Young
+  description: >-
+    Runs your actions when Alert Redux alerts fire, end, or are acknowledged.
+    Choose the alerts by entity, label, or generator (or leave all three empty
+    for every alert) and, if you like, a lowest priority.
+
+
+    Your actions can use these variables:
+
+    - `alert`: the alert's entity ID
+
+    - `alert_name`: its name
+
+    - `priority`: `emergency`, `critical`, `warning`, `notice`, or `informational`
+
+    - `phase`: `fired`, `ended`, or `acked`
+
+    - `message`: the alert's on message, as rendered for the card (when it fires)
+
+    - `fire_count`: how many times the current firing has fired
+
+    - `reason`: why it ended: `resolved`, `dismissed`, `no_data`, or `disabled`
+
+    - `latched`: true when it ended but is kept until acknowledged
+
+    - `duration` and `duration_seconds`: how long it fired (when it ends), as
+    text such as "12 minutes", and in seconds
+
+    - `area`: the name of the alert's area, or of its subject entity's area
+
+    - `subject_entity`: the entity the alert is about, if it has one
+
+    - `user`: the name of the person who made the change, when one did
+
+    - `by_supersession`: true when it was acknowledged because an alert that
+    supersedes it was
+
+
+    Remember to take any notifier group these actions replace off the alerts, so
+    you aren't notified twice.
+  domain: automation
+  source_url: https://github.com/arkane-systems/ha-alert-redux/blob/master/blueprints/automation/alert_redux/react_to_alerts.yaml
+  homeassistant:
+    min_version: 2026.6.0
+  input:
+    which:
+      name: Which alerts
+      description: >-
+        An alert is included when it's one of the chosen alerts, has one of the
+        chosen labels, or was made by one of the chosen generators. Choose
+        nothing in all three for every alert.
+      input:
+        alerts:
+          name: Alerts
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain: alert_redux
+              multiple: true
+        labels:
+          name: Labels
+          default: []
+          selector:
+            label:
+              multiple: true
+        generators:
+          name: Generators
+          description: >-
+            The generator's sensor, sensor.alert_redux_generator_…
+          default: []
+          selector:
+            entity:
+              filter:
+                - integration: alert_redux
+                  domain: sensor
+              multiple: true
+        min_priority:
+          name: Lowest priority
+          default: informational
+          selector:
+            select:
+              options:
+                - label: Informational (every alert)
+                  value: informational
+                - label: Notice
+                  value: notice
+                - label: Warning
+                  value: warning
+                - label: Critical
+                  value: critical
+                - label: Emergency
+                  value: emergency
+    on_fired:
+      name: When an alert fires
+      input:
+        fired_actions:
+          name: Actions
+          default: []
+          selector:
+            action: {}
+        every_fire:
+          name: Every fire
+          description: >-
+            Also run when an alert that's already firing fires again (manual and
+            event alerts can).
+          default: false
+          selector:
+            boolean: {}
+    on_ended:
+      name: When an alert ends
+      input:
+        ended_actions:
+          name: Actions
+          default: []
+          selector:
+            action: {}
+        end_reasons:
+          name: Reasons
+          description: Run only when the alert ends for one of these reasons.
+          default: [resolved, dismissed, no_data, disabled]
+          selector:
+            select:
+              multiple: true
+              options:
+                - label: Resolved (its condition cleared, or its duration ran out)
+                  value: resolved
+                - label: Dismissed
+                  value: dismissed
+                - label: Lost its data
+                  value: no_data
+                - label: Disabled
+                  value: disabled
+    on_acked:
+      name: When an alert is acknowledged
+      description: Snoozing an alert that wants acknowledging acknowledges it too.
+      collapsed: true
+      input:
+        acked_actions:
+          name: Actions
+          default: []
+          selector:
+            action: {}
+
+mode: queued
+max: 25
+
+triggers:
+  - trigger: event
+    event_type: alert_redux_fired
+    id: fired
+  - trigger: event
+    event_type: alert_redux_ended
+    id: ended
+  - trigger: event
+    event_type: alert_redux_acked
+    id: acked
+
+variables:
+  chosen_alerts: !input alerts
+  chosen_labels: !input labels
+  chosen_generators: !input generators
+  min_priority: !input min_priority
+  every_fire: !input every_fire
+  end_reasons: !input end_reasons
+  alert: "{{ trigger.event.data.entity_id }}"
+  alert_name: "{{ trigger.event.data.name }}"
+  priority: "{{ trigger.event.data.priority }}"
+  phase: "{{ trigger.id }}"
+  message: "{{ state_attr(alert, 'message') or '' }}"
+  fire_count: "{{ trigger.event.data.fire_count | default(0) }}"
+  reason: "{{ trigger.event.data.reason | default('') }}"
+  latched: "{{ trigger.event.data.new_state == 'latched' }}"
+  duration_seconds: "{{ trigger.event.data.duration_seconds | default(0) | int(0) }}"
+  duration: >-
+    {% set s = duration_seconds | int(0) %}
+    {%- set h = s // 3600 %}{% set m = s % 3600 // 60 %}
+    {%- if s < 60 %}{{ s }} second{{ '' if s == 1 else 's' }}
+    {%- else %}
+    {%- if h %}{{ h }} hour{{ '' if h == 1 else 's' }}{{ ' ' if m else '' }}{% endif %}
+    {%- if m %}{{ m }} minute{{ '' if m == 1 else 's' }}{% endif %}
+    {%- endif %}
+  subject_entity: "{{ state_attr(alert, 'subject_entity') or '' }}"
+  area: >-
+    {{ area_name(alert) or (area_name(subject_entity) if subject_entity else '')
+       or '' }}
+  user: >-
+    {% set uid = trigger.event.data.user_id | default(none) %}
+    {{ states.person | selectattr('attributes.user_id', 'eq', uid)
+       | map(attribute='name') | first | default('') if uid else '' }}
+  by_supersession: "{{ trigger.event.data.pre_acked_by is defined }}"
+
+conditions:
+  # One of the chosen alerts, or every alert when nothing is chosen.
+  - condition: template
+    value_template: >-
+      {{ not (chosen_alerts or chosen_labels or chosen_generators)
+         or alert in chosen_alerts
+         or chosen_labels | select('in', labels(alert)) | list | count > 0
+         or state_attr(alert, 'generated_by') in chosen_generators }}
+  - condition: template
+    value_template: >-
+      {% set order = ['informational', 'notice', 'warning', 'critical', 'emergency'] %}
+      {{ priority in order and order.index(priority) >= order.index(min_priority) }}
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: fired
+          - "{{ every_fire or fire_count | int(0) <= 1 }}"
+        sequence: !input fired_actions
+      - conditions:
+          - condition: trigger
+            id: ended
+          - "{{ reason in end_reasons }}"
+        sequence: !input ended_actions
+      - conditions:
+          - condition: trigger
+            id: acked
+        sequence: !input acked_actions
