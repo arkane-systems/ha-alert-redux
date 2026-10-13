@@ -257,6 +257,12 @@ time, each ending with tests, a run in real HA, green CI, and a release (`0.N.0`
   PyYAML only. `tests/test_converters.py` runs their output through the import
   action's `dry_run`, so they can't drift from the file format; fixtures are in
   `tests/fixtures/converters/`.
+- **`blueprints/automation/alert_redux/react_to_alerts.yaml`** — the *React to
+  Alert Redux alerts* automation blueprint: the user's actions on chosen alerts
+  firing, ending, or being acknowledged, with the alert's details as variables.
+  Not shipped in the integration; the README's import button points at it on
+  `master`. `tests/test_blueprint.py` loads it with HA's blueprint schema, checks
+  its description lists exactly its variables, and runs it against fake events.
 - **`assets/`** — the icon's SVG master, the 32 px README header icon, and
   `screenshots/`, the README's pictures of the cards: the dev preview's theme
   columns (without its toolbar), at 1.5× scale, quantized to 256 colours.

@@ -377,6 +377,19 @@ When one change implies another, both fire: snoozing an active alert fires
 `_snoozed` then `_acked`; a snooze running out fires `_snooze_expired` then
 `_unacked`; disabling a firing alert fires `_ended` then `_disabled`.
 
+#### Blueprint: React to Alert Redux alerts
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Farkane-systems%2Fha-alert-redux%2Fblob%2Fmaster%2Fblueprints%2Fautomation%2Falert_redux%2Freact_to_alerts.yaml)
+
+An automation blueprint that runs your actions when alerts fire, end, or are
+acknowledged. You choose the alerts by entity, label, or generator (or all of
+them), a lowest priority, and which end reasons count. Your actions get the
+alert's details as variables: `alert`, `alert_name`, `priority`, `message`,
+`reason`, `duration`, `area`, `user`, and more (the blueprint's description lists
+them all). Use it for anything a notifier group can't do, such as an email whose
+subject says the alert has cleared. If it replaces one of the alerts' notifier
+groups, take that group off the alerts.
+
 Alert state is saved as it changes and restored after a restart.
 
 ### Summary sensors
