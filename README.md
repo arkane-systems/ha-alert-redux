@@ -1,5 +1,7 @@
 # ![icon](assets/alert-redux-32px.png) Alert Redux
 
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
+
 A replacement alert system for Home Assistant, intended to take over from the
 built-in `alert` integration, which is
 [effectively deprecated](https://community.home-assistant.io/t/wth-are-alerts-not-configurable-through-the-ui/804195).
@@ -13,10 +15,17 @@ alert to escalation and generators, see the
 
 ### HACS
 
-1. In HACS, add `https://github.com/arkane-systems/ha-alert-redux` as a custom
-   repository of type **Integration**.
-2. Install **Alert Redux** and restart Home Assistant.
-3. Go to **Settings → Devices & Services → Add Integration** and add **Alert Redux**.
+Alert Redux is in the HACS default store.
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=arkane-systems&repository=ha-alert-redux&category=integration)
+
+1. Open Alert Redux in HACS with the button above, or search HACS for **Alert Redux**.
+2. Download it and restart Home Assistant.
+3. Add the integration:
+
+   [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=alert_redux)
+
+   or go to **Settings → Devices & Services → Add Integration** and add **Alert Redux**.
 
 ### Manual
 
