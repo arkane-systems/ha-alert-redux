@@ -13,13 +13,17 @@ alert to escalation and generators, see the
 
 ## Installation
 
-### HACS
+### Marketplace or HACS
 
-Alert Redux is in the HACS default store.
+Alert Redux is in the HACS default catalog. From Home Assistant 2026.11, HACS is
+built into Home Assistant as the **Marketplace** (Settings → Marketplace); on
+earlier versions, install it through HACS.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=arkane-systems&repository=ha-alert-redux&category=integration)
 
-1. Open Alert Redux in HACS with the button above, or search HACS for **Alert Redux**.
+1. Open Alert Redux with the button above (it opens the Marketplace on 2026.11 or
+   later, and HACS before that), or search for **Alert Redux** in the Marketplace
+   or HACS.
 2. Download it and restart Home Assistant.
 3. Add the integration:
 
